@@ -21,12 +21,12 @@
 		"display_tools": "sudo apt update && sudo apt install -y xauth x11-apps mesa-utils libgl1-mesa-glx libxkbcommon-x11-0 libxkbcommon-dev",
 	},
 	"remoteEnv": {
-		"WAYLAND_DISPLAY": ""
+		"WAYLAND_DISPLAY": "",
+		"XDG_RUNTIME_DIR": "/run/user/$(id -u)",
+		"LIBGL_ALWAYS_SOFTWARE": "1"
 	},
 	// Configure tool-specific properties.
 	// "customizations": {},
-	"postStartCommand": {
-	}
+	"postStartCommand": {}
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
 }
