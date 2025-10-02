@@ -19,13 +19,9 @@
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": {
 		"display_tools": "sudo apt update && sudo apt install -y xauth x11-apps mesa-utils libgl1-mesa-glx libxkbcommon-x11-0 libxkbcommon-dev",
-		"wasm32_toolchain": "rustup target add wasm32-unknown-unknown",
-		"install_missing_tools": "cargo install cargo-binstall --version 1.14.0 --locked && cargo binstall wasm-pack --version 0.13 -y && cargo binstall trunk --version 0.21 -y"
 	},
 	"remoteEnv": {
-		"DISPLAY": ":0",
-		"WINIT_UNIX_BACKEND": "x11",
-		"LIBGL_ALWAYS_INDIRECT": "1"
+		"WAYLAND_DISPLAY": ""
 	},
 	// Configure tool-specific properties.
 	// "customizations": {},
