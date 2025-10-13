@@ -1,16 +1,20 @@
+use glam::{Mat4, Vec3, Vec4};
 use std::{borrow::Cow, sync::Arc};
 use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{ElementState, MouseButton, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
 
+mod mouse;
+use mouse::Mouse;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
-    position: [f32; 2],
+    position: [f32; 3],
 }
 
 impl Vertex {
@@ -21,8 +25,45 @@ impl Vertex {
             attributes: &[wgpu::VertexAttribute {
                 offset: 0,
                 shader_location: 0,
-                format: wgpu::VertexFormat::Float32x2,
+                format: wgpu::VertexFormat::Float32x3,
             }],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Transformation {
+    transformation: [[f32; 4]; 4],
+}
+
+impl Transformation {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Transformation>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: (2 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
         }
     }
 }
@@ -34,6 +75,7 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
+    current_transformation: Mat4,
 }
 
 impl State {
@@ -61,6 +103,7 @@ impl State {
             size,
             surface,
             surface_format,
+            current_transformation: Mat4::IDENTITY,
         };
 
         // Configure surface for the first time
@@ -110,7 +153,7 @@ impl State {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
-                    buffers: &[Vertex::desc()],
+                    buffers: &[Vertex::desc(), Transformation::desc()],
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -164,28 +207,77 @@ impl State {
         renderpass.set_pipeline(&render_pipeline);
 
         let vertices = [
-            Vertex {
-                position: [-0.5, -0.5],
+            Vec3 {
+                x: -0.5,
+                y: -0.5,
+                z: -0.5,
             },
-            Vertex {
-                position: [0.5, -0.5],
+            Vec3 {
+                x: 0.5,
+                y: -0.5,
+                z: -0.5,
             },
-            Vertex {
-                position: [0.5, 0.5],
+            Vec3 {
+                x: 0.5,
+                y: 0.5,
+                z: -0.5,
             },
-            Vertex {
-                position: [-0.5, 0.5],
+            Vec3 {
+                x: -0.5,
+                y: 0.5,
+                z: -0.5,
             },
+            Vec3 {
+                x: -0.5,
+                y: -0.5,
+                z: 0.5,
+            },
+            Vec3 {
+                x: 0.5,
+                y: -0.5,
+                z: 0.5,
+            },
+            Vec3 {
+                x: 0.5,
+                y: 0.5,
+                z: 0.5,
+            },
+            Vec3 {
+                x: -0.5,
+                y: 0.5,
+                z: 0.5,
+            },
+        ];
+        let indices = [
+            0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7,
         ];
         let vertex_buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&vertices),
+                contents: bytemuck::cast_slice(
+                    &vertices.iter().map(|v| v.to_array()).collect::<Vec<_>>(),
+                ),
                 usage: wgpu::BufferUsages::VERTEX,
             });
+        let index_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        let transformation_buffer =
+            self.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Transformation Buffer"),
+                    contents: bytemuck::cast_slice(&self.current_transformation.to_cols_array_2d()),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
         renderpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        renderpass.draw(0..4, 0..1);
+        renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
+        renderpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        renderpass.draw_indexed(0..index_buffer.size() as u32 / 4, 0, 0..1);
 
         // End the renderpass.
         drop(renderpass);
@@ -200,6 +292,7 @@ impl State {
 #[derive(Default)]
 struct App {
     state: Option<State>,
+    mouse: Mouse,
 }
 
 impl ApplicationHandler for App {
@@ -234,6 +327,28 @@ impl ApplicationHandler for App {
                 // here as this event is always followed up by redraw request.
                 state.resize(size);
             }
+            WindowEvent::CursorMoved {
+                device_id,
+                position,
+            } => {
+                self.mouse.cursor_moved(position);
+                state.current_transformation = self.mouse.get_current_transformation();
+                state.render();
+            }
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => match button {
+                MouseButton::Left => {
+                    if state == ElementState::Pressed {
+                        self.mouse.mouse_down();
+                    } else {
+                        self.mouse.mouse_up();
+                    }
+                }
+                _ => (),
+            },
             _ => (),
         }
     }
