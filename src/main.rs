@@ -344,7 +344,7 @@ impl ApplicationHandler for App {
             } => {
                 self.mouse.cursor_moved(position);
                 state.current_transformation = self.mouse.get_current_transformation();
-                state.render();
+                state.get_window().request_redraw();
             }
             WindowEvent::MouseInput {
                 device_id: _,
