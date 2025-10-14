@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3};
 use std::{borrow::Cow, sync::Arc};
 use wgpu::util::DeviceExt;
 use winit::{
@@ -76,6 +76,10 @@ struct State {
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
     current_transformation: Mat4,
+    render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
 }
 
 impl State {
@@ -96,116 +100,39 @@ impl State {
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
-        let state = State {
-            window,
-            device,
-            queue,
-            size,
-            surface,
-            surface_format,
-            current_transformation: Mat4::IDENTITY,
-        };
-
-        // Configure surface for the first time
-        state.configure_surface();
-
-        state
-    }
-
-    fn get_window(&self) -> &Window {
-        &self.window
-    }
-
-    fn configure_surface(&self) {
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.surface_format,
-            // Request compatibility with the sRGB-format texture view we‘re going to create later.
-            view_formats: vec![self.surface_format.add_srgb_suffix()],
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: self.size.width,
-            height: self.size.height,
-            desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::AutoVsync,
-        };
-        self.surface.configure(&self.device, &surface_config);
-    }
-
-    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.size = new_size;
-
-        // reconfigure the surface
-        self.configure_surface();
-    }
-
-    fn render(&mut self) {
-        let shader = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            });
-        let render_pipeline = self
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: None,
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[Vertex::desc(), Transformation::desc()],
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some("fs_main"),
-                    compilation_options: Default::default(),
-                    targets: &[Some(self.surface_format.into())],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::LineList,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-                cache: None,
-            });
-
-        // Create texture view
-        let surface_texture = self
-            .surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
-        let texture_view = surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor {
-                // Without add_srgb_suffix() the image we will be working with
-                // might not be "gamma correct".
-                format: Some(self.surface_format.add_srgb_suffix()),
-                ..Default::default()
-            });
-
-        // Renders a GREEN screen
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-        // Create the renderpass which will clear the screen.
-        let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        // Create shader module
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &texture_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
-        renderpass.set_pipeline(&render_pipeline);
 
+        // Create render pipeline
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc(), Transformation::desc()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(surface_format.into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::LineList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        // Create vertex data
         let vertices = [
             Vec3 {
                 x: -0.5,
@@ -251,22 +178,86 @@ impl State {
         let indices = [
             0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7,
         ];
-        let vertex_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(
-                    &vertices.iter().map(|v| v.to_array()).collect::<Vec<_>>(),
-                ),
-                usage: wgpu::BufferUsages::VERTEX,
+
+        // Create buffers
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(
+                &vertices.iter().map(|v| v.to_array()).collect::<Vec<_>>(),
+            ),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let num_indices = indices.len() as u32;
+
+        let state = State {
+            window,
+            device,
+            queue,
+            size,
+            surface,
+            surface_format,
+            current_transformation: Mat4::IDENTITY,
+            render_pipeline,
+            vertex_buffer,
+            index_buffer,
+            num_indices,
+        };
+
+        // Configure surface for the first time
+        state.configure_surface();
+
+        state
+    }
+
+    fn get_window(&self) -> &Window {
+        &self.window
+    }
+
+    fn configure_surface(&self) {
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: self.surface_format,
+            // Request compatibility with the sRGB-format texture view we‘re going to create later.
+            view_formats: vec![self.surface_format.add_srgb_suffix()],
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            width: self.size.width,
+            height: self.size.height,
+            desired_maximum_frame_latency: 2,
+            present_mode: wgpu::PresentMode::AutoVsync,
+        };
+        self.surface.configure(&self.device, &surface_config);
+    }
+
+    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        self.size = new_size;
+
+        // reconfigure the surface
+        self.configure_surface();
+    }
+
+    fn render(&mut self) {
+        // Create texture view
+        let surface_texture = self
+            .surface
+            .get_current_texture()
+            .expect("failed to acquire next swapchain texture");
+        let texture_view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor {
+                // Without add_srgb_suffix() the image we will be working with
+                // might not be "gamma correct".
+                format: Some(self.surface_format.add_srgb_suffix()),
+                ..Default::default()
             });
-        let index_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+
+        // Create transformation buffer (this changes per frame based on mouse input)
         let transformation_buffer =
             self.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -274,10 +265,30 @@ impl State {
                     contents: bytemuck::cast_slice(&self.current_transformation.to_cols_array_2d()),
                     usage: wgpu::BufferUsages::VERTEX,
                 });
-        renderpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+
+        // Renders a GREEN screen
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        // Create the renderpass which will clear the screen.
+        let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &texture_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        renderpass.set_pipeline(&self.render_pipeline);
+        renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
-        renderpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        renderpass.draw_indexed(0..index_buffer.size() as u32 / 4, 0, 0..1);
+        renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        renderpass.draw_indexed(0..self.num_indices, 0, 0..1);
 
         // End the renderpass.
         drop(renderpass);
@@ -328,7 +339,7 @@ impl ApplicationHandler for App {
                 state.resize(size);
             }
             WindowEvent::CursorMoved {
-                device_id,
+                device_id: _,
                 position,
             } => {
                 self.mouse.cursor_moved(position);
@@ -336,7 +347,7 @@ impl ApplicationHandler for App {
                 state.render();
             }
             WindowEvent::MouseInput {
-                device_id,
+                device_id: _,
                 state,
                 button,
             } => match button {
