@@ -1,5 +1,6 @@
 use glam::{Mat4, Vec3};
 use std::{borrow::Cow, sync::Arc};
+use tracing::error;
 use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
@@ -238,7 +239,6 @@ impl State {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
 
-        // reconfigure the surface
         self.configure_surface();
     }
 
@@ -336,13 +336,16 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => {
                 // Reconfigures the size of the surface. We do not re-render
                 // here as this event is always followed up by redraw request.
+                self.mouse.update_window_size(size);
                 state.resize(size);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
                 position,
             } => {
-                self.mouse.cursor_moved(position);
+                if let Err(e) = self.mouse.cursor_moved(position) {
+                    error!("Error handling cursor moved event: {}", e);
+                }
                 state.current_transformation = self.mouse.get_current_transformation();
                 state.get_window().request_redraw();
             }
