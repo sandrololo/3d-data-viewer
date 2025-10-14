@@ -36,7 +36,7 @@ impl Mouse {
             let new_position = physical_position_to_vec3(new_position);
             let rot_axis = self.last_position.0.cross(new_position.0);
             let axis_len = rot_axis.length();
-            let rot = mat4_from_rotation_axis(rot_axis, axis_len * 180.0 / std::f32::consts::PI);
+            let rot = mat4_from_rotation_axis(rot_axis, axis_len / 1000.0);
             let transformation = rot * self.last_transformation;
             self.last_transformation = transformation;
             self.last_position = new_position;
