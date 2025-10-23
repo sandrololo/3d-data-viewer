@@ -1,5 +1,4 @@
 use glam::{Mat4, Vec3, Vec4};
-use tracing::trace;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::ElementState,
@@ -9,6 +8,7 @@ struct MousePosition(Vec3);
 
 pub struct Mouse {
     left_button: ElementState,
+    control_button: ElementState,
     last_position: MousePosition,
     last_transformation: Mat4,
     window_size: PhysicalSize<u32>,
@@ -24,6 +24,7 @@ impl Mouse {
     pub fn new() -> Self {
         Self {
             left_button: ElementState::Released,
+            control_button: ElementState::Released,
             last_position: MousePosition(Vec3::new(0.5, 0.5, 1.0)),
             last_transformation: mat4_from_rotation_axis(Vec3::new(1.0, 0.0, 0.0), 30.0)
                 * mat4_from_rotation_axis(Vec3::new(0.0, 1.0, 0.0), 30.0),
@@ -36,27 +37,38 @@ impl Mouse {
     }
 
     pub fn cursor_moved(&mut self, new_position: PhysicalPosition<f64>) -> anyhow::Result<()> {
-        trace!("Cursor moved to position: {:?}", new_position);
         if ElementState::Pressed == self.left_button {
             let new_position = self.physical_position_to_vec3(new_position)?;
-            let rot_axis = self.last_position.0.cross(new_position.0);
-            let axis_len = rot_axis.length();
-            let rot = mat4_from_rotation_axis(rot_axis, axis_len / 1000.0);
-            let transformation = rot * self.last_transformation;
-            self.last_transformation = transformation;
+            if ElementState::Pressed == self.control_button {
+                let trans = mat4_from_translation(
+                    (new_position.0 - self.last_position.0) * Vec3::new(0.5, 0.5, 0.0),
+                );
+                self.last_transformation = trans * self.last_transformation;
+            } else {
+                let rot_axis = self.last_position.0.cross(new_position.0);
+                let axis_len = rot_axis.length();
+                let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
+                self.last_transformation = rot * self.last_transformation;
+            }
             self.last_position = new_position;
         }
         Ok(())
     }
 
     pub fn mouse_down(&mut self) {
-        trace!("Mouse button down");
         self.left_button = ElementState::Pressed;
     }
 
     pub fn mouse_up(&mut self) {
-        trace!("Mouse button up");
         self.left_button = ElementState::Released;
+    }
+
+    pub fn control_down(&mut self) {
+        self.control_button = ElementState::Pressed;
+    }
+
+    pub fn control_up(&mut self) {
+        self.control_button = ElementState::Released;
     }
 
     pub fn update_window_size(&mut self, size: PhysicalSize<u32>) {
@@ -72,6 +84,15 @@ impl Mouse {
         let x = (2.0 * pos.x / w - 1.0) as f32;
         let y = (1.0 - 2.0 * pos.y / h) as f32;
         Ok(MousePosition(Vec3::new(x, y, 1.0)))
+    }
+}
+
+fn mat4_from_translation(v: Vec3) -> Mat4 {
+    Mat4 {
+        x_axis: Vec4::new(1.0, 0.0, 0.0, 0.0),
+        y_axis: Vec4::new(0.0, 1.0, 0.0, 0.0),
+        z_axis: Vec4::new(0.0, 0.0, 1.0, 0.0),
+        w_axis: Vec4::new(v[0], v[1], v[2], 1.0),
     }
 }
 

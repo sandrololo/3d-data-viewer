@@ -136,44 +136,44 @@ impl State {
         // Create vertex data
         let vertices = [
             Vec3 {
-                x: -0.5,
-                y: -0.5,
-                z: -0.5,
+                x: -0.2,
+                y: -0.2,
+                z: 0.3,
             },
             Vec3 {
-                x: 0.5,
-                y: -0.5,
-                z: -0.5,
+                x: 0.2,
+                y: -0.2,
+                z: 0.3,
             },
             Vec3 {
-                x: 0.5,
-                y: 0.5,
-                z: -0.5,
+                x: 0.2,
+                y: 0.2,
+                z: 0.3,
             },
             Vec3 {
-                x: -0.5,
-                y: 0.5,
-                z: -0.5,
+                x: -0.2,
+                y: 0.2,
+                z: 0.3,
             },
             Vec3 {
-                x: -0.5,
-                y: -0.5,
-                z: 0.5,
+                x: -0.2,
+                y: -0.2,
+                z: 0.7,
             },
             Vec3 {
-                x: 0.5,
-                y: -0.5,
-                z: 0.5,
+                x: 0.2,
+                y: -0.2,
+                z: 0.7,
             },
             Vec3 {
-                x: 0.5,
-                y: 0.5,
-                z: 0.5,
+                x: 0.2,
+                y: 0.2,
+                z: 0.7,
             },
             Vec3 {
-                x: -0.5,
-                y: 0.5,
-                z: 0.5,
+                x: -0.2,
+                y: 0.2,
+                z: 0.7,
             },
         ];
         let indices = [
@@ -317,7 +317,7 @@ impl ApplicationHandler for App {
 
         let state = pollster::block_on(State::new(window.clone()));
         self.state = Some(state);
-
+        self.mouse.update_window_size(window.inner_size());
         window.request_redraw();
     }
 
@@ -359,6 +359,20 @@ impl ApplicationHandler for App {
                         self.mouse.mouse_down();
                     } else {
                         self.mouse.mouse_up();
+                    }
+                }
+                _ => (),
+            },
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => match event.logical_key {
+                winit::keyboard::Key::Named(winit::keyboard::NamedKey::Control) => {
+                    if event.state == ElementState::Pressed {
+                        self.mouse.control_down();
+                    } else {
+                        self.mouse.control_up();
                     }
                 }
                 _ => (),
