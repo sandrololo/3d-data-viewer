@@ -39,6 +39,9 @@ impl Mouse {
     pub fn cursor_moved(&mut self, new_position: PhysicalPosition<f64>) -> anyhow::Result<()> {
         if ElementState::Pressed == self.left_button {
             let new_position = self.physical_position_to_vec3(new_position)?;
+            if !self.pointer_inside(new_position.0) {
+                return Ok(());
+            }
             if ElementState::Pressed == self.control_button {
                 let trans = mat4_from_translation(
                     (new_position.0 - self.last_position.0) * Vec3::new(0.5, 0.5, 0.0),
@@ -53,6 +56,10 @@ impl Mouse {
             self.last_position = new_position;
         }
         Ok(())
+    }
+
+    fn pointer_inside(&self, pos: Vec3) -> bool {
+        pos.x >= -1.0 && pos.x <= 1.0 && pos.y >= -1.0 && pos.y <= 1.0
     }
 
     pub fn mouse_down(&mut self) {
