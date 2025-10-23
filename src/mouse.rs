@@ -50,9 +50,7 @@ impl Mouse {
                 return Ok(());
             }
             if ElementState::Pressed == self.control_button {
-                let trans = mat4_from_translation(
-                    (new_position.0 - self.initial_trans_position.0) * Vec3::new(0.5, 0.5, 0.0),
-                );
+                let trans = mat4_from_translation(new_position.0 - self.initial_trans_position.0);
                 self.current_transformation = trans * self.initial_transformation;
             } else {
                 let rot_axis = -self.initial_trans_position.0.cross(new_position.0);
