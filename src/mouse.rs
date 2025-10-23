@@ -1,4 +1,5 @@
 use glam::{Mat4, Vec3, Vec4};
+use tracing::error;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::ElementState,
@@ -7,10 +8,12 @@ use winit::{
 struct MousePosition(Vec3);
 
 pub struct Mouse {
+    current_position: PhysicalPosition<f64>,
     left_button: ElementState,
     control_button: ElementState,
-    last_position: MousePosition,
-    last_transformation: Mat4,
+    initial_trans_position: MousePosition,
+    initial_transformation: Mat4,
+    current_transformation: Mat4,
     window_size: PhysicalSize<u32>,
 }
 
@@ -22,21 +25,25 @@ impl Default for Mouse {
 
 impl Mouse {
     pub fn new() -> Self {
+        let default_trans = mat4_from_rotation_axis(Vec3::new(1.0, 0.0, 0.0), 30.0)
+            * mat4_from_rotation_axis(Vec3::new(0.0, 1.0, 0.0), 30.0);
         Self {
+            current_position: PhysicalPosition::new(0.0, 0.0),
             left_button: ElementState::Released,
             control_button: ElementState::Released,
-            last_position: MousePosition(Vec3::new(0.5, 0.5, 1.0)),
-            last_transformation: mat4_from_rotation_axis(Vec3::new(1.0, 0.0, 0.0), 30.0)
-                * mat4_from_rotation_axis(Vec3::new(0.0, 1.0, 0.0), 30.0),
+            initial_trans_position: MousePosition(Vec3::new(0.5, 0.5, 1.0)),
+            initial_transformation: default_trans,
+            current_transformation: default_trans,
             window_size: PhysicalSize::new(100, 100),
         }
     }
 
     pub fn get_current_transformation(&self) -> Mat4 {
-        self.last_transformation
+        self.current_transformation
     }
 
     pub fn cursor_moved(&mut self, new_position: PhysicalPosition<f64>) -> anyhow::Result<()> {
+        self.current_position = new_position;
         if ElementState::Pressed == self.left_button {
             let new_position = self.physical_position_to_vec3(new_position)?;
             if !self.pointer_inside(new_position.0) {
@@ -44,16 +51,15 @@ impl Mouse {
             }
             if ElementState::Pressed == self.control_button {
                 let trans = mat4_from_translation(
-                    (new_position.0 - self.last_position.0) * Vec3::new(0.5, 0.5, 0.0),
+                    (new_position.0 - self.initial_trans_position.0) * Vec3::new(0.5, 0.5, 0.0),
                 );
-                self.last_transformation = trans * self.last_transformation;
+                self.current_transformation = trans * self.initial_transformation;
             } else {
-                let rot_axis = self.last_position.0.cross(new_position.0);
+                let rot_axis = self.initial_trans_position.0.cross(new_position.0);
                 let axis_len = rot_axis.length();
                 let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
-                self.last_transformation = rot * self.last_transformation;
+                self.current_transformation = rot * self.initial_transformation;
             }
-            self.last_position = new_position;
         }
         Ok(())
     }
@@ -64,6 +70,11 @@ impl Mouse {
 
     pub fn mouse_down(&mut self) {
         self.left_button = ElementState::Pressed;
+        match self.physical_position_to_vec3(self.current_position) {
+            Ok(pos) => self.initial_trans_position = pos,
+            Err(e) => error!("Failed to calculate pointer position: {}", e),
+        }
+        self.initial_transformation = self.current_transformation;
     }
 
     pub fn mouse_up(&mut self) {
