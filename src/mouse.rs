@@ -55,7 +55,7 @@ impl Mouse {
                 );
                 self.current_transformation = trans * self.initial_transformation;
             } else {
-                let rot_axis = self.initial_trans_position.0.cross(new_position.0);
+                let rot_axis = -self.initial_trans_position.0.cross(new_position.0);
                 let axis_len = rot_axis.length();
                 let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
                 self.current_transformation = rot * self.initial_transformation;
