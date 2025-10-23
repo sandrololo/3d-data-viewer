@@ -33,9 +33,5 @@ const cmax: f32 = 1.0;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let c = (in.position.z + 1.0) / 2.0 * (cmax - cmin) + cmin;
-    let c1 = c * 1.0;
-    let c2 = c * 1.0;
-    let c3 = c * 1.0;
-    return vec4<f32>(c1, c2, c3, 1.0);
+    return vec4<f32>(in.position.z, in.position.z, in.position.z, 1.0);
 }
