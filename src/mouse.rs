@@ -87,6 +87,14 @@ impl Mouse {
         self.control_button = ElementState::Released;
     }
 
+    pub fn scroll(&mut self, _delta_x: f32, delta_y: f32) {
+        if self.control_button == ElementState::Pressed {
+            let scale = Mat4::from_scale(0.1 * delta_y + Vec3::new(1.0, 1.0, 1.0));
+            self.current_transformation = scale * self.current_transformation;
+            self.initial_transformation = self.current_transformation;
+        }
+    }
+
     pub fn update_window_size(&mut self, size: PhysicalSize<u32>) {
         self.window_size = size;
     }

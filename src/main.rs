@@ -1,10 +1,10 @@
-use glam::{Mat4, Vec3};
+use glam::Mat4;
 use std::{borrow::Cow, sync::Arc, vec};
 use tracing::error;
 use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
-    event::{ElementState, MouseButton, WindowEvent},
+    event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
@@ -137,7 +137,7 @@ impl State {
 
         let image = SurfaceAmplitudeImage::from_file("img.tiff")
             .unwrap()
-            .surface;
+            .amplitude;
         let image_array = image.to_xyz_scaled(-0.7..0.7, -0.7..0.7, 0.3..0.7);
 
         let mut indices = vec![];
@@ -336,6 +336,21 @@ impl ApplicationHandler for App {
                 }
                 _ => (),
             },
+            WindowEvent::MouseWheel {
+                device_id: _,
+                delta,
+                phase: _,
+            } => {
+                // Handle mouse wheel events
+                match delta {
+                    MouseScrollDelta::LineDelta(x, y) => {
+                        self.mouse.scroll(x, y);
+                        state.current_transformation = self.mouse.get_current_transformation();
+                        state.get_window().request_redraw();
+                    }
+                    _ => (),
+                }
+            }
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
