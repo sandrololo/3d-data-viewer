@@ -1,5 +1,5 @@
 use glam::{Mat4, Vec3};
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, sync::Arc, vec};
 use tracing::error;
 use wgpu::util::DeviceExt;
 use winit::{
@@ -9,7 +9,9 @@ use winit::{
     window::{Window, WindowId},
 };
 
+mod image;
 mod mouse;
+use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
 
 #[repr(C)]
@@ -133,59 +135,30 @@ impl State {
             cache: None,
         });
 
-        // Create vertex data
-        let vertices = [
-            Vec3 {
-                x: -0.2,
-                y: -0.2,
-                z: 0.3,
-            },
-            Vec3 {
-                x: 0.2,
-                y: -0.2,
-                z: 0.3,
-            },
-            Vec3 {
-                x: 0.2,
-                y: 0.2,
-                z: 0.3,
-            },
-            Vec3 {
-                x: -0.2,
-                y: 0.2,
-                z: 0.3,
-            },
-            Vec3 {
-                x: -0.2,
-                y: -0.2,
-                z: 0.7,
-            },
-            Vec3 {
-                x: 0.2,
-                y: -0.2,
-                z: 0.7,
-            },
-            Vec3 {
-                x: 0.2,
-                y: 0.2,
-                z: 0.7,
-            },
-            Vec3 {
-                x: -0.2,
-                y: 0.2,
-                z: 0.7,
-            },
-        ];
-        let indices = [
-            0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7,
-        ];
+        let image = SurfaceAmplitudeImage::from_file("img.tiff")
+            .unwrap()
+            .surface;
+        let image_array = image.to_xyz_scaled(-0.7..0.7, -0.7..0.7, 0.3..0.7);
+
+        let mut indices = vec![];
+        for y in 0..(image.height - 1) {
+            for x in 0..(image.width - 1) {
+                let top_left = y * image.width + x;
+                let top_right = top_left + 1;
+                let bottom_left = top_left + image.width;
+
+                indices.push(top_left);
+                indices.push(bottom_left);
+
+                indices.push(top_left);
+                indices.push(top_right);
+            }
+        }
 
         // Create buffers
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(
-                &vertices.iter().map(|v| v.to_array()).collect::<Vec<_>>(),
-            ),
+            contents: bytemuck::cast_slice(&image_array),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -276,7 +249,7 @@ impl State {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
             })],
