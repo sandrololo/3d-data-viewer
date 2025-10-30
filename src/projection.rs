@@ -58,7 +58,7 @@ pub struct ProjectionBuffer {
 }
 
 impl ProjectionBuffer {
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+    pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<ProjectionBuffer>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,

@@ -4,19 +4,25 @@ use std::{borrow::Cow, sync::Arc, vec};
 use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
-    event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
+    event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
 
 mod image;
+mod keyboard;
 mod mouse;
 mod projection;
+mod transformation;
 use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
 use projection::Projection;
 
-use crate::projection::ProjectionBuffer;
+use crate::{
+    keyboard::Keyboard,
+    projection::ProjectionBuffer,
+    transformation::{Transformation, TransformationBuffer},
+};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -34,43 +40,6 @@ impl Vertex {
                 shader_location: 0,
                 format: wgpu::VertexFormat::Float32x3,
             }],
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Transformation {
-    transformation: [[f32; 4]; 4],
-}
-
-impl Transformation {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Transformation>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: (2 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
         }
     }
 }
@@ -123,7 +92,7 @@ impl State {
                 entry_point: Some("vs_main"),
                 buffers: &[
                     Vertex::desc(),
-                    Transformation::desc(),
+                    TransformationBuffer::desc(),
                     ProjectionBuffer::desc(),
                 ],
                 compilation_options: Default::default(),
@@ -296,6 +265,8 @@ impl State {
 struct App {
     state: Option<State>,
     mouse: Mouse,
+    keyboard: Keyboard,
+    transformation: Transformation,
     projection: Projection,
 }
 
@@ -310,30 +281,28 @@ impl ApplicationHandler for App {
 
         let state = pollster::block_on(State::new(window.clone()));
         self.state = Some(state);
-        self.mouse.update_window_size(window.inner_size());
+
         self.projection.update_window_size(window.inner_size());
         window.request_redraw();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let state = self.state.as_mut().unwrap();
+        let app_state = self.state.as_mut().unwrap();
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                state.render();
-                // Emits a new redraw requested event.
-                state.get_window().request_redraw();
+                app_state.current_transformation = self.transformation.get_current();
+                app_state.render();
             }
             WindowEvent::Resized(size) => {
                 // Reconfigures the size of the surface. We do not re-render
                 // here as this event is always followed up by redraw request.
-                self.mouse.update_window_size(size);
                 self.projection.update_window_size(size);
                 let zoom = self.mouse.get_zoom();
-                state.current_projection = self.projection.mat4_orthographic(
+                app_state.current_projection = self.projection.mat4_orthographic(
                     -2.0 * zoom,
                     2.0 * zoom,
                     -2.0 * zoom,
@@ -341,70 +310,70 @@ impl ApplicationHandler for App {
                     -2.0 * zoom,
                     2.0 * zoom,
                 );
-                state.resize(size);
+                app_state.resize(size);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
                 position,
             } => {
-                if let Err(e) = self.mouse.cursor_moved(position) {
-                    error!("Error handling cursor moved event: {}", e);
+                self.mouse.register_move_event(position);
+                if self.mouse.is_left_button_pressed() {
+                    match self
+                        .mouse
+                        .get_device_coordinates(app_state.get_window().inner_size())
+                    {
+                        Ok(new_position) => {
+                            if self.mouse.is_pointer_inside(new_position) {
+                                if self.keyboard.is_control_pressed() {
+                                    self.transformation.trans(new_position);
+                                } else {
+                                    self.transformation.rotate(new_position);
+                                }
+                            }
+                            app_state.get_window().request_redraw();
+                        }
+                        Err(e) => error!("Failed to calculate pointer position: {}", e),
+                    }
                 }
-                state.current_transformation = self.mouse.get_current_transformation();
-                state.get_window().request_redraw();
             }
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button,
-            } => match button {
-                MouseButton::Left => {
-                    if state == ElementState::Pressed {
-                        self.mouse.mouse_down();
-                    } else {
-                        self.mouse.mouse_up();
+            } => {
+                self.mouse.register_button_event(button, state);
+                if self.mouse.is_left_button_pressed() {
+                    match self
+                        .mouse
+                        .get_device_coordinates(app_state.get_window().inner_size())
+                    {
+                        Ok(pos) => self.transformation.start(pos),
+                        Err(e) => error!("Failed to calculate pointer position: {}", e),
                     }
                 }
-                _ => (),
-            },
+            }
             WindowEvent::MouseWheel {
                 device_id: _,
                 delta,
                 phase: _,
             } => {
-                // Handle mouse wheel events
-                match delta {
-                    MouseScrollDelta::LineDelta(x, y) => {
-                        self.mouse.scroll(x, y);
-                        state.current_transformation = self.mouse.get_current_transformation();
-                        let zoom = self.mouse.get_zoom();
-                        state.current_projection = self.projection.mat4_orthographic(
-                            -2.0 * zoom,
-                            2.0 * zoom,
-                            -2.0 * zoom,
-                            2.0 * zoom,
-                            -2.0 * zoom,
-                            2.0 * zoom,
-                        );
-                        state.get_window().request_redraw();
-                    }
-                    _ => (),
-                }
+                self.mouse.register_scroll_event(delta);
+                let zoom = self.mouse.get_zoom();
+                app_state.current_projection = self.projection.mat4_orthographic(
+                    -2.0 * zoom,
+                    2.0 * zoom,
+                    -2.0 * zoom,
+                    2.0 * zoom,
+                    -2.0 * zoom,
+                    2.0 * zoom,
+                );
+                app_state.get_window().request_redraw();
             }
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
                 is_synthetic: _,
-            } => match event.logical_key {
-                winit::keyboard::Key::Named(winit::keyboard::NamedKey::Control) => {
-                    if event.state == ElementState::Pressed {
-                        self.mouse.control_down();
-                    } else {
-                        self.mouse.control_up();
-                    }
-                }
-                _ => (),
-            },
+            } => self.keyboard.register_event(event),
             _ => (),
         }
     }
