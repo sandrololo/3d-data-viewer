@@ -49,6 +49,7 @@ struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
     size: winit::dpi::PhysicalSize<u32>,
+    aspect_ratio: f32,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
     current_transformation: Mat4,
@@ -153,6 +154,7 @@ impl State {
             device,
             queue,
             size,
+            aspect_ratio: size.width as f32 / size.height as f32,
             surface,
             surface_format,
             current_transformation: Mat4::IDENTITY,
@@ -190,7 +192,7 @@ impl State {
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
-
+        self.aspect_ratio = new_size.width as f32 / new_size.height as f32;
         self.configure_surface();
     }
 
@@ -226,7 +228,6 @@ impl State {
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
-        // Renders a GREEN screen
         let mut encoder = self.device.create_command_encoder(&Default::default());
         // Create the renderpass which will clear the screen.
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -281,8 +282,6 @@ impl ApplicationHandler for App {
 
         let state = pollster::block_on(State::new(window.clone()));
         self.state = Some(state);
-
-        self.projection.update_window_size(window.inner_size());
         window.request_redraw();
     }
 
@@ -295,22 +294,13 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 app_state.current_transformation = self.transformation.get_current();
+                app_state.current_projection = self.projection.get_current();
                 app_state.render();
             }
             WindowEvent::Resized(size) => {
-                // Reconfigures the size of the surface. We do not re-render
-                // here as this event is always followed up by redraw request.
-                self.projection.update_window_size(size);
-                let zoom = self.mouse.get_zoom();
-                app_state.current_projection = self.projection.mat4_orthographic(
-                    -2.0 * zoom,
-                    2.0 * zoom,
-                    -2.0 * zoom,
-                    2.0 * zoom,
-                    -2.0 * zoom,
-                    2.0 * zoom,
-                );
                 app_state.resize(size);
+                self.projection
+                    .zoom(self.mouse.get_zoom(), app_state.aspect_ratio);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
@@ -358,15 +348,8 @@ impl ApplicationHandler for App {
                 phase: _,
             } => {
                 self.mouse.register_scroll_event(delta);
-                let zoom = self.mouse.get_zoom();
-                app_state.current_projection = self.projection.mat4_orthographic(
-                    -2.0 * zoom,
-                    2.0 * zoom,
-                    -2.0 * zoom,
-                    2.0 * zoom,
-                    -2.0 * zoom,
-                    2.0 * zoom,
-                );
+                self.projection
+                    .zoom(self.mouse.get_zoom(), app_state.aspect_ratio);
                 app_state.get_window().request_redraw();
             }
             WindowEvent::KeyboardInput {
