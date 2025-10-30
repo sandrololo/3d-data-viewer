@@ -1,3 +1,4 @@
+use log::info;
 use std::fs::File;
 use tiff::decoder::{Decoder, DecodingResult};
 
@@ -19,7 +20,6 @@ impl Image<f32> {
             .iter()
             .cloned()
             .fold(f32::NEG_INFINITY, |a, b| a.max(b));
-        println!("z_min: {}, z_max: {}", z_min, z_max);
         let mut result = Vec::with_capacity((self.height * self.width) as usize);
         for y in 0..self.height {
             for x in 0..self.width {
@@ -64,6 +64,10 @@ impl SurfaceAmplitudeImage {
             }),
             _ => Err(anyhow::anyhow!("Unsupported image format")),
         }?;
+        info!(
+            "Loaded surface & amplitude image with size {}x{} from {}",
+            surface.width, surface.height, path,
+        );
         Ok(Self { surface, amplitude })
     }
 }

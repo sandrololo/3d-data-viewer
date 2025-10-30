@@ -1,6 +1,6 @@
 use glam::Mat4;
+use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
-use tracing::error;
 use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
@@ -415,7 +415,9 @@ fn main() {
     //
     // To change the log level, set the `RUST_LOG` environment variable. See the `env_logger`
     // documentation for more information.
-    env_logger::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_secs()
+        .init();
 
     let event_loop = EventLoop::new().unwrap();
 
