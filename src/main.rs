@@ -332,9 +332,15 @@ impl ApplicationHandler for App {
                 // here as this event is always followed up by redraw request.
                 self.mouse.update_window_size(size);
                 self.projection.update_window_size(size);
-                state.current_projection = self
-                    .projection
-                    .mat4_orthographic(-2.5, 2.5, -2.5, 2.5, -2.5, 2.5);
+                let zoom = self.mouse.get_zoom();
+                state.current_projection = self.projection.mat4_orthographic(
+                    -2.0 * zoom,
+                    2.0 * zoom,
+                    -2.0 * zoom,
+                    2.0 * zoom,
+                    -2.0 * zoom,
+                    2.0 * zoom,
+                );
                 state.resize(size);
             }
             WindowEvent::CursorMoved {
@@ -371,6 +377,15 @@ impl ApplicationHandler for App {
                     MouseScrollDelta::LineDelta(x, y) => {
                         self.mouse.scroll(x, y);
                         state.current_transformation = self.mouse.get_current_transformation();
+                        let zoom = self.mouse.get_zoom();
+                        state.current_projection = self.projection.mat4_orthographic(
+                            -2.0 * zoom,
+                            2.0 * zoom,
+                            -2.0 * zoom,
+                            2.0 * zoom,
+                            -2.0 * zoom,
+                            2.0 * zoom,
+                        );
                         state.get_window().request_redraw();
                     }
                     _ => (),

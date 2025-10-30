@@ -11,6 +11,7 @@ pub struct Mouse {
     current_position: PhysicalPosition<f64>,
     left_button: ElementState,
     control_button: ElementState,
+    current_zoom: f32,
     initial_trans_position: MousePosition,
     initial_transformation: Mat4,
     current_transformation: Mat4,
@@ -32,11 +33,16 @@ impl Mouse {
             current_position: PhysicalPosition::new(0.0, 0.0),
             left_button: ElementState::Released,
             control_button: ElementState::Released,
+            current_zoom: 1.0,
             initial_trans_position: MousePosition(Vec3::new(0.5, 0.5, 1.0)),
             initial_transformation: default_trans,
             current_transformation: default_trans,
             window_size: PhysicalSize::new(100, 100),
         }
+    }
+
+    pub fn get_zoom(&self) -> f32 {
+        self.current_zoom
     }
 
     pub fn get_current_transformation(&self) -> Mat4 {
@@ -90,9 +96,7 @@ impl Mouse {
 
     pub fn scroll(&mut self, _delta_x: f32, delta_y: f32) {
         if self.control_button == ElementState::Pressed {
-            let scale = Mat4::from_scale(0.1 * delta_y + Vec3::new(1.0, 1.0, 1.0));
-            self.current_transformation = scale * self.current_transformation;
-            self.initial_transformation = self.current_transformation;
+            self.current_zoom *= -0.1 * delta_y + 1.0;
         }
     }
 
