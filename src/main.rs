@@ -147,7 +147,7 @@ impl State {
         let image = SurfaceAmplitudeImage::from_file("img.tiff")
             .unwrap()
             .amplitude;
-        let image_array = image.to_xyz();
+        let image_array = image.to_xyz_scaled();
 
         let mut indices = vec![];
         for y in 0..(image.height - 1) {

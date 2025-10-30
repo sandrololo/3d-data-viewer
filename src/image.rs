@@ -8,7 +8,7 @@ pub struct Image<T> {
 }
 
 impl Image<f32> {
-    pub fn to_xyz(&self) -> Vec<[f32; 3]> {
+    pub fn to_xyz_scaled(&self) -> Vec<[f32; 3]> {
         let z_min = self
             .data
             .iter()
@@ -24,7 +24,12 @@ impl Image<f32> {
         for y in 0..self.height {
             for x in 0..self.width {
                 let index = (y * self.width + x) as usize;
-                result.push([x as f32, y as f32, self.data[index]]);
+                let z: f32 = self.data[index].into();
+                result.push([
+                    -1.0 + x as f32 * (2.0) / self.width as f32,
+                    -1.0 + y as f32 * (2.0) / self.height as f32,
+                    -1.0 + (z - z_min) / (z_max - z_min) * (2.0),
+                ]);
             }
         }
         result
