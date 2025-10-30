@@ -40,11 +40,11 @@ impl Projection {
         Mat4 {
             x_axis: Vec4::new(2.0 / dx, 0.0, 0.0, 0.0),
             y_axis: Vec4::new(0.0, 2.0 / dy, 0.0, 0.0),
-            z_axis: Vec4::new(0.0, 0.0, -2.0 / dz, 0.0),
+            z_axis: Vec4::new(0.0, 0.0, 1.0 / dz, 0.0),
             w_axis: Vec4::new(
                 -(x_max + x_min) / dx,
                 -(y_max + y_min) / dy,
-                -(z_max + z_min) / dz,
+                -z_min / dz,
                 1.0,
             ),
         }
