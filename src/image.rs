@@ -1,4 +1,4 @@
-use std::{fs::File, ops::Range};
+use std::fs::File;
 use tiff::decoder::{Decoder, DecodingResult};
 
 pub struct Image<T> {
@@ -8,12 +8,7 @@ pub struct Image<T> {
 }
 
 impl Image<f32> {
-    pub fn to_xyz_scaled(
-        &self,
-        x_range: Range<f32>,
-        y_range: Range<f32>,
-        z_range: Range<f32>,
-    ) -> Vec<[f32; 3]> {
+    pub fn to_xyz(&self) -> Vec<[f32; 3]> {
         let z_min = self
             .data
             .iter()
@@ -29,12 +24,7 @@ impl Image<f32> {
         for y in 0..self.height {
             for x in 0..self.width {
                 let index = (y * self.width + x) as usize;
-                let z: f32 = self.data[index].into();
-                result.push([
-                    x_range.start + x as f32 * (x_range.end - x_range.start) / self.width as f32,
-                    y_range.start + y as f32 * (y_range.end - y_range.start) / self.height as f32,
-                    z_range.start + (z - z_min) / (z_max - z_min) * (z_range.end - z_range.start),
-                ]);
+                result.push([x as f32, y as f32, self.data[index]]);
             }
         }
         result

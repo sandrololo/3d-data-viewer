@@ -11,8 +11,12 @@ use winit::{
 
 mod image;
 mod mouse;
+mod projection;
 use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
+use projection::Projection;
+
+use crate::projection::ProjectionBuffer;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -79,6 +83,7 @@ struct State {
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
     current_transformation: Mat4,
+    current_projection: Mat4,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -116,7 +121,11 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc(), Transformation::desc()],
+                buffers: &[
+                    Vertex::desc(),
+                    Transformation::desc(),
+                    ProjectionBuffer::desc(),
+                ],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -138,7 +147,7 @@ impl State {
         let image = SurfaceAmplitudeImage::from_file("img.tiff")
             .unwrap()
             .amplitude;
-        let image_array = image.to_xyz_scaled(-0.7..0.7, -0.7..0.7, 0.3..0.7);
+        let image_array = image.to_xyz();
 
         let mut indices = vec![];
         for y in 0..(image.height - 1) {
@@ -178,6 +187,7 @@ impl State {
             surface,
             surface_format,
             current_transformation: Mat4::IDENTITY,
+            current_projection: Mat4::IDENTITY,
             render_pipeline,
             vertex_buffer,
             index_buffer,
@@ -239,6 +249,14 @@ impl State {
                     usage: wgpu::BufferUsages::VERTEX,
                 });
 
+        let projection_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Projection Buffer"),
+                contents: bytemuck::cast_slice(&self.current_projection.to_cols_array_2d()),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
         // Renders a GREEN screen
         let mut encoder = self.device.create_command_encoder(&Default::default());
         // Create the renderpass which will clear the screen.
@@ -260,6 +278,7 @@ impl State {
         renderpass.set_pipeline(&self.render_pipeline);
         renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
+        renderpass.set_vertex_buffer(2, projection_buffer.slice(..));
         renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         renderpass.draw_indexed(0..self.num_indices, 0, 0..1);
 
@@ -277,6 +296,7 @@ impl State {
 struct App {
     state: Option<State>,
     mouse: Mouse,
+    projection: Projection,
 }
 
 impl ApplicationHandler for App {
@@ -291,6 +311,7 @@ impl ApplicationHandler for App {
         let state = pollster::block_on(State::new(window.clone()));
         self.state = Some(state);
         self.mouse.update_window_size(window.inner_size());
+        self.projection.update_window_size(window.inner_size());
         window.request_redraw();
     }
 
@@ -310,6 +331,10 @@ impl ApplicationHandler for App {
                 // Reconfigures the size of the surface. We do not re-render
                 // here as this event is always followed up by redraw request.
                 self.mouse.update_window_size(size);
+                self.projection.update_window_size(size);
+                state.current_projection = self
+                    .projection
+                    .mat4_orthographic(-2.5, 2.5, -2.5, 2.5, -2.5, 2.5);
                 state.resize(size);
             }
             WindowEvent::CursorMoved {
