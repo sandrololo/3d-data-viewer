@@ -14,8 +14,7 @@ impl Default for Transformation {
 
 impl Transformation {
     pub fn new() -> Self {
-        let default = mat4_from_translation(Vec3::new(0.0, 0.5, 0.0))
-            * mat4_from_rotation_axis(Vec3::new(0.0, 1.0, 0.0), 45.0)
+        let default = mat4_from_rotation_axis(Vec3::new(0.0, 1.0, 0.0), 45.0)
             * mat4_from_rotation_axis(Vec3::new(1.0, 0.0, 0.0), 240.0);
         Self {
             initial: default,
