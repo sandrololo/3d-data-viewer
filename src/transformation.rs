@@ -27,7 +27,7 @@ impl Transformation {
         self.current
     }
 
-    pub fn start(&mut self, position: Vec3) {
+    pub fn start_move(&mut self, position: Vec3) {
         self.initial_position = position;
         self.initial = self.current;
     }
@@ -37,11 +37,6 @@ impl Transformation {
         let axis_len = rot_axis.length();
         let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
         self.current = rot * self.initial;
-    }
-
-    pub fn trans(&mut self, new_position: Vec3) {
-        let trans = mat4_from_translation(new_position - self.initial_position);
-        self.current = trans * self.initial;
     }
 }
 
@@ -79,15 +74,6 @@ impl TransformationBuffer {
                 },
             ],
         }
-    }
-}
-
-fn mat4_from_translation(v: Vec3) -> Mat4 {
-    Mat4 {
-        x_axis: Vec4::new(1.0, 0.0, 0.0, 0.0),
-        y_axis: Vec4::new(0.0, 1.0, 0.0, 0.0),
-        z_axis: Vec4::new(0.0, 0.0, 1.0, 0.0),
-        w_axis: Vec4::new(v[0], v[1], v[2], 1.0),
     }
 }
 

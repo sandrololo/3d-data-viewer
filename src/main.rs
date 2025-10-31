@@ -299,8 +299,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(size) => {
                 app_state.resize(size);
-                self.projection
-                    .zoom(self.mouse.get_zoom(), app_state.aspect_ratio);
+                self.projection.update_aspect_ratio(app_state.aspect_ratio);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
@@ -315,7 +314,7 @@ impl ApplicationHandler for App {
                         Ok(new_position) => {
                             if self.mouse.is_pointer_inside(new_position) {
                                 if self.keyboard.is_control_pressed() {
-                                    self.transformation.trans(new_position);
+                                    self.projection.change_position(new_position.truncate());
                                 } else {
                                     self.transformation.rotate(new_position);
                                 }
@@ -337,7 +336,13 @@ impl ApplicationHandler for App {
                         .mouse
                         .get_device_coordinates(app_state.get_window().inner_size())
                     {
-                        Ok(pos) => self.transformation.start(pos),
+                        Ok(pos) => {
+                            if self.keyboard.is_control_pressed() {
+                                self.projection.start_move(pos.truncate());
+                            } else {
+                                self.transformation.start_move(pos)
+                            };
+                        }
                         Err(e) => error!("Failed to calculate pointer position: {}", e),
                     }
                 }
@@ -348,8 +353,7 @@ impl ApplicationHandler for App {
                 phase: _,
             } => {
                 self.mouse.register_scroll_event(delta);
-                self.projection
-                    .zoom(self.mouse.get_zoom(), app_state.aspect_ratio);
+                self.projection.zoom(self.mouse.get_zoom());
                 app_state.get_window().request_redraw();
             }
             WindowEvent::KeyboardInput {
