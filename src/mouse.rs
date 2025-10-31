@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton, MouseScrollDelta},
@@ -21,7 +21,7 @@ impl Mouse {
         Self {
             current_position: PhysicalPosition::new(0.0, 0.0),
             left_button: ElementState::Released,
-            current_zoom: 1.0,
+            current_zoom: 2.0,
         }
     }
 
@@ -51,12 +51,12 @@ impl Mouse {
         }
     }
 
-    pub fn get_device_coordinates(&self, window_size: PhysicalSize<u32>) -> anyhow::Result<Vec3> {
+    pub fn get_device_coordinates(&self, window_size: PhysicalSize<u32>) -> anyhow::Result<Vec2> {
         let w = f64::try_from(window_size.width - 1)?;
         let h = f64::try_from(window_size.height - 1)?;
         let x = (2.0 * self.current_position.x / w - 1.0) as f32;
         let y = (1.0 - 2.0 * self.current_position.y / h) as f32;
-        Ok(Vec3::new(x, y, 1.0))
+        Ok(Vec2::new(x, y))
     }
 
     pub fn is_left_button_pressed(&self) -> bool {

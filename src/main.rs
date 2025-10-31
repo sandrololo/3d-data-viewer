@@ -1,4 +1,4 @@
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
 use wgpu::util::DeviceExt;
@@ -307,16 +307,16 @@ impl ApplicationHandler for App {
             } => {
                 self.mouse.register_move_event(position);
                 if self.mouse.is_left_button_pressed() {
-                    match self
-                        .mouse
-                        .get_device_coordinates(app_state.get_window().inner_size())
-                    {
+                    match self.mouse.get_device_coordinates(app_state.size) {
                         Ok(new_position) => {
-                            if self.mouse.is_pointer_inside(new_position) {
+                            if self
+                                .mouse
+                                .is_pointer_inside(Vec3::from((new_position, 1.0)))
+                            {
                                 if self.keyboard.is_control_pressed() {
-                                    self.projection.change_position(new_position.truncate());
+                                    self.projection.change_position(new_position);
                                 } else {
-                                    self.transformation.rotate(new_position);
+                                    self.transformation.rotate(Vec3::from((new_position, 1.0)));
                                 }
                             }
                             app_state.get_window().request_redraw();
@@ -332,15 +332,12 @@ impl ApplicationHandler for App {
             } => {
                 self.mouse.register_button_event(button, state);
                 if self.mouse.is_left_button_pressed() {
-                    match self
-                        .mouse
-                        .get_device_coordinates(app_state.get_window().inner_size())
-                    {
+                    match self.mouse.get_device_coordinates(app_state.size) {
                         Ok(pos) => {
                             if self.keyboard.is_control_pressed() {
-                                self.projection.start_move(pos.truncate());
+                                self.projection.start_move(pos);
                             } else {
-                                self.transformation.start_move(pos)
+                                self.transformation.start_move(Vec3::from((pos, 1.0)))
                             };
                         }
                         Err(e) => error!("Failed to calculate pointer position: {}", e),

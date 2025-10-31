@@ -1,5 +1,4 @@
 use glam::{Mat4, Vec2, Vec4};
-use log::info;
 
 pub struct Projection {
     initial_position: Vec2,
@@ -21,7 +20,7 @@ impl Projection {
             initial_position: Vec2::ZERO,
             initial_delta: Vec2::ZERO,
             current_delta: Vec2::ZERO,
-            zoom: 1.0,
+            zoom: 2.0,
             aspect_ratio: 1.0,
         }
     }
@@ -32,7 +31,6 @@ impl Projection {
     }
 
     pub fn change_position(&mut self, position: Vec2) {
-        info!("Changing position to {:?}", position);
         self.current_delta = position - self.initial_position + self.initial_delta;
     }
 
@@ -45,12 +43,12 @@ impl Projection {
     }
 
     pub fn get_current(&self) -> Mat4 {
-        let x_min = -2.0 * self.zoom - self.current_delta.x;
-        let x_max = 2.0 * self.zoom - self.current_delta.x;
-        let y_min = -2.0 * self.zoom - self.current_delta.y;
-        let y_max = 2.0 * self.zoom - self.current_delta.y;
-        let z_min = -2.0 * self.zoom;
-        let z_max = 2.0 * self.zoom;
+        let x_min = -self.zoom - self.current_delta.x;
+        let x_max = self.zoom - self.current_delta.x;
+        let y_min = -self.zoom - self.current_delta.y;
+        let y_max = self.zoom - self.current_delta.y;
+        let z_min = -self.zoom;
+        let z_max = self.zoom;
 
         let mut dx = x_max - x_min;
         let mut dy = y_max - y_min;
