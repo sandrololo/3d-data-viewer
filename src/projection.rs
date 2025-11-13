@@ -86,22 +86,22 @@ impl ProjectionBuffer {
             attributes: &[
                 wgpu::VertexAttribute {
                     offset: 0,
-                    shader_location: 5,
+                    shader_location: 10,
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 6,
+                    shader_location: 11,
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
                     offset: (2 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 7,
+                    shader_location: 12,
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
                     offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 8,
+                    shader_location: 13,
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],

@@ -1,5 +1,5 @@
 use log::info;
-use std::fs::File;
+use std::{fs::File, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
 
 pub struct Image<T> {
@@ -8,31 +8,22 @@ pub struct Image<T> {
     pub data: Vec<T>,
 }
 
-impl Image<f32> {
-    pub fn to_xyz_scaled(&self) -> Vec<[f32; 3]> {
-        let z_min = self
-            .data
-            .iter()
-            .cloned()
-            .fold(f32::INFINITY, |a, b| a.min(b));
-        let z_max = self
-            .data
-            .iter()
-            .cloned()
-            .fold(f32::NEG_INFINITY, |a, b| a.max(b));
-        let mut result = Vec::with_capacity((self.height * self.width) as usize);
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let index = (y * self.width + x) as usize;
-                let z: f32 = self.data[index].into();
-                result.push([
-                    -1.0 + x as f32 * (2.0) / self.width as f32,
-                    -1.0 + y as f32 * (2.0) / self.height as f32,
-                    -1.0 + (z - z_min) / (z_max - z_min) * (2.0),
-                ]);
+impl<T> Image<T>
+where
+    T: PartialOrd + Copy,
+{
+    pub fn value_range(&self) -> Range<T> {
+        let mut min_value = self.data[0];
+        let mut max_value = self.data[0];
+        for &value in &self.data {
+            if value < min_value {
+                min_value = value;
+            }
+            if value > max_value {
+                max_value = value;
             }
         }
-        result
+        min_value..max_value
     }
 }
 

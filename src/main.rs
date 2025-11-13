@@ -19,6 +19,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
+    image::Image,
     keyboard::Keyboard,
     projection::ProjectionBuffer,
     transformation::{Transformation, TransformationBuffer},
@@ -27,7 +28,8 @@ use crate::{
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
-    position: [f32; 3],
+    position: [f32; 1],
+    vertex_id: [u32; 1],
 }
 
 impl Vertex {
@@ -35,11 +37,70 @@ impl Vertex {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[wgpu::VertexAttribute {
-                offset: 0,
-                shader_location: 0,
-                format: wgpu::VertexFormat::Float32x3,
-            }],
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Uint32,
+                },
+            ],
+        }
+    }
+}
+
+struct ImageSize {
+    width: u32,
+    height: u32,
+}
+
+impl ImageSize {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<ImageSize>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Uint32,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<u32>() as wgpu::BufferAddress,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Uint32,
+                },
+            ],
+        }
+    }
+}
+
+struct ZValueRange {
+    min: f32,
+    max: f32,
+}
+
+impl ZValueRange {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<ZValueRange>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32,
+                },
+            ],
         }
     }
 }
@@ -56,8 +117,9 @@ struct State {
     current_projection: Mat4,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    image_size_buffer: wgpu::Buffer,
+    z_value_range_buffer: wgpu::Buffer,
+    image: Image<f32>,
 }
 
 impl State {
@@ -93,6 +155,8 @@ impl State {
                 entry_point: Some("vs_main"),
                 buffers: &[
                     Vertex::desc(),
+                    ImageSize::desc(),
+                    ZValueRange::desc(),
                     TransformationBuffer::desc(),
                     ProjectionBuffer::desc(),
                 ],
@@ -117,37 +181,34 @@ impl State {
         let image = SurfaceAmplitudeImage::from_file("img.tiff")
             .unwrap()
             .amplitude;
-        let image_array = image.to_xyz_scaled();
 
-        let mut indices = vec![];
-        for y in 0..(image.height - 1) {
-            for x in 0..(image.width - 1) {
-                let top_left = y * image.width + x;
-                let top_right = top_left + 1;
-                let bottom_left = top_left + image.width;
-
-                indices.push(top_left);
-                indices.push(bottom_left);
-
-                indices.push(top_left);
-                indices.push(top_right);
-            }
+        // Interleave z values and vertex indices into a single vertex buffer
+        let mut vertices: Vec<Vertex> = Vec::with_capacity((image.width * image.height) as usize);
+        for (i, &z) in image.data.iter().enumerate() {
+            vertices.push(Vertex {
+                position: [z],
+                vertex_id: [i as u32],
+            });
         }
-
-        // Create buffers
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&image_array),
+            label: Some("Vertex Buffer (z + index)"),
+            contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
+        let image_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Image Size Buffer"),
+            contents: bytemuck::cast_slice(&[image.width, image.height]),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        let num_indices = indices.len() as u32;
+        let z_range = image.value_range();
+
+        let z_value_range_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Z Value Range Buffer"),
+            contents: bytemuck::cast_slice(&[z_range.start, z_range.end]),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
 
         let state = State {
             window,
@@ -161,8 +222,9 @@ impl State {
             current_projection: Mat4::IDENTITY,
             render_pipeline,
             vertex_buffer,
-            index_buffer,
-            num_indices,
+            image_size_buffer,
+            z_value_range_buffer,
+            image,
         };
 
         // Configure surface for the first time
@@ -246,11 +308,13 @@ impl State {
             occlusion_query_set: None,
         });
         renderpass.set_pipeline(&self.render_pipeline);
+        // bind the image width/height uniform bind group at group 0
         renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
-        renderpass.set_vertex_buffer(2, projection_buffer.slice(..));
-        renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        renderpass.draw_indexed(0..self.num_indices, 0, 0..1);
+        renderpass.set_vertex_buffer(1, self.image_size_buffer.slice(..));
+        renderpass.set_vertex_buffer(2, self.z_value_range_buffer.slice(..));
+        renderpass.set_vertex_buffer(3, transformation_buffer.slice(..));
+        renderpass.set_vertex_buffer(4, projection_buffer.slice(..));
+        renderpass.draw(0..self.image.width * self.image.height, 0..1);
 
         // End the renderpass.
         drop(renderpass);
