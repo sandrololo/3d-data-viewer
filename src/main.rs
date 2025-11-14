@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
 use wgpu::util::DeviceExt;
@@ -468,10 +468,7 @@ impl ApplicationHandler for App {
                 if self.mouse.is_left_button_pressed() {
                     match self.mouse.get_device_coordinates(app_state.size) {
                         Ok(new_position) => {
-                            if self
-                                .mouse
-                                .is_pointer_inside(Vec3::from((new_position, 1.0)))
-                            {
+                            if self.mouse.is_pointer_inside(Vec2::from(new_position)) {
                                 if self.keyboard.is_control_pressed() {
                                     self.projection.change_position(new_position);
                                 } else {

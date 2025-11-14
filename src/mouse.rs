@@ -1,4 +1,4 @@
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton, MouseScrollDelta},
@@ -67,7 +67,7 @@ impl Mouse {
         self.current_zoom
     }
 
-    pub fn is_pointer_inside(&self, pos: Vec3) -> bool {
+    pub fn is_pointer_inside(&self, pos: Vec2) -> bool {
         pos.x >= -1.0 && pos.x <= 1.0 && pos.y >= -1.0 && pos.y <= 1.0
     }
 }
