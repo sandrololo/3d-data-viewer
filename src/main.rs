@@ -19,7 +19,6 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::Image,
     keyboard::Keyboard,
     projection::ProjectionBuffer,
     transformation::{Transformation, TransformationBuffer},
@@ -117,9 +116,10 @@ struct State {
     current_projection: Mat4,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
     image_size_buffer: wgpu::Buffer,
     z_value_range_buffer: wgpu::Buffer,
-    image: Image<f32>,
+    num_indices: u32,
 }
 
 impl State {
@@ -169,7 +169,8 @@ impl State {
                 targets: &[Some(surface_format.into())],
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::LineList,
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: Some(wgpu::IndexFormat::Uint32),
                 ..Default::default()
             },
             depth_stencil: None,
@@ -194,6 +195,24 @@ impl State {
             label: Some("Vertex Buffer (z + index)"),
             contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::VERTEX,
+        });
+        let mut indices: Vec<u32> = Vec::new();
+        for i in 0..image.height - 1 {
+            for j in 0..((image.width - 1) / 2) {
+                let j = j * 2;
+                indices.push((i * image.width + j) as u32);
+                indices.push(((i + 1) * image.width + j) as u32);
+                indices.push((i * image.width + j + 1) as u32);
+                indices.push(((i + 1) * image.width + j + 1) as u32);
+                indices.push((i * image.width + j + 2) as u32);
+                indices.push(((i + 1) * image.width + j + 2) as u32);
+            }
+        }
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         let image_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -222,9 +241,10 @@ impl State {
             current_projection: Mat4::IDENTITY,
             render_pipeline,
             vertex_buffer,
+            index_buffer,
             image_size_buffer,
             z_value_range_buffer,
-            image,
+            num_indices: indices.len() as u32,
         };
 
         // Configure surface for the first time
@@ -310,11 +330,12 @@ impl State {
         renderpass.set_pipeline(&self.render_pipeline);
         // bind the image width/height uniform bind group at group 0
         renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         renderpass.set_vertex_buffer(1, self.image_size_buffer.slice(..));
         renderpass.set_vertex_buffer(2, self.z_value_range_buffer.slice(..));
         renderpass.set_vertex_buffer(3, transformation_buffer.slice(..));
         renderpass.set_vertex_buffer(4, projection_buffer.slice(..));
-        renderpass.draw(0..self.image.width * self.image.height, 0..1);
+        renderpass.draw_indexed(0..self.num_indices, 0, 0..1);
 
         // End the renderpass.
         drop(renderpass);
