@@ -47,8 +47,8 @@ impl Projection {
         let x_max = self.zoom - self.current_delta.x;
         let y_min = -self.zoom - self.current_delta.y;
         let y_max = self.zoom - self.current_delta.y;
-        let z_min = -self.zoom;
-        let z_max = self.zoom;
+        let z_min = -1.0;
+        let z_max = 1.0;
 
         let mut dx = x_max - x_min;
         let mut dy = y_max - y_min;
