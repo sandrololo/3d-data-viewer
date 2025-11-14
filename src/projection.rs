@@ -47,8 +47,9 @@ impl Projection {
         let x_max = self.zoom - self.current_delta.x;
         let y_min = -self.zoom - self.current_delta.y;
         let y_max = self.zoom - self.current_delta.y;
-        let z_min = -1.0;
-        let z_max = 1.0;
+        let pad3d = 3.0_f32.sqrt();
+        let z_min = -pad3d;
+        let z_max = pad3d;
 
         let mut dx = x_max - x_min;
         let mut dy = y_max - y_min;
@@ -58,6 +59,9 @@ impl Projection {
         } else {
             dy = dx / self.aspect_ratio;
         }
+        let pad_xy = 3.0_f32.sqrt();
+        dx *= pad_xy;
+        dy *= pad_xy;
         Mat4 {
             x_axis: Vec4::new(2.0 / dx, 0.0, 0.0, 0.0),
             y_axis: Vec4::new(0.0, 2.0 / dy, 0.0, 0.0),
