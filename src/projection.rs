@@ -20,7 +20,7 @@ impl Projection {
             initial_position: Vec2::ZERO,
             initial_delta: Vec2::ZERO,
             current_delta: Vec2::ZERO,
-            zoom: 2.0,
+            zoom: 1.0,
             aspect_ratio: 1.0,
         }
     }
