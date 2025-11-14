@@ -35,8 +35,11 @@ struct VertexOutput {
 @vertex
 fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, transformation: TransformationInput, projection: ProjectionInput) -> VertexOutput {
     let idx = data.vertex_index;
-    let x = -1.0 + f32(idx % (image_size.width-1)) * 2.0 / f32(image_size.width);
-    let y = -1.0 + f32(idx / image_size.width) * 2.0 / f32(image_size.height);
+    let col = idx % image_size.width;
+    let row = idx / image_size.width;
+    // Map grid coordinates to NDC consistently across the full width/height
+    let x = -1.0 + 2.0 * f32(col) / f32(image_size.width - 1u);
+    let y = -1.0 + 2.0 * f32(row) / f32(image_size.height - 1u);
     let z = -1.0 + (data.z_values - z_range.z_min) / (z_range.z_max - z_range.z_min) * (2.0);
     let points = vec4<f32>(x, y, z, 1.0);
 
@@ -58,7 +61,10 @@ fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, trans
 
     var out: VertexOutput;
     out.position = projected_position;
-    out.tex_coords = vec2<f32>(f32(idx % image_size.width) / f32(image_size.width - 1), f32(idx / image_size.width) / f32(image_size.height - 1));
+    out.tex_coords = vec2<f32>(
+        f32(col) / f32(image_size.width - 1u),
+        f32(row) / f32(image_size.height - 1u)
+    );
     return out;
 }
 
