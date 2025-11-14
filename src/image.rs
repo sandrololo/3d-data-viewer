@@ -1,6 +1,5 @@
 use egui::emath::Float;
 use log::info;
-use num_traits::{Bounded, Num, NumCast};
 use std::{fs::File, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
 
