@@ -13,6 +13,7 @@ mod image;
 mod keyboard;
 mod mouse;
 mod projection;
+mod texture;
 mod transformation;
 use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
@@ -119,6 +120,7 @@ struct State {
     index_buffer: wgpu::Buffer,
     image_size_buffer: wgpu::Buffer,
     z_value_range_buffer: wgpu::Buffer,
+    texture_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -145,10 +147,22 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
-        // Create render pipeline
+        let image = SurfaceAmplitudeImage::from_file("img.tiff").unwrap();
+        let image_surface = image.surface;
+
+        let texture = texture::Texture::new(image.amplitude, &device);
+        texture.write_to_queue(&queue);
+
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("render_pipeline_layout"),
+                bind_group_layouts: &[&texture.texture_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
-            layout: None,
+            layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
@@ -178,13 +192,14 @@ impl State {
             cache: None,
         });
 
-        let image = SurfaceAmplitudeImage::from_file("img.tiff")
-            .unwrap()
-            .amplitude;
-
         // Interleave z values and vertex indices into a single vertex buffer
-        let mut vertices: Vec<Vertex> = Vec::with_capacity((image.width * image.height) as usize);
-        for (i, &z) in image.data.iter().enumerate() {
+        let mut vertices: Vec<Vertex> =
+            Vec::with_capacity((image_surface.width * image_surface.height) as usize);
+        for (i, &z) in image_surface
+            .outlier_removed_data(10.0, 90.0)
+            .iter()
+            .enumerate()
+        {
             vertices.push(Vertex {
                 position: [z],
                 vertex_id: [i as u32],
@@ -196,15 +211,15 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
         let mut indices: Vec<u32> = Vec::new();
-        for i in 0..image.height - 1 {
-            for j in 0..((image.width - 1) / 2) {
+        for i in 0..image_surface.height - 1 {
+            for j in 0..((image_surface.width - 1) / 2) {
                 let j = j * 2;
-                indices.push((i * image.width + j) as u32);
-                indices.push(((i + 1) * image.width + j) as u32);
-                indices.push((i * image.width + j + 1) as u32);
-                indices.push(((i + 1) * image.width + j + 1) as u32);
-                indices.push((i * image.width + j + 2) as u32);
-                indices.push(((i + 1) * image.width + j + 2) as u32);
+                indices.push((i * image_surface.width + j) as u32);
+                indices.push(((i + 1) * image_surface.width + j) as u32);
+                indices.push((i * image_surface.width + j + 1) as u32);
+                indices.push(((i + 1) * image_surface.width + j + 1) as u32);
+                indices.push((i * image_surface.width + j + 2) as u32);
+                indices.push(((i + 1) * image_surface.width + j + 2) as u32);
             }
         }
 
@@ -216,11 +231,11 @@ impl State {
 
         let image_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Image Size Buffer"),
-            contents: bytemuck::cast_slice(&[image.width, image.height]),
+            contents: bytemuck::cast_slice(&[image_surface.width, image_surface.height]),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        let z_range = image.value_range();
+        let z_range = image_surface.value_range();
 
         let z_value_range_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Z Value Range Buffer"),
@@ -243,6 +258,7 @@ impl State {
             index_buffer,
             image_size_buffer,
             z_value_range_buffer,
+            texture_bind_group: texture.texture_bind_group,
         };
 
         // Configure surface for the first time
@@ -323,7 +339,7 @@ impl State {
             occlusion_query_set: None,
         });
         renderpass.set_pipeline(&self.render_pipeline);
-        // bind the image width/height uniform bind group at group 0
+        renderpass.set_bind_group(0, &self.texture_bind_group, &[]);
         renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         renderpass.set_vertex_buffer(1, self.image_size_buffer.slice(..));

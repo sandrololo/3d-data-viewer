@@ -347,6 +347,7 @@ dependencies = [
  "env_logger",
  "glam",
  "log",
+ "num-traits",
  "pollster",
  "tiff",
  "wgpu",

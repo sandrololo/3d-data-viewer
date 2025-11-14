@@ -29,6 +29,7 @@ struct ProjectionInput{
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>
 }
 
 @vertex
@@ -57,17 +58,17 @@ fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, trans
 
     var out: VertexOutput;
     out.position = projected_position;
+    out.tex_coords = vec2<f32>(f32(idx % image_size.width) / f32(image_size.width - 1), f32(idx / image_size.width) / f32(image_size.height - 1));
     return out;
 }
 
-const cmin: f32 = 0.3;
-const cmax: f32 = 1.0;
+@group(0) @binding(0)
+var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1)
+var s_diffuse: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let c = (in.position.z + 1.0) / 2.0 * (cmax - cmin) + cmin;
-    let c1 = c * 1.0;
-    let c2 = c * 1.0;
-    let c3 = c * 1.0;
-    return vec4<f32>(c1, c2, c3, 1.0);
+    let sampled = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+    return vec4<f32>(1.0 - sampled.r, sampled.r, 0.0, 1.0);
 }

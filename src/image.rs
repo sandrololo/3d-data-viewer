@@ -1,4 +1,6 @@
+use egui::emath::Float;
 use log::info;
+use num_traits::{Bounded, Num, NumCast};
 use std::{fs::File, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
 
@@ -12,6 +14,23 @@ impl<T> Image<T>
 where
     T: PartialOrd + Copy,
 {
+    pub fn outlier_removed_data(&self, lower_percentile: f32, upper_percentile: f32) -> Vec<T>
+    where
+        T: num_traits::Float,
+    {
+        let mut sorted_data = self.data.clone();
+        sorted_data.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let len = sorted_data.len();
+        let lower_index = ((lower_percentile / 100.0) * len as f32).round() as usize;
+        let upper_index = ((upper_percentile / 100.0) * len as f32).round() as usize;
+        let min_value = sorted_data[lower_index];
+        let max_value = sorted_data[upper_index];
+        self.data
+            .iter()
+            .map(|&pixel| pixel.clamp(min_value, max_value))
+            .collect()
+    }
+
     pub fn value_range(&self) -> Range<T> {
         let mut min_value = self.data[0];
         let mut max_value = self.data[0];
@@ -24,6 +43,24 @@ where
             }
         }
         min_value..max_value
+    }
+
+    pub fn scaled_data(&self, new_min: T, new_max: T) -> Vec<T>
+    where
+        T: Float
+            + std::ops::Sub<Output = T>
+            + std::ops::Add<Output = T>
+            + std::ops::Mul<Output = T>
+            + std::ops::Div<Output = T>,
+    {
+        let value_range = self.value_range();
+        let old_min = value_range.start;
+        let old_max = value_range.end;
+        let scale = (new_max - new_min) / (old_max - old_min);
+        self.data
+            .iter()
+            .map(|&value| new_min + (value - old_min) * scale)
+            .collect()
     }
 }
 
