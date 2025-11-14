@@ -119,7 +119,6 @@ struct State {
     index_buffer: wgpu::Buffer,
     image_size_buffer: wgpu::Buffer,
     z_value_range_buffer: wgpu::Buffer,
-    num_indices: u32,
 }
 
 impl State {
@@ -244,7 +243,6 @@ impl State {
             index_buffer,
             image_size_buffer,
             z_value_range_buffer,
-            num_indices: indices.len() as u32,
         };
 
         // Configure surface for the first time
@@ -294,22 +292,19 @@ impl State {
             });
 
         // Create transformation buffer (this changes per frame based on mouse input)
-        let transformation_buffer =
-            self.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Transformation Buffer"),
-                    contents: bytemuck::cast_slice(&self.current_transformation.to_cols_array_2d()),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
+        let transformation_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Transformation Buffer"),
+            size: (std::mem::size_of::<[[f32; 4]; 4]>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
-        let projection_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Projection Buffer"),
-                contents: bytemuck::cast_slice(&self.current_projection.to_cols_array_2d()),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
+        let projection_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Projection Buffer"),
+            size: (std::mem::size_of::<[[f32; 4]; 4]>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         let mut encoder = self.device.create_command_encoder(&Default::default());
         // Create the renderpass which will clear the screen.
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -335,11 +330,24 @@ impl State {
         renderpass.set_vertex_buffer(2, self.z_value_range_buffer.slice(..));
         renderpass.set_vertex_buffer(3, transformation_buffer.slice(..));
         renderpass.set_vertex_buffer(4, projection_buffer.slice(..));
-        renderpass.draw_indexed(0..self.num_indices, 0, 0..1);
+        renderpass.draw_indexed(
+            0..self.index_buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
+            0,
+            0..1,
+        );
 
         // End the renderpass.
         drop(renderpass);
-
+        self.queue.write_buffer(
+            &transformation_buffer,
+            0,
+            bytemuck::cast_slice(&self.current_transformation.to_cols_array_2d()),
+        );
+        self.queue.write_buffer(
+            &projection_buffer,
+            0,
+            bytemuck::cast_slice(&self.current_projection.to_cols_array_2d()),
+        );
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
