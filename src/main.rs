@@ -12,6 +12,7 @@ use winit::{
 mod image;
 mod keyboard;
 mod mouse;
+mod overlay;
 mod projection;
 mod texture;
 mod transformation;
@@ -20,8 +21,8 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{ImageSize, ZValueRange},
     keyboard::Keyboard,
+    overlay::{Overlay, OverlayTexture},
     projection::ProjectionBuffer,
     transformation::{Transformation, TransformationBuffer},
 };
@@ -69,9 +70,9 @@ struct State {
     use_height_shader: bool,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    image_size_buffer: wgpu::Buffer,
-    z_value_range_buffer: wgpu::Buffer,
     texture_bind_group: wgpu::BindGroup,
+    image_dims_bind_group: wgpu::BindGroup,
+    z_value_range_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
 }
 
@@ -102,13 +103,149 @@ impl State {
         let image = SurfaceAmplitudeImage::from_file("img.tiff").unwrap();
         let image_surface = image.surface;
 
-        let texture = texture::Texture::new(image.amplitude, &device);
-        texture.write_to_queue(&queue);
+        let amplitude_texture = texture::Texture::new(image.amplitude, &device);
+        amplitude_texture.write_to_queue(&queue);
+
+        let example_overlays = vec![
+            Overlay {
+                pixels: vec![0..100, 1024..1124, 2048..2148, 3072..3172, 4096..4196],
+                color: [255, 0, 0, 180],
+            },
+            Overlay {
+                pixels: vec![5000..50000],
+                color: [255, 255, 0, 180],
+            },
+        ];
+
+        let overlay_texture = OverlayTexture::new(&image_surface.size, &example_overlays, &device);
+        overlay_texture.write_to_queue(&queue);
+
+        // Create bind group layout for textures (group 0)
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("texture_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("texture_bind_group"),
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&amplitude_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&amplitude_texture.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&overlay_texture.view),
+                },
+            ],
+        });
+
+        let image_dims_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("image_dims_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let z_value_range_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("z_value_range_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let image_dims_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("image_dims_buffer"),
+            contents: bytemuck::cast_slice(&[
+                image_surface.size.width.get(),
+                image_surface.size.height.get(),
+            ]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let outlier_removed_data = image_surface.outlier_removed_data(5.0, 95.0);
+        let z_range = image::value_range(&outlier_removed_data);
+        let z_value_range_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("z_value_range_buffer"),
+            contents: bytemuck::cast_slice(&[z_range.start, z_range.end]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let image_dims_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("image_dims_bind_group"),
+            layout: &image_dims_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: image_dims_buffer.as_entire_binding(),
+            }],
+        });
+
+        let z_value_range_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("z_value_range_bind_group"),
+            layout: &z_value_range_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: z_value_range_buffer.as_entire_binding(),
+            }],
+        });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render_pipeline_layout"),
-                bind_group_layouts: &[&texture.texture_bind_group_layout],
+                bind_group_layouts: &[
+                    &texture_bind_group_layout,
+                    &image_dims_bind_group_layout,
+                    &z_value_range_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -123,8 +260,6 @@ impl State {
                 entry_point: Some("vs_main"),
                 buffers: &[
                     Vertex::desc(),
-                    ImageSize::buffer_desc(),
-                    ZValueRange::buffer_desc(),
                     TransformationBuffer::desc(),
                     ProjectionBuffer::desc(),
                 ],
@@ -170,7 +305,6 @@ impl State {
         let mut vertices: Vec<Vertex> = Vec::with_capacity(
             (image_surface.size.width.get() * image_surface.size.height.get()) as usize,
         );
-        let outlier_removed_data = image_surface.outlier_removed_data(5.0, 95.0);
         for (i, &z) in outlier_removed_data.iter().enumerate() {
             vertices.push(Vertex {
                 position: [z],
@@ -199,23 +333,6 @@ impl State {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX,
-        });
-
-        let image_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Image Size Buffer"),
-            contents: bytemuck::cast_slice(&[
-                image_surface.size.width.get(),
-                image_surface.size.height.get(),
-            ]),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let z_range = image::value_range(&outlier_removed_data);
-
-        let z_value_range_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Z Value Range Buffer"),
-            contents: bytemuck::cast_slice(&[z_range.start, z_range.end]),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         // Create depth texture view
@@ -250,9 +367,9 @@ impl State {
             use_height_shader: true,
             vertex_buffer,
             index_buffer,
-            image_size_buffer,
-            z_value_range_buffer,
-            texture_bind_group: texture.texture_bind_group,
+            texture_bind_group,
+            image_dims_bind_group,
+            z_value_range_bind_group,
             depth_view,
         };
 
@@ -363,12 +480,12 @@ impl State {
         };
         renderpass.set_pipeline(pipeline);
         renderpass.set_bind_group(0, &self.texture_bind_group, &[]);
+        renderpass.set_bind_group(1, &self.image_dims_bind_group, &[]);
+        renderpass.set_bind_group(2, &self.z_value_range_bind_group, &[]);
         renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        renderpass.set_vertex_buffer(1, self.image_size_buffer.slice(..));
-        renderpass.set_vertex_buffer(2, self.z_value_range_buffer.slice(..));
-        renderpass.set_vertex_buffer(3, transformation_buffer.slice(..));
-        renderpass.set_vertex_buffer(4, projection_buffer.slice(..));
+        renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
+        renderpass.set_vertex_buffer(2, projection_buffer.slice(..));
         renderpass.draw_indexed(
             0..self.index_buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
             0,

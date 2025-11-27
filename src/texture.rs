@@ -2,8 +2,8 @@ use crate::image::Image;
 
 pub struct Texture {
     pub data: wgpu::Texture,
-    pub texture_bind_group_layout: wgpu::BindGroupLayout,
-    pub texture_bind_group: wgpu::BindGroup,
+    pub view: wgpu::TextureView,
+    pub sampler: wgpu::Sampler,
     image: Image<f32>,
     size: wgpu::Extent3d,
 }
@@ -37,46 +37,10 @@ impl Texture {
             ..Default::default()
         });
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
-        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&texture_sampler),
-                },
-            ],
-            label: Some("texture_bind_group"),
-        });
         Self {
             data: texture,
-            texture_bind_group_layout,
-            texture_bind_group,
+            view: texture_view,
+            sampler: texture_sampler,
             image,
             size: texture_size,
         }

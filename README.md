@@ -8,5 +8,5 @@
 ⬜  Add coordinate system\
 ⬜  Display height values at mouse pointer\
 ⬜  Improve responsivenes\
-⬜  Add rendering of AOI's\
+✅  Add rendering of AOI's\
 ⬜  Fix errors in the surface\

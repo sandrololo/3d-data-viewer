@@ -93,53 +93,6 @@ pub(crate) struct ImageSize {
     pub height: NonZeroU32,
 }
 
-impl ImageSize {
-    pub(crate) fn buffer_desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<ImageSize>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<u32>() as wgpu::BufferAddress,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-            ],
-        }
-    }
-}
-
-pub(crate) struct ZValueRange {
-    min: f32,
-    max: f32,
-}
-
-impl ZValueRange {
-    pub(crate) fn buffer_desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<ZValueRange>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32,
-                },
-            ],
-        }
-    }
-}
-
 pub fn value_range<T: PartialOrd + Copy>(data: &Vec<T>) -> Range<T> {
     let mut min_value = data[0];
     let mut max_value = data[0];

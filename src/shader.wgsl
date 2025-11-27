@@ -3,47 +3,49 @@ struct VertexInput {
     @location(1) vertex_index: u32,
 }
 
-struct ImageSize{
-    @location(2) width: u32,
-    @location(3) height: u32,
+struct ImageDimensions {
+    width: u32,
+    height: u32,
 }
+@group(1) @binding(0)
+var<uniform> image_dims: ImageDimensions;
 
 struct ZValueRange{
-    @location(4) z_min: f32,
-    @location(5) z_max: f32,
+     min: f32,
+     max: f32,
 }
+@group(2) @binding(0)
+var<uniform> z_range: ZValueRange;
 
 struct TransformationInput {
+    @location(2) col0: vec4<f32>,
+    @location(3) col1: vec4<f32>,
+    @location(4) col2: vec4<f32>,
+    @location(5) col3: vec4<f32>,
+}
+
+struct ProjectionInput{
     @location(6) col0: vec4<f32>,
     @location(7) col1: vec4<f32>,
     @location(8) col2: vec4<f32>,
     @location(9) col3: vec4<f32>,
 }
 
-struct ProjectionInput{
-    @location(10) col0: vec4<f32>,
-    @location(11) col1: vec4<f32>,
-    @location(12) col2: vec4<f32>,
-    @location(13) col3: vec4<f32>,
-}
-
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
     @location(1) points_z: f32,
-    @location(2) z_min: f32,
-    @location(3) z_max: f32,
 }
 
 @vertex
-fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, transformation: TransformationInput, projection: ProjectionInput) -> VertexOutput {
+fn vs_main(data: VertexInput,  transformation: TransformationInput, projection: ProjectionInput) -> VertexOutput {
     let idx = data.vertex_index;
-    let col = idx % image_size.width;
-    let row = idx / image_size.width;
+    let col = idx % image_dims.width;
+    let row = idx / image_dims.width;
     // Map grid coordinates to NDC consistently across the full width/height
-    let x = -1.0 + 2.0 * f32(col) / f32(image_size.width - 1u);
-    let y = -1.0 + 2.0 * f32(row) / f32(image_size.height - 1u);
-    let z = -1.0 + 2.0 *(data.z_values - z_range.z_min) / (z_range.z_max - z_range.z_min);
+    let x = -1.0 + 2.0 * f32(col) / f32(image_dims.width - 1u);
+    let y = -1.0 + 2.0 * f32(row) / f32(image_dims.height - 1u);
+    let z = -1.0 + 2.0 * (data.z_values - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
 
 
@@ -65,12 +67,10 @@ fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, trans
     var out: VertexOutput;
     out.position = projected_position;
     out.tex_coords = vec2<f32>(
-        f32(col) / f32(image_size.width - 1u),
-        f32(row) / f32(image_size.height - 1u)
+        f32(col) / f32(image_dims.width - 1u),
+        f32(row) / f32(image_dims.height - 1u)
     );
     out.points_z = data.z_values;
-    out.z_min = z_range.z_min;
-    out.z_max = z_range.z_max;
     return out;
 }
 
@@ -78,6 +78,8 @@ fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, trans
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
 var s_diffuse: sampler;
+@group(0) @binding(2)
+var t_overlay: texture_2d<f32>;
 
 @fragment
 fn fs_amplitude(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -87,6 +89,26 @@ fn fs_amplitude(in: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_height(in: VertexOutput) -> @location(0) vec4<f32> {    
-    let depth = 0.10 + 0.80 * (in.points_z - in.z_min) / (in.z_max - in.z_min);
-    return vec4<f32>(depth, depth, depth, 1.0);
+    // Calculate pixel coordinates from texture coordinates
+    let col = u32(in.tex_coords.x * f32(image_dims.width - 1u) + 0.5);
+    let row = u32(in.tex_coords.y * f32(image_dims.height - 1u) + 0.5);
+    
+    // Sample overlay texture directly using col, row
+    let overlay_color = textureLoad(t_overlay, vec2<i32>(i32(col), i32(row)), 0);
+    
+    // Calculate base height color
+    let depth = 0.10 + 0.80 * (in.points_z - z_range.min) / (z_range.max - z_range.min);
+    let base_color = vec4<f32>(depth, depth, depth, 1.0);
+    
+    // Blend overlay if present (alpha > 0)
+    if (overlay_color.a > 0.0) {
+        // Alpha blend: result = overlay * alpha + base * (1 - alpha)
+        let alpha = overlay_color.a;
+        return vec4<f32>(
+            overlay_color.rgb * alpha + base_color.rgb * (1.0 - alpha),
+            1.0
+        );
+    }
+    
+    return base_color;
 }
