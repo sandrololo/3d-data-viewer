@@ -1,10 +1,10 @@
+use anyhow::anyhow;
 use log::info;
-use std::{fs::File, ops::Range};
+use std::{fs::File, num::NonZeroU32, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
 
 pub struct Image<T> {
-    pub height: u32,
-    pub width: u32,
+    pub size: ImageSize,
     pub data: Vec<T>,
 }
 
@@ -60,27 +60,83 @@ impl SurfaceAmplitudeImage {
         let dimensions = decoder.dimensions()?;
         let surface = match decoder.read_image()? {
             DecodingResult::F32(data) => Ok(Image {
-                height: dimensions.1,
-                width: dimensions.0,
+                size: ImageSize {
+                    width: NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
+                    height: NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
+                },
                 data,
             }),
-            _ => Err(anyhow::anyhow!("Unsupported image format")),
+            _ => Err(anyhow::anyhow!("Unsupported surface image format")),
         }?;
         decoder.next_image()?;
         let dimensions = decoder.dimensions()?;
         let amplitude = match decoder.read_image()? {
             DecodingResult::F32(data) => Ok(Image {
-                height: dimensions.1,
-                width: dimensions.0,
+                size: ImageSize {
+                    width: NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
+                    height: NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
+                },
                 data,
             }),
-            _ => Err(anyhow::anyhow!("Unsupported image format")),
+            _ => Err(anyhow::anyhow!("Unsupported amplitude image format")),
         }?;
         info!(
             "Loaded surface & amplitude image with size {}x{} from {}",
-            surface.width, surface.height, path,
+            surface.size.width, surface.size.height, path,
         );
         Ok(Self { surface, amplitude })
+    }
+}
+
+pub(crate) struct ImageSize {
+    pub width: NonZeroU32,
+    pub height: NonZeroU32,
+}
+
+impl ImageSize {
+    pub(crate) fn buffer_desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<ImageSize>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Uint32,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<u32>() as wgpu::BufferAddress,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Uint32,
+                },
+            ],
+        }
+    }
+}
+
+pub(crate) struct ZValueRange {
+    min: f32,
+    max: f32,
+}
+
+impl ZValueRange {
+    pub(crate) fn buffer_desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<ZValueRange>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32,
+                },
+            ],
+        }
     }
 }
 

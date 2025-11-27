@@ -20,6 +20,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
+    image::{ImageSize, ZValueRange},
     keyboard::Keyboard,
     projection::ProjectionBuffer,
     transformation::{Transformation, TransformationBuffer},
@@ -47,58 +48,6 @@ impl Vertex {
                     offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Uint32,
-                },
-            ],
-        }
-    }
-}
-
-struct ImageSize {
-    width: u32,
-    height: u32,
-}
-
-impl ImageSize {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<ImageSize>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<u32>() as wgpu::BufferAddress,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-            ],
-        }
-    }
-}
-
-struct ZValueRange {
-    min: f32,
-    max: f32,
-}
-
-impl ZValueRange {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<ZValueRange>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32,
                 },
             ],
         }
@@ -174,8 +123,8 @@ impl State {
                 entry_point: Some("vs_main"),
                 buffers: &[
                     Vertex::desc(),
-                    ImageSize::desc(),
-                    ZValueRange::desc(),
+                    ImageSize::buffer_desc(),
+                    ZValueRange::buffer_desc(),
                     TransformationBuffer::desc(),
                     ProjectionBuffer::desc(),
                 ],
@@ -218,8 +167,9 @@ impl State {
         let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
 
         // Interleave z values and vertex indices into a single vertex buffer
-        let mut vertices: Vec<Vertex> =
-            Vec::with_capacity((image_surface.width * image_surface.height) as usize);
+        let mut vertices: Vec<Vertex> = Vec::with_capacity(
+            (image_surface.size.width.get() * image_surface.size.height.get()) as usize,
+        );
         let outlier_removed_data = image_surface.outlier_removed_data(5.0, 95.0);
         for (i, &z) in outlier_removed_data.iter().enumerate() {
             vertices.push(Vertex {
@@ -233,15 +183,15 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
         let mut indices: Vec<u32> = Vec::new();
-        for i in 0..image_surface.height - 1 {
-            for j in 0..((image_surface.width - 1) / 2) {
+        for i in 0..image_surface.size.height.get() - 1 {
+            for j in 0..((image_surface.size.width.get() - 1) / 2) {
                 let j = j * 2;
-                indices.push((i * image_surface.width + j) as u32);
-                indices.push(((i + 1) * image_surface.width + j) as u32);
-                indices.push((i * image_surface.width + j + 1) as u32);
-                indices.push(((i + 1) * image_surface.width + j + 1) as u32);
-                indices.push((i * image_surface.width + j + 2) as u32);
-                indices.push(((i + 1) * image_surface.width + j + 2) as u32);
+                indices.push((i * image_surface.size.width.get() + j) as u32);
+                indices.push(((i + 1) * image_surface.size.width.get() + j) as u32);
+                indices.push((i * image_surface.size.width.get() + j + 1) as u32);
+                indices.push(((i + 1) * image_surface.size.width.get() + j + 1) as u32);
+                indices.push((i * image_surface.size.width.get() + j + 2) as u32);
+                indices.push(((i + 1) * image_surface.size.width.get() + j + 2) as u32);
             }
         }
 
@@ -253,7 +203,10 @@ impl State {
 
         let image_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Image Size Buffer"),
-            contents: bytemuck::cast_slice(&[image_surface.width, image_surface.height]),
+            contents: bytemuck::cast_slice(&[
+                image_surface.size.width.get(),
+                image_surface.size.height.get(),
+            ]),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 

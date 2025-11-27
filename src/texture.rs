@@ -11,8 +11,8 @@ pub struct Texture {
 impl Texture {
     pub fn new(image: Image<f32>, device: &wgpu::Device) -> Self {
         let texture_size = wgpu::Extent3d {
-            width: image.width,
-            height: image.height,
+            width: image.size.width.get(),
+            height: image.size.height.get(),
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -93,8 +93,8 @@ impl Texture {
             bytemuck::cast_slice(&self.image.scaled_data(0.0, 1.0)),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * self.image.width),
-                rows_per_image: Some(self.image.height),
+                bytes_per_row: Some(4 * self.image.size.width.get()),
+                rows_per_image: Some(self.image.size.height.get()),
             },
             self.size,
         );
