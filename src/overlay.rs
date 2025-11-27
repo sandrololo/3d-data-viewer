@@ -16,13 +16,13 @@ pub struct OverlayTexture<'a> {
 
 impl<'a> OverlayTexture<'a> {
     pub fn new(image_size: &'a ImageSize, overlays: &'a [Overlay], device: &wgpu::Device) -> Self {
-        let texture = device.create_texture(&Self::desc(&image_size));
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
             height: image_size.height.get(),
             depth_or_array_layers: 1,
         };
+        let texture = device.create_texture(&Self::desc(&size));
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
             texture,
             view,
@@ -73,14 +73,10 @@ impl<'a> OverlayTexture<'a> {
         data
     }
 
-    fn desc(image_size: &ImageSize) -> wgpu::TextureDescriptor<'static> {
+    fn desc(size: &wgpu::Extent3d) -> wgpu::TextureDescriptor<'static> {
         wgpu::TextureDescriptor {
             label: Some("overlay_texture"),
-            size: wgpu::Extent3d {
-                width: image_size.width.get(),
-                height: image_size.height.get(),
-                depth_or_array_layers: 1,
-            },
+            size: *size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
