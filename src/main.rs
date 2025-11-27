@@ -15,6 +15,7 @@ mod keyboard;
 mod mouse;
 mod overlay;
 mod projection;
+mod texture;
 mod transformation;
 use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
@@ -24,6 +25,7 @@ use crate::{
     keyboard::Keyboard,
     overlay::{Overlay, OverlayTexture},
     projection::ProjectionBuffer,
+    texture::Texture,
     transformation::{Transformation, TransformationBuffer},
 };
 
@@ -120,58 +122,8 @@ impl State {
         let overlay_texture = OverlayTexture::new(&image_surface.size, &example_overlays, &device);
         overlay_texture.write_to_queue(&queue);
 
-        // Create bind group layout for textures (group 0)
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("texture_bind_group_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        },
-                        count: None,
-                    },
-                ],
-            });
-
-        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("texture_bind_group"),
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&amplitude_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&amplitude_texture.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&overlay_texture.view),
-                },
-            ],
-        });
+        let texture = Texture::new(amplitude_texture, overlay_texture);
+        let (texture_bind_group_layout, texture_bind_group) = texture.create_bind_group(&device);
 
         let outlier_removed_data = image_surface.outlier_removed_data(5.0, 95.0);
         let z_range = image::value_range(&outlier_removed_data);
