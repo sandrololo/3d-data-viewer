@@ -11,19 +11,23 @@ pub struct OverlayTexture<'a> {
     texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     overlays: &'a [Overlay],
-    image_size: &'a ImageSize,
+    size: wgpu::Extent3d,
 }
 
 impl<'a> OverlayTexture<'a> {
     pub fn new(image_size: &'a ImageSize, overlays: &'a [Overlay], device: &wgpu::Device) -> Self {
         let texture = device.create_texture(&Self::desc(&image_size));
-
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let size = wgpu::Extent3d {
+            width: image_size.width.get(),
+            height: image_size.height.get(),
+            depth_or_array_layers: 1,
+        };
         Self {
             texture,
             view,
-            image_size,
             overlays: overlays,
+            size,
         }
     }
 
@@ -39,14 +43,10 @@ impl<'a> OverlayTexture<'a> {
             &overlay_data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(self.image_size.width.get() * 4),
-                rows_per_image: Some(self.image_size.height.get()),
+                bytes_per_row: Some(self.size.width * 4),
+                rows_per_image: Some(self.size.height),
             },
-            wgpu::Extent3d {
-                width: self.image_size.width.get(),
-                height: self.image_size.height.get(),
-                depth_or_array_layers: 1,
-            },
+            self.size,
         );
     }
 
@@ -54,7 +54,7 @@ impl<'a> OverlayTexture<'a> {
     /// Returns a vec where each 4 bytes represents RGBA for that pixel index
     /// If a pixel has no overlay, it's [0, 0, 0, 0]
     fn create_overlay_data(&self) -> Vec<u8> {
-        let total_pixels = (self.image_size.width.get() * self.image_size.height.get()) as usize;
+        let total_pixels = (self.size.width * self.size.height) as usize;
         let mut data = vec![0u8; total_pixels * 4];
 
         for overlay in self.overlays {
