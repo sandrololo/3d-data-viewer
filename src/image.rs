@@ -3,7 +3,7 @@ use bytemuck::NoUninit;
 use log::info;
 use std::{fs::File, num::NonZeroU32, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
-use wgpu::{util::DeviceExt, wgc::device};
+use wgpu::util::DeviceExt;
 
 pub struct Image<T> {
     pub size: ImageSize,

@@ -17,6 +17,7 @@ mod overlay;
 mod projection;
 mod texture;
 mod transformation;
+mod vertex_buffer;
 use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
 use projection::Projection;
@@ -27,35 +28,8 @@ use crate::{
     projection::ProjectionBuffer,
     texture::Texture,
     transformation::{Transformation, TransformationBuffer},
+    vertex_buffer::VertexBuffer,
 };
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 1],
-    vertex_id: [u32; 1],
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-            ],
-        }
-    }
-}
 
 struct State {
     window: Arc<Window>,
@@ -70,7 +44,7 @@ struct State {
     render_pipeline_amplitude: wgpu::RenderPipeline,
     render_pipeline_height: wgpu::RenderPipeline,
     use_height_shader: bool,
-    vertex_buffer: wgpu::Buffer,
+    vertex_buffer: VertexBuffer,
     index_buffer: wgpu::Buffer,
     texture_bind_group: wgpu::BindGroup,
     image_dims_bind_group: wgpu::BindGroup,
@@ -155,7 +129,7 @@ impl State {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[
-                    Vertex::desc(),
+                    VertexBuffer::desc(),
                     TransformationBuffer::desc(),
                     ProjectionBuffer::desc(),
                 ],
@@ -197,21 +171,7 @@ impl State {
         });
         let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
 
-        // Interleave z values and vertex indices into a single vertex buffer
-        let mut vertices: Vec<Vertex> = Vec::with_capacity(
-            (image_surface.size.width.get() * image_surface.size.height.get()) as usize,
-        );
-        for (i, &z) in outlier_removed_data.iter().enumerate() {
-            vertices.push(Vertex {
-                position: [z],
-                vertex_id: [i as u32],
-            });
-        }
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer (z + index)"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let vertex_buffer = VertexBuffer::new(&image_surface.size, &outlier_removed_data, &device);
         let mut indices: Vec<u32> = Vec::new();
         for i in 0..image_surface.size.height.get() - 1 {
             for j in 0..((image_surface.size.width.get() - 1) / 2) {
@@ -378,7 +338,7 @@ impl State {
         renderpass.set_bind_group(0, &self.texture_bind_group, &[]);
         renderpass.set_bind_group(1, &self.image_dims_bind_group, &[]);
         renderpass.set_bind_group(2, &self.z_value_range_bind_group, &[]);
-        renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        renderpass.set_vertex_buffer(0, self.vertex_buffer.buffer.slice(..));
         renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
         renderpass.set_vertex_buffer(2, projection_buffer.slice(..));
