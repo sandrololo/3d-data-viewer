@@ -14,22 +14,26 @@ struct ZValueRange{
      min: f32,
      max: f32,
 }
-@group(2) @binding(0)
+@group(1) @binding(1)
 var<uniform> z_range: ZValueRange;
 
 struct TransformationInput {
-    @location(2) col0: vec4<f32>,
-    @location(3) col1: vec4<f32>,
-    @location(4) col2: vec4<f32>,
-    @location(5) col3: vec4<f32>,
+    col0: vec4<f32>,
+    col1: vec4<f32>,
+    col2: vec4<f32>,
+    col3: vec4<f32>,
 }
+@group(2) @binding(0)
+var<uniform> transformation: TransformationInput;
 
 struct ProjectionInput{
-    @location(6) col0: vec4<f32>,
-    @location(7) col1: vec4<f32>,
-    @location(8) col2: vec4<f32>,
-    @location(9) col3: vec4<f32>,
+    col0: vec4<f32>,
+    col1: vec4<f32>,
+    col2: vec4<f32>,
+    col3: vec4<f32>,
 }
+@group(3) @binding(0)
+var<uniform> projection: ProjectionInput;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -38,7 +42,7 @@ struct VertexOutput {
 }
 
 @vertex
-fn vs_main(data: VertexInput,  transformation: TransformationInput, projection: ProjectionInput) -> VertexOutput {
+fn vs_main(data: VertexInput) -> VertexOutput {
     let idx = data.vertex_index;
     let col = idx % image_dims.width;
     let row = idx / image_dims.width;

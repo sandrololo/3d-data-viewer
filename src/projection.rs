@@ -1,4 +1,5 @@
 use glam::{Mat4, Vec2, Vec4};
+use wgpu::util::DeviceExt;
 
 pub struct Projection {
     initial_position: Vec2,
@@ -6,6 +7,8 @@ pub struct Projection {
     current_delta: Vec2,
     zoom: f32,
     aspect_ratio: f32,
+    pub bind_group: Option<wgpu::BindGroup>,
+    buffer: Option<wgpu::Buffer>,
 }
 
 impl Default for Projection {
@@ -22,7 +25,19 @@ impl Projection {
             current_delta: Vec2::ZERO,
             zoom: 1.0,
             aspect_ratio: 1.0,
+            bind_group: None,
+            buffer: None,
         }
+    }
+
+    pub fn update_gpu(&self, queue: &wgpu::Queue) {
+        queue.write_buffer(
+            self.buffer
+                .as_ref()
+                .expect("Projection buffer not initialized"),
+            0,
+            bytemuck::cast_slice(&self.get_current().to_cols_array()),
+        );
     }
 
     pub fn start_move(&mut self, position: Vec2) {
@@ -74,41 +89,43 @@ impl Projection {
             ),
         }
     }
-}
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ProjectionBuffer {
-    projection: [[f32; 4]; 4],
-}
+    pub(crate) fn create_bind_group(&mut self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        let buffer = self.create_buffer_init(device);
+        let layout = Self::create_bind_group_layout(device);
+        self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("projection_range_bind_group"),
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        }));
+        self.buffer = Some(buffer);
+        layout
+    }
 
-impl ProjectionBuffer {
-    pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<ProjectionBuffer>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float32x4,
+    fn create_buffer_init(&self, device: &wgpu::Device) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("projection_buffer"),
+            contents: bytemuck::cast_slice(&self.get_current().to_cols_array()),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        })
+    }
+
+    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("projection_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
                 },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 7,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: (2 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 8,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 9,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
-        }
+                count: None,
+            }],
+        })
     }
 }

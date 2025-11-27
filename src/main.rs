@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec2, Vec3};
+use glam::{Vec2, Vec3};
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
 use winit::{
@@ -26,9 +26,8 @@ use crate::{
     index_buffer::IndexBuffer,
     keyboard::Keyboard,
     overlay::{Overlay, OverlayTexture},
-    projection::ProjectionBuffer,
     texture::Texture,
-    transformation::{Transformation, TransformationBuffer},
+    transformation::Transformation,
     vertex_buffer::VertexBuffer,
 };
 
@@ -40,16 +39,15 @@ struct State {
     aspect_ratio: f32,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
-    current_transformation: Mat4,
-    current_projection: Mat4,
+    transformation: Transformation,
+    projection: Projection,
     render_pipeline_amplitude: wgpu::RenderPipeline,
     render_pipeline_height: wgpu::RenderPipeline,
     use_height_shader: bool,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     texture_bind_group: wgpu::BindGroup,
-    image_dims_bind_group: wgpu::BindGroup,
-    z_value_range_bind_group: wgpu::BindGroup,
+    image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
 }
 
@@ -101,19 +99,63 @@ impl State {
         let outlier_removed_data = image.surface.outlier_removed_data(5.0, 95.0);
         let z_range = image::value_range(&outlier_removed_data);
 
-        let (image_dims_bind_group_layout, image_dims_bind_group) =
-            image.surface.size.create_bind_group(&device);
+        // Combined bind group: image dimensions (binding 0) + z range (binding 1) in group 1
+        let image_dims_buffer = image.surface.size.create_buffer_init(&device);
+        let z_value_range_buffer = z_range.create_buffer_init(&device);
+        let image_info_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("image_info_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("image_info_bind_group"),
+            layout: &image_info_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: image_dims_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: z_value_range_buffer.as_entire_binding(),
+                },
+            ],
+        });
 
-        let (z_value_range_bind_group_layout, z_value_range_bind_group) =
-            z_range.create_bind_group(&device);
+        let mut transformation = Transformation::default();
+        let transformation_bind_group_layout = transformation.create_bind_group(&device);
+        let mut projection = Projection::default();
+        let projection_bind_group_layout = projection.create_bind_group(&device);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render_pipeline_layout"),
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
-                    &image_dims_bind_group_layout,
-                    &z_value_range_bind_group_layout,
+                    &image_info_bind_group_layout,
+                    &transformation_bind_group_layout,
+                    &projection_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -127,11 +169,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[
-                    VertexBuffer::desc(),
-                    TransformationBuffer::desc(),
-                    ProjectionBuffer::desc(),
-                ],
+                buffers: &[VertexBuffer::desc()],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -198,16 +236,15 @@ impl State {
             aspect_ratio: size.width as f32 / size.height as f32,
             surface,
             surface_format,
-            current_transformation: Mat4::IDENTITY,
-            current_projection: Mat4::IDENTITY,
+            transformation,
+            projection,
             render_pipeline_amplitude,
             render_pipeline_height,
             use_height_shader: true,
             vertex_buffer,
             index_buffer,
             texture_bind_group,
-            image_dims_bind_group,
-            z_value_range_bind_group,
+            image_info_bind_group,
             depth_view,
         };
 
@@ -273,20 +310,6 @@ impl State {
                 ..Default::default()
             });
 
-        // Create transformation buffer (this changes per frame based on mouse input)
-        let transformation_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Transformation Buffer"),
-            size: (std::mem::size_of::<[[f32; 4]; 4]>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let projection_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Projection Buffer"),
-            size: (std::mem::size_of::<[[f32; 4]; 4]>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
         let mut encoder = self.device.create_command_encoder(&Default::default());
         // Create the renderpass which will clear the screen.
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -318,33 +341,23 @@ impl State {
         };
         renderpass.set_pipeline(pipeline);
         renderpass.set_bind_group(0, &self.texture_bind_group, &[]);
-        renderpass.set_bind_group(1, &self.image_dims_bind_group, &[]);
-        renderpass.set_bind_group(2, &self.z_value_range_bind_group, &[]);
+        renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
+        renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
+        renderpass.set_bind_group(3, &self.projection.bind_group, &[]);
         renderpass.set_vertex_buffer(0, self.vertex_buffer.buffer.slice(..));
         renderpass.set_index_buffer(
             self.index_buffer.buffer.slice(..),
             wgpu::IndexFormat::Uint32,
         );
-        renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
-        renderpass.set_vertex_buffer(2, projection_buffer.slice(..));
         renderpass.draw_indexed(
             0..self.index_buffer.buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
             0,
             0..1,
         );
-
         // End the renderpass.
         drop(renderpass);
-        self.queue.write_buffer(
-            &transformation_buffer,
-            0,
-            bytemuck::cast_slice(&self.current_transformation.to_cols_array_2d()),
-        );
-        self.queue.write_buffer(
-            &projection_buffer,
-            0,
-            bytemuck::cast_slice(&self.current_projection.to_cols_array_2d()),
-        );
+        self.transformation.update_gpu(&self.queue);
+        self.projection.update_gpu(&self.queue);
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
@@ -357,8 +370,6 @@ struct App {
     state: Option<State>,
     mouse: Mouse,
     keyboard: Keyboard,
-    transformation: Transformation,
-    projection: Projection,
 }
 
 impl ApplicationHandler for App {
@@ -383,13 +394,13 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                app_state.current_transformation = self.transformation.get_current();
-                app_state.current_projection = self.projection.get_current();
                 app_state.render();
             }
             WindowEvent::Resized(size) => {
                 app_state.resize(size);
-                self.projection.update_aspect_ratio(app_state.aspect_ratio);
+                app_state
+                    .projection
+                    .update_aspect_ratio(app_state.aspect_ratio);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
@@ -401,9 +412,11 @@ impl ApplicationHandler for App {
                         Ok(new_position) => {
                             if self.mouse.is_pointer_inside(Vec2::from(new_position)) {
                                 if self.keyboard.is_control_pressed() {
-                                    self.projection.change_position(new_position);
+                                    app_state.projection.change_position(new_position);
                                 } else {
-                                    self.transformation.rotate(Vec3::from((new_position, 1.0)));
+                                    app_state
+                                        .transformation
+                                        .rotate(Vec3::from((new_position, 1.0)));
                                 }
                             }
                             app_state.get_window().request_redraw();
@@ -422,9 +435,9 @@ impl ApplicationHandler for App {
                     match self.mouse.get_device_coordinates(app_state.size) {
                         Ok(pos) => {
                             if self.keyboard.is_control_pressed() {
-                                self.projection.start_move(pos);
+                                app_state.projection.start_move(pos);
                             } else {
-                                self.transformation.start_move(Vec3::from((pos, 1.0)))
+                                app_state.transformation.start_move(Vec3::from((pos, 1.0)))
                             };
                         }
                         Err(e) => error!("Failed to calculate pointer position: {}", e),
@@ -437,7 +450,7 @@ impl ApplicationHandler for App {
                 phase: _,
             } => {
                 self.mouse.register_scroll_event(delta);
-                self.projection.zoom(self.mouse.get_zoom());
+                app_state.projection.zoom(self.mouse.get_zoom());
                 app_state.get_window().request_redraw();
             }
             WindowEvent::KeyboardInput {

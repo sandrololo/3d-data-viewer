@@ -1,9 +1,12 @@
 use glam::{Mat4, Vec3, Vec4};
+use wgpu::util::DeviceExt;
 
 pub struct Transformation {
     current: Mat4,
     initial: Mat4,
     initial_position: Vec3,
+    pub bind_group: Option<wgpu::BindGroup>,
+    buffer: Option<wgpu::Buffer>,
 }
 
 impl Default for Transformation {
@@ -19,11 +22,19 @@ impl Transformation {
             initial: default,
             current: default,
             initial_position: Vec3::new(0.0, 0.0, 1.0),
+            bind_group: None,
+            buffer: None,
         }
     }
 
-    pub fn get_current(&self) -> Mat4 {
-        self.current
+    pub fn update_gpu(&self, queue: &wgpu::Queue) {
+        queue.write_buffer(
+            self.buffer
+                .as_ref()
+                .expect("Transformation buffer not initialized"),
+            0,
+            bytemuck::cast_slice(&self.current.to_cols_array()),
+        );
     }
 
     pub fn start_move(&mut self, position: Vec3) {
@@ -37,42 +48,44 @@ impl Transformation {
         let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
         self.current = rot * self.initial;
     }
-}
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct TransformationBuffer {
-    transformation: [[f32; 4]; 4],
-}
+    pub(crate) fn create_bind_group(&mut self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        let buffer = self.create_buffer_init(device);
+        let layout = Self::create_bind_group_layout(device);
+        self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("transformation_range_bind_group"),
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        }));
+        self.buffer = Some(buffer);
+        layout
+    }
 
-impl TransformationBuffer {
-    pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<TransformationBuffer>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x4,
+    fn create_buffer_init(&self, device: &wgpu::Device) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("transformation_buffer"),
+            contents: bytemuck::cast_slice(&self.current.to_cols_array()),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        })
+    }
+
+    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("transformation_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
                 },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: (2 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: (3 * std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-            ],
-        }
+                count: None,
+            }],
+        })
     }
 }
 
