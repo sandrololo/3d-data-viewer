@@ -29,7 +29,10 @@ struct ProjectionInput{
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) tex_coords: vec2<f32>
+    @location(0) tex_coords: vec2<f32>,
+    @location(1) points_z: f32,
+    @location(2) z_min: f32,
+    @location(3) z_max: f32,
 }
 
 @vertex
@@ -40,7 +43,7 @@ fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, trans
     // Map grid coordinates to NDC consistently across the full width/height
     let x = -1.0 + 2.0 * f32(col) / f32(image_size.width - 1u);
     let y = -1.0 + 2.0 * f32(row) / f32(image_size.height - 1u);
-    let z = -1.0 + (data.z_values - z_range.z_min) / (z_range.z_max - z_range.z_min) * (2.0);
+    let z = -1.0 + 2.0 *(data.z_values - z_range.z_min) / (z_range.z_max - z_range.z_min);
     let points = vec4<f32>(x, y, z, 1.0);
 
 
@@ -65,6 +68,9 @@ fn vs_main(data: VertexInput, image_size: ImageSize, z_range: ZValueRange, trans
         f32(col) / f32(image_size.width - 1u),
         f32(row) / f32(image_size.height - 1u)
     );
+    out.points_z = data.z_values;
+    out.z_min = z_range.z_min;
+    out.z_max = z_range.z_max;
     return out;
 }
 
@@ -74,7 +80,13 @@ var t_diffuse: texture_2d<f32>;
 var s_diffuse: sampler;
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_amplitude(in: VertexOutput) -> @location(0) vec4<f32> {
     let sampled = textureSample(t_diffuse, s_diffuse, in.tex_coords);
     return vec4<f32>(1.0 - sampled.r, sampled.r, 0.0, 1.0);
+}
+
+@fragment
+fn fs_height(in: VertexOutput) -> @location(0) vec4<f32> {    
+    let depth = 0.10 + 0.80 * (in.points_z - in.z_min) / (in.z_max - in.z_min);
+    return vec4<f32>(depth, depth, depth, 1.0);
 }

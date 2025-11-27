@@ -115,7 +115,9 @@ struct State {
     surface_format: wgpu::TextureFormat,
     current_transformation: Mat4,
     current_projection: Mat4,
-    render_pipeline: wgpu::RenderPipeline,
+    render_pipeline_amplitude: wgpu::RenderPipeline,
+    render_pipeline_height: wgpu::RenderPipeline,
+    use_height_shader: bool,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     image_size_buffer: wgpu::Buffer,
@@ -163,8 +165,9 @@ impl State {
 
         const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
+        let texture_format = [Some(surface_format.into())];
+        let amplitude_pipeline_descriptor = &wgpu::RenderPipelineDescriptor {
+            label: Some("amplitude_pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -182,7 +185,7 @@ impl State {
                 module: &shader,
                 entry_point: Some("fs_amplitude"),
                 compilation_options: Default::default(),
-                targets: &[Some(surface_format.into())],
+                targets: &texture_format,
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
@@ -199,7 +202,20 @@ impl State {
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
             cache: None,
+        };
+
+        let render_pipeline_amplitude =
+            device.create_render_pipeline(amplitude_pipeline_descriptor);
+
+        let mut height_pipeline_descriptor = amplitude_pipeline_descriptor.clone();
+        height_pipeline_descriptor.label = Some("height_pipeline");
+        height_pipeline_descriptor.fragment = Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_height"),
+            compilation_options: Default::default(),
+            targets: &texture_format,
         });
+        let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
 
         // Interleave z values and vertex indices into a single vertex buffer
         let mut vertices: Vec<Vertex> =
@@ -276,7 +292,9 @@ impl State {
             surface_format,
             current_transformation: Mat4::IDENTITY,
             current_projection: Mat4::IDENTITY,
-            render_pipeline,
+            render_pipeline_amplitude,
+            render_pipeline_height,
+            use_height_shader: true,
             vertex_buffer,
             index_buffer,
             image_size_buffer,
@@ -385,7 +403,12 @@ impl State {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
-        renderpass.set_pipeline(&self.render_pipeline);
+        let pipeline = if self.use_height_shader {
+            &self.render_pipeline_height
+        } else {
+            &self.render_pipeline_amplitude
+        };
+        renderpass.set_pipeline(pipeline);
         renderpass.set_bind_group(0, &self.texture_bind_group, &[]);
         renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -510,7 +533,16 @@ impl ApplicationHandler for App {
                 device_id: _,
                 event,
                 is_synthetic: _,
-            } => self.keyboard.register_event(event),
+            } => {
+                self.keyboard.register_event(event.clone());
+                // Toggle shader with 'S' key
+                if let winit::keyboard::Key::Character(ref c) = event.logical_key {
+                    if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
+                        app_state.use_height_shader = !app_state.use_height_shader;
+                        app_state.get_window().request_redraw();
+                    }
+                }
+            }
             _ => (),
         }
     }
