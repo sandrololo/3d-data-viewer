@@ -71,14 +71,12 @@ impl State {
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
-        // Create shader module
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
         let image = SurfaceAmplitudeImage::from_file("img.tiff").unwrap();
-        let image_surface = image.surface;
 
         let amplitude_texture = amplitude_texture::AmplitudeTexture::new(image.amplitude, &device);
         amplitude_texture.write_to_queue(&queue);
@@ -94,17 +92,17 @@ impl State {
             },
         ];
 
-        let overlay_texture = OverlayTexture::new(&image_surface.size, &example_overlays, &device);
+        let overlay_texture = OverlayTexture::new(&image.surface.size, &example_overlays, &device);
         overlay_texture.write_to_queue(&queue);
 
         let texture = Texture::new(amplitude_texture, overlay_texture);
         let (texture_bind_group_layout, texture_bind_group) = texture.create_bind_group(&device);
 
-        let outlier_removed_data = image_surface.outlier_removed_data(5.0, 95.0);
+        let outlier_removed_data = image.surface.outlier_removed_data(5.0, 95.0);
         let z_range = image::value_range(&outlier_removed_data);
 
         let (image_dims_bind_group_layout, image_dims_bind_group) =
-            image_surface.size.create_bind_group(&device);
+            image.surface.size.create_bind_group(&device);
 
         let (z_value_range_bind_group_layout, z_value_range_bind_group) =
             z_range.create_bind_group(&device);
@@ -172,8 +170,8 @@ impl State {
         });
         let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
 
-        let vertex_buffer = VertexBuffer::new(&image_surface.size, &outlier_removed_data, &device);
-        let index_buffer = IndexBuffer::new(&image_surface.size, &device);
+        let vertex_buffer = VertexBuffer::new(&image.surface.size, &outlier_removed_data, &device);
+        let index_buffer = IndexBuffer::new(&image.surface.size, &device);
 
         // Create depth texture view
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
