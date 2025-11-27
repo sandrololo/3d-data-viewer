@@ -21,7 +21,7 @@ impl Mouse {
         Self {
             current_position: PhysicalPosition::new(0.0, 0.0),
             left_button: ElementState::Released,
-            current_zoom: 2.0,
+            current_zoom: 1.0,
         }
     }
 
