@@ -1,6 +1,6 @@
 use crate::image::Image;
 
-pub struct Texture {
+pub struct AmplitudeTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
@@ -8,15 +8,15 @@ pub struct Texture {
     size: wgpu::Extent3d,
 }
 
-impl Texture {
+impl AmplitudeTexture {
     pub fn new(image: Image<f32>, device: &wgpu::Device) -> Self {
-        let texture_size = wgpu::Extent3d {
+        let size = wgpu::Extent3d {
             width: image.size.width.get(),
             height: image.size.height.get(),
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: texture_size,
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -26,7 +26,7 @@ impl Texture {
             view_formats: &[],
         });
 
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -39,10 +39,10 @@ impl Texture {
 
         Self {
             data: texture,
-            view: texture_view,
+            view,
             sampler: texture_sampler,
             image,
-            size: texture_size,
+            size,
         }
     }
 

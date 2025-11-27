@@ -9,12 +9,12 @@ use winit::{
     window::{Window, WindowId},
 };
 
+mod amplitude_texture;
 mod image;
 mod keyboard;
 mod mouse;
 mod overlay;
 mod projection;
-mod texture;
 mod transformation;
 use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
@@ -103,7 +103,7 @@ impl State {
         let image = SurfaceAmplitudeImage::from_file("img.tiff").unwrap();
         let image_surface = image.surface;
 
-        let amplitude_texture = texture::Texture::new(image.amplitude, &device);
+        let amplitude_texture = amplitude_texture::AmplitudeTexture::new(image.amplitude, &device);
         amplitude_texture.write_to_queue(&queue);
 
         let example_overlays = vec![
