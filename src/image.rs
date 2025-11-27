@@ -1,7 +1,9 @@
 use anyhow::anyhow;
+use bytemuck::NoUninit;
 use log::info;
 use std::{fs::File, num::NonZeroU32, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
+use wgpu::{util::DeviceExt, wgc::device};
 
 pub struct Image<T> {
     pub size: ImageSize,
@@ -10,7 +12,7 @@ pub struct Image<T> {
 
 impl<T> Image<T>
 where
-    T: PartialOrd + Copy,
+    T: PartialOrd + Copy + NoUninit,
 {
     pub fn outlier_removed_data(&self, lower_percentile: f32, upper_percentile: f32) -> Vec<T>
     where
@@ -38,8 +40,8 @@ where
             + std::ops::Div<Output = T>,
     {
         let value_range = value_range(&self.data);
-        let old_min = value_range.start;
-        let old_max = value_range.end;
+        let old_min = value_range.0.start;
+        let old_max = value_range.0.end;
         let scale = (new_max - new_min) / (old_max - old_min);
         self.data
             .iter()
@@ -93,7 +95,95 @@ pub(crate) struct ImageSize {
     pub height: NonZeroU32,
 }
 
-pub fn value_range<T: PartialOrd + Copy>(data: &Vec<T>) -> Range<T> {
+impl ImageSize {
+    pub(crate) fn create_buffer_init(&self, device: &wgpu::Device) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("image_dims_buffer"),
+            contents: bytemuck::cast_slice(&[self.width.get(), self.height.get()]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        })
+    }
+
+    pub(crate) fn create_bind_group(
+        &self,
+        device: &wgpu::Device,
+    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+        let buffer = self.create_buffer_init(device);
+        let layout = Self::create_bind_group_layout(device);
+        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("image_dims_bind_group"),
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        (layout, group)
+    }
+
+    pub(crate) fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("image_dims_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        })
+    }
+}
+
+pub(crate) struct ZValueRange<T: NoUninit>(Range<T>);
+
+impl<T: NoUninit> ZValueRange<T> {
+    pub(crate) fn create_buffer_init(&self, device: &wgpu::Device) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("z_value_range_buffer"),
+            contents: bytemuck::cast_slice(&[self.0.start, self.0.end]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        })
+    }
+
+    pub(crate) fn create_bind_group(
+        &self,
+        device: &wgpu::Device,
+    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+        let buffer = self.create_buffer_init(device);
+        let layout = Self::create_bind_group_layout(device);
+        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("z_value_range_bind_group"),
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        (layout, group)
+    }
+
+    pub(crate) fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("z_value_range_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        })
+    }
+}
+
+pub fn value_range<T: PartialOrd + Copy + NoUninit>(data: &Vec<T>) -> ZValueRange<T> {
     let mut min_value = data[0];
     let mut max_value = data[0];
     for &value in data {
@@ -104,5 +194,5 @@ pub fn value_range<T: PartialOrd + Copy>(data: &Vec<T>) -> Range<T> {
             max_value = value;
         }
     }
-    min_value..max_value
+    ZValueRange(min_value..max_value)
 }

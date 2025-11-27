@@ -173,70 +173,14 @@ impl State {
             ],
         });
 
-        let image_dims_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("image_dims_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let z_value_range_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("z_value_range_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let image_dims_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("image_dims_buffer"),
-            contents: bytemuck::cast_slice(&[
-                image_surface.size.width.get(),
-                image_surface.size.height.get(),
-            ]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
         let outlier_removed_data = image_surface.outlier_removed_data(5.0, 95.0);
         let z_range = image::value_range(&outlier_removed_data);
-        let z_value_range_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("z_value_range_buffer"),
-            contents: bytemuck::cast_slice(&[z_range.start, z_range.end]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
 
-        let image_dims_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("image_dims_bind_group"),
-            layout: &image_dims_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: image_dims_buffer.as_entire_binding(),
-            }],
-        });
+        let (image_dims_bind_group_layout, image_dims_bind_group) =
+            image_surface.size.create_bind_group(&device);
 
-        let z_value_range_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("z_value_range_bind_group"),
-            layout: &z_value_range_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: z_value_range_buffer.as_entire_binding(),
-            }],
-        });
+        let (z_value_range_bind_group_layout, z_value_range_bind_group) =
+            z_range.create_bind_group(&device);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
