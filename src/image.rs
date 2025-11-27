@@ -30,20 +30,6 @@ where
             .collect()
     }
 
-    pub fn value_range(&self) -> Range<T> {
-        let mut min_value = self.data[0];
-        let mut max_value = self.data[0];
-        for &value in &self.data {
-            if value < min_value {
-                min_value = value;
-            }
-            if value > max_value {
-                max_value = value;
-            }
-        }
-        min_value..max_value
-    }
-
     pub fn scaled_data(&self, new_min: T, new_max: T) -> Vec<T>
     where
         T: Float
@@ -52,7 +38,7 @@ where
             + std::ops::Mul<Output = T>
             + std::ops::Div<Output = T>,
     {
-        let value_range = self.value_range();
+        let value_range = value_range(&self.data);
         let old_min = value_range.start;
         let old_max = value_range.end;
         let scale = (new_max - new_min) / (old_max - old_min);
@@ -97,4 +83,18 @@ impl SurfaceAmplitudeImage {
         );
         Ok(Self { surface, amplitude })
     }
+}
+
+pub fn value_range<T: PartialOrd + Copy>(data: &Vec<T>) -> Range<T> {
+    let mut min_value = data[0];
+    let mut max_value = data[0];
+    for &value in data {
+        if value < min_value {
+            min_value = value;
+        }
+        if value > max_value {
+            max_value = value;
+        }
+    }
+    min_value..max_value
 }

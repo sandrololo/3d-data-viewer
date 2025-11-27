@@ -180,7 +180,7 @@ impl State {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some("fs_amplitude"),
                 compilation_options: Default::default(),
                 targets: &[Some(surface_format.into())],
             }),
@@ -204,11 +204,8 @@ impl State {
         // Interleave z values and vertex indices into a single vertex buffer
         let mut vertices: Vec<Vertex> =
             Vec::with_capacity((image_surface.width * image_surface.height) as usize);
-        for (i, &z) in image_surface
-            .outlier_removed_data(10.0, 90.0)
-            .iter()
-            .enumerate()
-        {
+        let outlier_removed_data = image_surface.outlier_removed_data(5.0, 95.0);
+        for (i, &z) in outlier_removed_data.iter().enumerate() {
             vertices.push(Vertex {
                 position: [z],
                 vertex_id: [i as u32],
@@ -244,7 +241,7 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        let z_range = image_surface.value_range();
+        let z_range = image::value_range(&outlier_removed_data);
 
         let z_value_range_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Z Value Range Buffer"),
