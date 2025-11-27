@@ -1,7 +1,6 @@
 use glam::{Mat4, Vec2, Vec3};
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
-use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -11,6 +10,7 @@ use winit::{
 
 mod amplitude_texture;
 mod image;
+mod index_buffer;
 mod keyboard;
 mod mouse;
 mod overlay;
@@ -23,6 +23,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
+    index_buffer::IndexBuffer,
     keyboard::Keyboard,
     overlay::{Overlay, OverlayTexture},
     projection::ProjectionBuffer,
@@ -45,7 +46,7 @@ struct State {
     render_pipeline_height: wgpu::RenderPipeline,
     use_height_shader: bool,
     vertex_buffer: VertexBuffer,
-    index_buffer: wgpu::Buffer,
+    index_buffer: IndexBuffer,
     texture_bind_group: wgpu::BindGroup,
     image_dims_bind_group: wgpu::BindGroup,
     z_value_range_bind_group: wgpu::BindGroup,
@@ -172,24 +173,7 @@ impl State {
         let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
 
         let vertex_buffer = VertexBuffer::new(&image_surface.size, &outlier_removed_data, &device);
-        let mut indices: Vec<u32> = Vec::new();
-        for i in 0..image_surface.size.height.get() - 1 {
-            for j in 0..((image_surface.size.width.get() - 1) / 2) {
-                let j = j * 2;
-                indices.push((i * image_surface.size.width.get() + j) as u32);
-                indices.push(((i + 1) * image_surface.size.width.get() + j) as u32);
-                indices.push((i * image_surface.size.width.get() + j + 1) as u32);
-                indices.push(((i + 1) * image_surface.size.width.get() + j + 1) as u32);
-                indices.push((i * image_surface.size.width.get() + j + 2) as u32);
-                indices.push(((i + 1) * image_surface.size.width.get() + j + 2) as u32);
-            }
-        }
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let index_buffer = IndexBuffer::new(&image_surface.size, &device);
 
         // Create depth texture view
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -339,11 +323,14 @@ impl State {
         renderpass.set_bind_group(1, &self.image_dims_bind_group, &[]);
         renderpass.set_bind_group(2, &self.z_value_range_bind_group, &[]);
         renderpass.set_vertex_buffer(0, self.vertex_buffer.buffer.slice(..));
-        renderpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        renderpass.set_index_buffer(
+            self.index_buffer.buffer.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
         renderpass.set_vertex_buffer(1, transformation_buffer.slice(..));
         renderpass.set_vertex_buffer(2, projection_buffer.slice(..));
         renderpass.draw_indexed(
-            0..self.index_buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
+            0..self.index_buffer.buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
             0,
             0..1,
         );
