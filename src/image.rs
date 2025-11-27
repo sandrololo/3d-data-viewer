@@ -1,4 +1,3 @@
-use egui::emath::Float;
 use log::info;
 use std::{fs::File, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
@@ -32,7 +31,7 @@ where
 
     pub fn scaled_data(&self, new_min: T, new_max: T) -> Vec<T>
     where
-        T: Float
+        T: num_traits::Float
             + std::ops::Sub<Output = T>
             + std::ops::Add<Output = T>
             + std::ops::Mul<Output = T>
