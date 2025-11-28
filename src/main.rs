@@ -23,7 +23,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    index_buffer::IndexBuffer,
+    index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
     overlay::{Overlay, OverlayTexture},
     texture::Texture,
@@ -82,11 +82,11 @@ impl State {
         let example_overlays = vec![
             Overlay {
                 pixels: vec![0..100, 1024..1124, 2048..2148, 3072..3172, 4096..4196],
-                color: [255, 0, 0, 180],
+                color: [255, 0, 0, 100],
             },
             Overlay {
                 pixels: vec![5000..50000],
-                color: [255, 255, 0, 180],
+                color: [255, 255, 0, 100],
             },
         ];
 
@@ -209,7 +209,8 @@ impl State {
         let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
 
         let vertex_buffer = VertexBuffer::new(&image.surface.size, &outlier_removed_data, &device);
-        let index_buffer = IndexBuffer::new(&image.surface.size, &device);
+        let index_buffer =
+            IndexBufferBuilder::new_triangle_strip(&image.surface.size).create_buffer_init(&device);
 
         // Create depth texture view
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
