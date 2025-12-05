@@ -1,4 +1,4 @@
-# computer-graphics-rs
+# 3D Data Viewer wit wgpu
 
 ## TODO's
 ⬜  Add light source so that surface structure is better visible\
