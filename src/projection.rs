@@ -40,6 +40,13 @@ impl Projection {
         );
     }
 
+    pub fn reset(&mut self) {
+        self.initial_position = Vec2::ZERO;
+        self.initial_delta = Vec2::ZERO;
+        self.current_delta = Vec2::ZERO;
+        self.zoom = 1.0;
+    }
+
     pub fn start_move(&mut self, position: Vec2) {
         self.initial_position = position;
         self.initial_delta = self.current_delta;

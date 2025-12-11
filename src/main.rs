@@ -460,10 +460,16 @@ impl ApplicationHandler for App {
                 is_synthetic: _,
             } => {
                 self.keyboard.register_event(event.clone());
-                // Toggle shader with 'S' key
                 if let winit::keyboard::Key::Character(ref c) = event.logical_key {
+                    // Toggle shader with 'S' key
                     if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
                         app_state.use_height_shader = !app_state.use_height_shader;
+                        app_state.get_window().request_redraw();
+                    }
+                    // Move object to origin with 'O' key
+                    if c.as_str() == "o" && event.state == winit::event::ElementState::Pressed {
+                        app_state.projection.reset();
+                        app_state.transformation.reset();
                         app_state.get_window().request_redraw();
                     }
                 }
