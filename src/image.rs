@@ -104,37 +104,24 @@ impl ImageSize {
         })
     }
 
-    pub(crate) fn create_bind_group(
-        &self,
-        device: &wgpu::Device,
-    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let buffer = self.create_buffer_init(device);
-        let layout = Self::create_bind_group_layout(device);
-        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("image_dims_bind_group"),
-            layout: &layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-        });
-        (layout, group)
+    pub fn get_bind_group_entry(buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }
     }
 
-    pub(crate) fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("image_dims_bind_group_layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        })
+    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }
     }
 }
 
@@ -149,37 +136,24 @@ impl<T: NoUninit> ZValueRange<T> {
         })
     }
 
-    pub(crate) fn create_bind_group(
-        &self,
-        device: &wgpu::Device,
-    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let buffer = self.create_buffer_init(device);
-        let layout = Self::create_bind_group_layout(device);
-        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("z_value_range_bind_group"),
-            layout: &layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-        });
-        (layout, group)
+    pub fn get_bind_group_entry(buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: buffer.as_entire_binding(),
+        }
     }
 
-    pub(crate) fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("z_value_range_bind_group_layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        })
+    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding: 1,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }
     }
 }
 

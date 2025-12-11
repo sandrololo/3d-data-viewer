@@ -23,6 +23,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
+    image::{ImageSize, ZValueRange},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
     overlay::{Overlay, OverlayTexture},
@@ -106,40 +107,16 @@ impl State {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("image_info_bind_group_layout"),
                 entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
+                    ImageSize::get_bind_group_layout_entry(),
+                    ZValueRange::<f32>::get_bind_group_layout_entry(),
                 ],
             });
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: image_dims_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: z_value_range_buffer.as_entire_binding(),
-                },
+                ImageSize::get_bind_group_entry(&image_dims_buffer),
+                ZValueRange::<f32>::get_bind_group_entry(&z_value_range_buffer),
             ],
         });
 
