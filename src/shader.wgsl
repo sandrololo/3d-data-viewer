@@ -54,7 +54,7 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let row = idx / image_dims.width;
     // Map grid coordinates to NDC consistently across the full width/height
     let x = 2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0;
-    let y = 2.0 * f32(row) / f32(image_dims.height - 1u) - 1.0;
+    let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
     let z = 1.0 - (data.z_values - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
 
