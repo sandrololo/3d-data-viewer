@@ -1,6 +1,11 @@
 use glam::{Vec2, Vec3};
-use log::error;
-use std::{borrow::Cow, sync::Arc, vec};
+use log::{error, info};
+use std::{
+    borrow::Cow,
+    sync::{Arc, mpsc::channel},
+    vec,
+};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -40,6 +45,7 @@ struct State {
     aspect_ratio: f32,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
+    mouse: Mouse,
     transformation: Transformation,
     projection: Projection,
     render_pipeline_amplitude: wgpu::RenderPipeline,
@@ -50,6 +56,9 @@ struct State {
     texture_bind_group: wgpu::BindGroup,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
+    mouse_position_buffer: wgpu::Buffer,
+    pixel_value_output_buffer: wgpu::Buffer,
+    temp_buffer: wgpu::Buffer,
 }
 
 impl State {
@@ -60,7 +69,10 @@ impl State {
             .await
             .unwrap();
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
+                ..Default::default()
+            })
             .await
             .unwrap();
 
@@ -109,15 +121,62 @@ impl State {
                 entries: &[
                     ImageSize::get_bind_group_layout_entry(),
                     ZValueRange::<f32>::get_bind_group_layout_entry(),
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
+        let mouse_position_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("mouse_position_buffer"),
+            contents: bytemuck::cast_slice(&[0u32, 0u32]),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
+        });
+
+        let pixel_value_output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pixel_value_output_buffer"),
+            size: std::mem::size_of::<f32>() as u64 * 3,
+            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
                 ImageSize::get_bind_group_entry(&image_dims_buffer),
                 ZValueRange::<f32>::get_bind_group_entry(&z_value_range_buffer),
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: mouse_position_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: pixel_value_output_buffer.as_entire_binding(),
+                },
             ],
+        });
+
+        let temp_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("temp"),
+            size: std::mem::size_of::<f32>() as u64 * 3,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
         });
 
         let mut transformation = Transformation::default();
@@ -214,6 +273,7 @@ impl State {
             aspect_ratio: size.width as f32 / size.height as f32,
             surface,
             surface_format,
+            mouse: Mouse::new(),
             transformation,
             projection,
             render_pipeline_amplitude,
@@ -224,6 +284,9 @@ impl State {
             texture_bind_group,
             image_info_bind_group,
             depth_view,
+            mouse_position_buffer,
+            pixel_value_output_buffer,
+            temp_buffer,
         };
 
         // Configure surface for the first time
@@ -289,6 +352,14 @@ impl State {
             });
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
+
+        encoder.copy_buffer_to_buffer(
+            &self.pixel_value_output_buffer,
+            0,
+            &self.temp_buffer,
+            0,
+            self.pixel_value_output_buffer.size(),
+        );
         // Create the renderpass which will clear the screen.
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -332,10 +403,18 @@ impl State {
             0,
             0..1,
         );
+
         // End the renderpass.
         drop(renderpass);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
+        let mouse_pos = self.mouse.get_device_coordinates(self.size).unwrap();
+
+        self.queue.write_buffer(
+            &self.mouse_position_buffer,
+            0,
+            bytemuck::cast_slice(&[mouse_pos.x, mouse_pos.y]),
+        );
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
@@ -346,7 +425,6 @@ impl State {
 #[derive(Default)]
 struct App {
     state: Option<State>,
-    mouse: Mouse,
     keyboard: Keyboard,
 }
 
@@ -384,11 +462,11 @@ impl ApplicationHandler for App {
                 device_id: _,
                 position,
             } => {
-                self.mouse.register_move_event(position);
-                if self.mouse.is_left_button_pressed() {
-                    match self.mouse.get_device_coordinates(app_state.size) {
+                app_state.mouse.register_move_event(position);
+                if app_state.mouse.is_left_button_pressed() {
+                    match app_state.mouse.get_device_coordinates(app_state.size) {
                         Ok(new_position) => {
-                            if self.mouse.is_pointer_inside(Vec2::from(new_position)) {
+                            if app_state.mouse.is_pointer_inside(Vec2::from(new_position)) {
                                 if self.keyboard.is_control_pressed() {
                                     app_state.projection.change_position(new_position);
                                 } else {
@@ -402,15 +480,48 @@ impl ApplicationHandler for App {
                         Err(e) => error!("Failed to calculate pointer position: {}", e),
                     }
                 }
+                {
+                    // The mapping process is async, so we'll need to create a channel to get
+                    // the success flag for our mapping
+                    let (tx, rx) = channel();
+
+                    // We send the success or failure of our mapping via a callback
+                    app_state
+                        .temp_buffer
+                        .map_async(wgpu::MapMode::Read, .., move |result| {
+                            tx.send(result).unwrap()
+                        });
+
+                    // The callback we submitted to map async will only get called after the
+                    // device is polled or the queue submitted
+                    app_state.device.poll(wgpu::PollType::wait()).unwrap();
+
+                    // We check if the mapping was successful here
+                    rx.recv().unwrap();
+
+                    // We then get the bytes that were stored in the buffer
+                    let output_data = app_state.temp_buffer.get_mapped_range(..);
+
+                    info!(
+                        "Pixel value at: ({}/{}): {}",
+                        bytemuck::cast_slice::<u8, f32>(&output_data)[0],
+                        bytemuck::cast_slice::<u8, f32>(&output_data)[1],
+                        bytemuck::cast_slice::<u8, f32>(&output_data)[2],
+                    );
+                }
+
+                // We need to unmap the buffer to be able to use it again
+                app_state.temp_buffer.unmap();
+                app_state.get_window().request_redraw();
             }
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button,
             } => {
-                self.mouse.register_button_event(button, state);
-                if self.mouse.is_left_button_pressed() {
-                    match self.mouse.get_device_coordinates(app_state.size) {
+                app_state.mouse.register_button_event(button, state);
+                if app_state.mouse.is_left_button_pressed() {
+                    match app_state.mouse.get_device_coordinates(app_state.size) {
                         Ok(pos) => {
                             if self.keyboard.is_control_pressed() {
                                 app_state.projection.start_move(pos);
@@ -427,8 +538,8 @@ impl ApplicationHandler for App {
                 delta,
                 phase: _,
             } => {
-                self.mouse.register_scroll_event(delta);
-                app_state.projection.zoom(self.mouse.get_zoom());
+                app_state.mouse.register_scroll_event(delta);
+                app_state.projection.zoom(app_state.mouse.get_zoom());
                 app_state.get_window().request_redraw();
             }
             WindowEvent::KeyboardInput {

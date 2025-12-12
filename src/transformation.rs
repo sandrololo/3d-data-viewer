@@ -17,7 +17,7 @@ impl Default for Transformation {
 
 impl Transformation {
     pub fn new() -> Self {
-        let default = mat4_from_rotation_axis(Vec3::new(1.0, 0.0, 0.0), 180.0);
+        let default = Mat4::IDENTITY;
         Self {
             initial: default,
             current: default,
@@ -28,7 +28,7 @@ impl Transformation {
     }
 
     pub fn reset(&mut self) {
-        let default = mat4_from_rotation_axis(Vec3::new(1.0, 0.0, 0.0), 180.0);
+        let default = Mat4::IDENTITY;
         self.initial = default;
         self.current = default;
         self.initial_position = Vec3::new(0.0, 0.0, 1.0);

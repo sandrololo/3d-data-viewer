@@ -17,6 +17,12 @@ struct ZValueRange{
 @group(1) @binding(1)
 var<uniform> z_range: ZValueRange;
 
+@group(1) @binding(2)
+var<storage, read> mouse_pos: vec2<f32>;
+
+@group(1) @binding(3)
+var<storage, read_write> pixel_value: array<f32, 3>;
+
 struct TransformationInput {
     col0: vec4<f32>,
     col1: vec4<f32>,
@@ -47,9 +53,9 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let col = idx % image_dims.width;
     let row = idx / image_dims.width;
     // Map grid coordinates to NDC consistently across the full width/height
-    let x = -1.0 + 2.0 * f32(col) / f32(image_dims.width - 1u);
-    let y = -1.0 + 2.0 * f32(row) / f32(image_dims.height - 1u);
-    let z = -1.0 + 2.0 * (data.z_values - z_range.min) / (z_range.max - z_range.min);
+    let x = 2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0;
+    let y = 2.0 * f32(row) / f32(image_dims.height - 1u) - 1.0;
+    let z = 1.0 - (data.z_values - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
 
 
@@ -75,6 +81,13 @@ fn vs_main(data: VertexInput) -> VertexOutput {
         f32(row) / f32(image_dims.height - 1u)
     );
     out.points_z = data.z_values;
+
+    if abs(projected_position.x - mouse_pos.x) < 0.001 && abs(projected_position.y - mouse_pos.y) < 0.001 {
+        pixel_value[0] = f32(col);
+        pixel_value[1] = f32(row);
+        pixel_value[2] = data.z_values;
+    }
+
     return out;
 }
 
