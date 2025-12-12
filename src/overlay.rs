@@ -7,15 +7,15 @@ pub struct Overlay {
     pub color: [u8; 4],
 }
 
-pub struct OverlayTexture<'a> {
+pub struct OverlayTexture {
     texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    overlays: &'a [Overlay],
+    pub overlays: Vec<Overlay>,
     size: wgpu::Extent3d,
 }
 
-impl<'a> OverlayTexture<'a> {
-    pub fn new(image_size: &'a ImageSize, overlays: &'a [Overlay], device: &wgpu::Device) -> Self {
+impl OverlayTexture {
+    pub fn new(image_size: &ImageSize, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
             height: image_size.height.get(),
@@ -26,9 +26,13 @@ impl<'a> OverlayTexture<'a> {
         Self {
             texture,
             view,
-            overlays: overlays,
+            overlays: Vec::new(),
             size,
         }
+    }
+
+    pub fn set_overlays(&mut self, overlays: Vec<Overlay>) {
+        self.overlays = overlays;
     }
 
     pub fn write_to_queue(&self, queue: &wgpu::Queue) {
@@ -57,7 +61,7 @@ impl<'a> OverlayTexture<'a> {
         let total_pixels = (self.size.width * self.size.height) as usize;
         let mut data = vec![0u8; total_pixels * 4];
 
-        for overlay in self.overlays {
+        for overlay in &self.overlays {
             for range in &overlay.pixels {
                 for pixel_idx in range.start..range.end {
                     let idx = (pixel_idx as usize) * 4;
@@ -85,4 +89,17 @@ impl<'a> OverlayTexture<'a> {
             view_formats: &[],
         }
     }
+}
+
+pub fn example_overlays() -> Vec<Overlay> {
+    vec![
+        Overlay {
+            pixels: vec![0..100, 1024..1124, 2048..2148, 3072..3172, 4096..4196],
+            color: [255, 0, 0, 100],
+        },
+        Overlay {
+            pixels: vec![5000..50000],
+            color: [255, 255, 0, 100],
+        },
+    ]
 }

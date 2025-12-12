@@ -27,7 +27,7 @@ use crate::{
     image::{ImageSize, ZValueRange},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
-    overlay::{Overlay, OverlayTexture},
+    overlay::OverlayTexture,
     pixel_value_reader::PixelValueReader,
     texture::Texture,
     transformation::Transformation,
@@ -50,7 +50,7 @@ struct State {
     use_height_shader: bool,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
-    texture_bind_group: wgpu::BindGroup,
+    texture: Texture,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_value: PixelValueReader,
@@ -87,22 +87,10 @@ impl State {
         let amplitude_texture = amplitude_texture::AmplitudeTexture::new(image.amplitude, &device);
         amplitude_texture.write_to_queue(&queue);
 
-        let example_overlays = vec![
-            Overlay {
-                pixels: vec![0..100, 1024..1124, 2048..2148, 3072..3172, 4096..4196],
-                color: [255, 0, 0, 100],
-            },
-            Overlay {
-                pixels: vec![5000..50000],
-                color: [255, 255, 0, 100],
-            },
-        ];
-
-        let overlay_texture = OverlayTexture::new(&image.surface.size, &example_overlays, &device);
+        let overlay_texture = OverlayTexture::new(&image.surface.size, &device);
         overlay_texture.write_to_queue(&queue);
 
-        let texture = Texture::new(amplitude_texture, overlay_texture);
-        let (texture_bind_group_layout, texture_bind_group) = texture.create_bind_group(&device);
+        let texture = Texture::new(&device, amplitude_texture, overlay_texture);
 
         let outlier_removed_data = image.surface.outlier_removed_data(5.0, 95.0);
         let z_range = image::value_range(&outlier_removed_data);
@@ -142,7 +130,7 @@ impl State {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render_pipeline_layout"),
                 bind_group_layouts: &[
-                    &texture_bind_group_layout,
+                    &texture.bind_group_layout,
                     &image_info_bind_group_layout,
                     &transformation_bind_group_layout,
                     &projection_bind_group_layout,
@@ -235,7 +223,7 @@ impl State {
             use_height_shader: true,
             vertex_buffer,
             index_buffer,
-            texture_bind_group,
+            texture,
             image_info_bind_group,
             depth_view,
             pixel_value,
@@ -336,7 +324,7 @@ impl State {
             &self.render_pipeline_amplitude
         };
         renderpass.set_pipeline(pipeline);
-        renderpass.set_bind_group(0, &self.texture_bind_group, &[]);
+        renderpass.set_bind_group(0, &self.texture.bind_group, &[]);
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
         renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
         renderpass.set_bind_group(3, &self.projection.bind_group, &[]);
@@ -353,6 +341,7 @@ impl State {
 
         // End the renderpass.
         drop(renderpass);
+        self.texture.overlay.write_to_queue(&self.queue);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
         let mouse_pos = self
@@ -473,6 +462,18 @@ impl ApplicationHandler for App {
                     // Toggle shader with 'S' key
                     if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
                         app_state.use_height_shader = !app_state.use_height_shader;
+                        app_state.get_window().request_redraw();
+                    }
+                    // Toggle overlay with 'T' key
+                    if c.as_str() == "t" && event.state == winit::event::ElementState::Pressed {
+                        if app_state.texture.overlay.overlays.is_empty() {
+                            app_state
+                                .texture
+                                .overlay
+                                .set_overlays(overlay::example_overlays());
+                        } else {
+                            app_state.texture.overlay.set_overlays(Vec::new());
+                        }
                         app_state.get_window().request_redraw();
                     }
                     // Move object to origin with 'O' key
