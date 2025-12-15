@@ -82,7 +82,7 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
-        let image = SurfaceAmplitudeImage::from_file("img.tiff").unwrap();
+        let image = SurfaceAmplitudeImage::from_file("example-img.tiff").unwrap();
 
         let amplitude_texture = amplitude_texture::AmplitudeTexture::new(image.amplitude, &device);
         amplitude_texture.write_to_queue(&queue);
