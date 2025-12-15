@@ -33,7 +33,7 @@ impl IndexBufferBuilder {
                 }
             }
         }
-
+        log::info!("Index buffer length: {:?}", indices.len());
         Self { indices }
     }
 
