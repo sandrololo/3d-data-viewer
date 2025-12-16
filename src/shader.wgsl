@@ -48,7 +48,8 @@ var<uniform> projection: ProjectionInput;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) pixel: vec2<u32>
+    @location(0) pixel: vec2<u32>,
+    @location(1) z_value: f32,
 }
 
 @vertex
@@ -81,6 +82,7 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.position = projected_position;
     out.pixel = vec2<u32>(col, row);
+    out.z_value = z_value.x;
 
     // if abs(projected_position.x - mouse_pos.x) < 0.001 && abs(projected_position.y - mouse_pos.y) < 0.001 {
     //     pixel_value[0] = f32(col);
@@ -102,8 +104,7 @@ fn fs_height(in: VertexOutput) -> @location(0) vec4<f32> {
     let overlay_color = textureLoad(overlay_texture, in.pixel, 0);
     
     // Calculate base height color
-    let z_value = textureLoad(surface_texture, in.pixel, 0);
-    let depth = 0.05 + 0.95 * (z_value.x - z_range.min) / (z_range.max - z_range.min);
+    let depth = 0.05 + 0.95 * (in.z_value - z_range.min) / (z_range.max - z_range.min);
     let base_color = vec4<f32>(depth, depth, depth, 1.0);
     
     // Blend overlay if present (alpha > 0)
