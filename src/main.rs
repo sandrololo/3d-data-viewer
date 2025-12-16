@@ -357,12 +357,12 @@ impl State {
 }
 
 #[derive(Default)]
-struct App {
+struct ImageViewer3D {
     state: Option<State>,
     keyboard: Keyboard,
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler for ImageViewer3D {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create window object
         let window = Arc::new(
@@ -512,6 +512,6 @@ fn main() {
     // the background.
     // event_loop.set_control_flow(ControlFlow::Wait);
 
-    let mut app = App::default();
+    let mut app = ImageViewer3D::default();
     event_loop.run_app(&mut app).unwrap();
 }
