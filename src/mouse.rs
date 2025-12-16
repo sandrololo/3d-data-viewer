@@ -47,7 +47,10 @@ impl Mouse {
             MouseScrollDelta::LineDelta(_delta_x, delta_y) => {
                 self.current_zoom *= -0.1 * delta_y + 1.0;
             }
-            _ => (),
+            MouseScrollDelta::PixelDelta(pos) => {
+                let delta_y = pos.y as f32 / 100.0;
+                self.current_zoom *= -0.1 * delta_y + 1.0;
+            }
         }
     }
 

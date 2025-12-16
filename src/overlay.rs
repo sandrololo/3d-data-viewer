@@ -1,6 +1,5 @@
-use std::{ops::Range, sync::Arc};
-
 use crate::image::ImageSize;
+use std::{ops::Range, sync::Arc};
 
 #[derive(Debug)]
 pub struct Overlay {

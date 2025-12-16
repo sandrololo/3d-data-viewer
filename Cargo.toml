@@ -1,5 +1,5 @@
 [package]
-name = "computer-graphics-rs"
+name = "data-viewer-3d"
 version = "0.1.0"
 edition = "2024"
 
@@ -11,6 +11,19 @@ glam = "0.30.8"
 log = "0.4.28"
 num-traits = "0.2.19"
 pollster = "0.4.0"
+reqwest = "0.12.26"
 tiff = "0.10.3"
 wgpu = "26.0.1"
 winit = "0.30.12"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+console_log = "1.0"
+wgpu = { version = "26.0.1"}
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4.30"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Window",
+    "Element",
+]}

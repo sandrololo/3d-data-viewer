@@ -1,7 +1,9 @@
 use anyhow::anyhow;
 use bytemuck::NoUninit;
 use log::info;
-use std::{fs::File, num::NonZeroU32, ops::Range};
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs::File;
+use std::{num::NonZeroU32, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
 use wgpu::util::DeviceExt;
 
@@ -56,6 +58,43 @@ pub struct SurfaceAmplitudeImage {
 }
 
 impl SurfaceAmplitudeImage {
+    pub async fn from_url(surface_url: &str, amplitude_url: &str) -> anyhow::Result<Self> {
+        let response = reqwest::get(surface_url).await?;
+        let body = response.bytes().await?;
+        let mut decoder = Decoder::new(std::io::Cursor::new(body))?;
+        let dimensions = decoder.dimensions()?;
+        let surface = match decoder.read_image()? {
+            DecodingResult::F32(data) => Ok(Image {
+                size: ImageSize {
+                    width: NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
+                    height: NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
+                },
+                data,
+            }),
+            _ => Err(anyhow::anyhow!("Unsupported surface image format")),
+        }?;
+        let response = reqwest::get(amplitude_url).await?;
+        let body = response.bytes().await?;
+        let mut decoder = Decoder::new(std::io::Cursor::new(body))?;
+        let dimensions = decoder.dimensions()?;
+        let amplitude = match decoder.read_image()? {
+            DecodingResult::U16(data) => Ok(Image {
+                size: ImageSize {
+                    width: NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
+                    height: NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
+                },
+                data,
+            }),
+            _ => Err(anyhow::anyhow!("Unsupported amplitude image format")),
+        }?;
+        let amplitude = Image {
+            size: amplitude.size,
+            data: amplitude.data.iter().map(|&value| value as f32).collect(),
+        };
+        Ok(Self { surface, amplitude })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
         let img_file = File::open(path)?;
         let mut decoder = Decoder::new(img_file)?;

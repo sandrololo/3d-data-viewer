@@ -1,16 +1,18 @@
 use glam::{Vec2, Vec3};
-use log::{error, info};
+use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
 };
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub enum UserEvent {
+pub enum ViewerCommand {
     BackToOrigin,
     SetAmplitudeShader,
     SetHeightShader,
@@ -18,27 +20,64 @@ pub enum UserEvent {
     ClearOverlays,
 }
 
-/// Handle to control the 3D viewer from external code
-#[derive(Clone)]
-pub struct ViewerHandle {
-    proxy: EventLoopProxy<UserEvent>,
+#[cfg(target_arch = "wasm32")]
+mod wasm_commands {
+    use super::ViewerCommand;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    use std::sync::Arc;
+    use winit::window::Window;
+
+    thread_local! {
+        /// Queue of commands from JavaScript to be processed by the viewer
+        pub static COMMAND_QUEUE: RefCell<VecDeque<ViewerCommand>> = RefCell::new(VecDeque::new());
+        /// Reference to the window for requesting redraws
+        pub static WINDOW: RefCell<Option<Arc<Window>>> = RefCell::new(None);
+    }
+
+    pub fn set_window(window: Arc<Window>) {
+        WINDOW.with(|w| *w.borrow_mut() = Some(window));
+    }
+
+    pub fn push_command(cmd: ViewerCommand) {
+        COMMAND_QUEUE.with(|q| q.borrow_mut().push_back(cmd));
+    }
+
+    pub fn pop_command() -> Option<ViewerCommand> {
+        COMMAND_QUEUE.with(|q| q.borrow_mut().pop_front())
+    }
 }
 
-impl ViewerHandle {
-    pub fn back_to_origin(&self) {
-        let _ = self.proxy.send_event(UserEvent::BackToOrigin);
-    }
+// JavaScript-callable functions
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn viewer_back_to_origin() {
+    wasm_commands::push_command(ViewerCommand::BackToOrigin);
+}
 
-    pub fn set_amplitude_shader(&self) {
-        let _ = self.proxy.send_event(UserEvent::SetAmplitudeShader);
-    }
-    pub fn set_height_shader(&self) {
-        let _ = self.proxy.send_event(UserEvent::SetHeightShader);
-    }
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn viewer_set_amplitude_shader() {
+    wasm_commands::push_command(ViewerCommand::SetAmplitudeShader);
+}
 
-    pub fn set_overlay(&self, overlays: Arc<Vec<Overlay>>) {
-        let _ = self.proxy.send_event(UserEvent::SetOverlays(overlays));
-    }
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn viewer_set_height_shader() {
+    wasm_commands::push_command(ViewerCommand::SetHeightShader);
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn viewer_set_overlays() {
+    let overlays = overlay::example_overlays();
+    wasm_commands::push_command(ViewerCommand::SetOverlays(Arc::new(overlays)));
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn viewer_clear_overlays() {
+    wasm_commands::push_command(ViewerCommand::ClearOverlays);
 }
 
 mod amplitude_texture;
@@ -116,7 +155,15 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
+        #[cfg(not(target_arch = "wasm32"))]
         let image = SurfaceAmplitudeImage::from_file("example-img.tiff").unwrap();
+        #[cfg(target_arch = "wasm32")]
+        let image = SurfaceAmplitudeImage::from_url(
+            "http://localhost:4242/api/temp_image/f6739d7f-5454-4fb6-b6ed-9f709d8414ba",
+            "http://localhost:4242/api/temp_image/43d7903c-20a7-4931-8980-ae3868d2841b",
+        )
+        .await
+        .unwrap();
 
         let amplitude_texture = amplitude_texture::AmplitudeTexture::new(image.amplitude, &device);
         amplitude_texture.write_to_queue(&queue);
@@ -139,7 +186,7 @@ impl State {
                     ImageSize::get_bind_group_layout_entry(),
                     ZValueRange::<f32>::get_bind_group_layout_entry(),
                     PixelValueReader::get_mouse_position_bind_group_layout_entry(),
-                    PixelValueReader::get_pixel_value_bind_group_layout_entry(),
+                    // PixelValueReader::get_pixel_value_bind_group_layout_entry(),
                 ],
             });
         let pixel_value = PixelValueReader::new(&device);
@@ -151,7 +198,7 @@ impl State {
                 ImageSize::get_bind_group_entry(&image_dims_buffer),
                 ZValueRange::<f32>::get_bind_group_entry(&z_value_range_buffer),
                 pixel_value.get_mouse_position_bind_group_entry(),
-                pixel_value.get_pixel_value_bind_group_entry(),
+                // pixel_value.get_pixel_value_bind_group_entry(),
             ],
         });
 
@@ -174,7 +221,7 @@ impl State {
 
         const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-        let texture_format = [Some(surface_format.into())];
+        let texture_format = [Some(surface_format.add_srgb_suffix().into())];
         let amplitude_pipeline_descriptor = &wgpu::RenderPipelineDescriptor {
             label: Some("amplitude_pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -389,199 +436,279 @@ impl State {
         self.window.pre_present_notify();
         surface_texture.present();
     }
+
+    /// Process any pending commands from JavaScript (WASM only)
+    #[cfg(target_arch = "wasm32")]
+    pub fn process_commands(&mut self) {
+        while let Some(cmd) = wasm_commands::pop_command() {
+            match cmd {
+                ViewerCommand::BackToOrigin => {
+                    self.projection.reset();
+                    self.transformation.reset();
+                }
+                ViewerCommand::SetAmplitudeShader => {
+                    self.use_height_shader = false;
+                }
+                ViewerCommand::SetHeightShader => {
+                    self.use_height_shader = true;
+                }
+                ViewerCommand::SetOverlays(overlays) => {
+                    self.texture.overlay.set_overlays(overlays.clone());
+                }
+                ViewerCommand::ClearOverlays => {
+                    self.texture.overlay.set_overlays(Arc::new(Vec::new()));
+                }
+            }
+        }
+        self.get_window().request_redraw();
+    }
 }
 
 struct ImageViewer3D {
+    #[cfg(target_arch = "wasm32")]
+    proxy: Option<winit::event_loop::EventLoopProxy<State>>,
     state: Option<State>,
 }
 
-impl ApplicationHandler<UserEvent> for ImageViewer3D {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Create window object
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
+impl ImageViewer3D {
+    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>) -> Self {
+        #[cfg(target_arch = "wasm32")]
+        let proxy = Some(event_loop.create_proxy());
+        Self {
+            state: None,
+            #[cfg(target_arch = "wasm32")]
+            proxy,
+        }
+    }
+}
 
-        let state = pollster::block_on(State::new(window.clone()));
-        self.state = Some(state);
-        window.request_redraw();
+impl ApplicationHandler<State> for ImageViewer3D {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        #[allow(unused_mut)]
+        let mut window_attributes = Window::default_attributes();
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowAttributesExtWebSys;
+
+            const CANVAS_ID: &str = "canvas";
+
+            let window = wgpu::web_sys::window().unwrap_throw();
+            let document = window.document().unwrap_throw();
+            let canvas = document.get_element_by_id(CANVAS_ID).unwrap_throw();
+            let html_canvas_element = canvas.unchecked_into();
+            window_attributes = window_attributes.with_canvas(Some(html_canvas_element));
+        }
+
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // If we are not on web we can use pollster to
+            // await the
+            self.state = Some(pollster::block_on(State::new(window)));
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Run the future asynchronously and use the
+            // proxy to send the results to the event loop
+            if let Some(proxy) = self.proxy.take() {
+                wasm_bindgen_futures::spawn_local(async move {
+                    assert!(proxy.send_event(State::new(window).await).is_ok())
+                });
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let app_state = self.state.as_mut().unwrap();
-        match event {
-            WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
-                event_loop.exit();
+        // Debug: log all events on WASM
+        #[cfg(target_arch = "wasm32")]
+        {
+            match &event {
+                WindowEvent::RedrawRequested => {} // Don't spam redraw logs
+                _ => log::info!("Window event: {:?}", event),
             }
-            WindowEvent::RedrawRequested => {
-                app_state.render();
-            }
-            WindowEvent::Resized(size) => {
-                app_state.resize(size);
-                app_state
-                    .projection
-                    .update_aspect_ratio(app_state.aspect_ratio);
-            }
-            WindowEvent::CursorMoved {
-                device_id: _,
-                position,
-            } => {
-                app_state.mouse.register_move_event(position);
-                if app_state.mouse.is_left_button_pressed() {
-                    match app_state.mouse.get_device_coordinates(app_state.size) {
-                        Ok(new_position) => {
-                            if app_state.mouse.is_pointer_inside(Vec2::from(new_position)) {
-                                if app_state.keyboard.is_control_pressed() {
-                                    app_state.projection.change_position(new_position);
-                                } else {
-                                    app_state
-                                        .transformation
-                                        .rotate(Vec3::from((new_position, 1.0)));
+        }
+
+        if self.state.is_none() {
+            log::warn!("State is None, ignoring event");
+            return;
+        }
+
+        if let Some(app_state) = self.state.as_mut() {
+            match event {
+                WindowEvent::CloseRequested => {
+                    println!("The close button was pressed; stopping");
+                    event_loop.exit();
+                }
+                WindowEvent::RedrawRequested => {
+                    // Process any pending commands from JavaScript (WASM only)
+                    #[cfg(target_arch = "wasm32")]
+                    app_state.process_commands();
+
+                    app_state.render();
+                }
+                WindowEvent::Resized(size) => {
+                    app_state.resize(size);
+                    app_state
+                        .projection
+                        .update_aspect_ratio(app_state.aspect_ratio);
+                }
+                WindowEvent::CursorMoved {
+                    device_id: _,
+                    position,
+                } => {
+                    app_state.mouse.register_move_event(position);
+                    if app_state.mouse.is_left_button_pressed() {
+                        match app_state.mouse.get_device_coordinates(app_state.size) {
+                            Ok(new_position) => {
+                                if app_state.mouse.is_pointer_inside(Vec2::from(new_position)) {
+                                    if app_state.keyboard.is_control_pressed() {
+                                        app_state.projection.change_position(new_position);
+                                    } else {
+                                        app_state
+                                            .transformation
+                                            .rotate(Vec3::from((new_position, 1.0)));
+                                    }
                                 }
                             }
+                            Err(e) => error!("Failed to calculate pointer position: {}", e),
                         }
-                        Err(e) => error!("Failed to calculate pointer position: {}", e),
+                    }
+                    app_state.get_window().request_redraw();
+                    // let pixel_value = app_state.pixel_value.read(&app_state.device);
+                    // match pixel_value {
+                    //     Ok((x, y, z)) => {
+                    //         info!("Pixel Value at [{}/{}]={:.3}", x, y, z);
+                    //     }
+                    //     Err(e) => {
+                    //         error!("Failed to read pixel value: {}", e);
+                    //     }
+                    // };
+                }
+                WindowEvent::MouseInput {
+                    device_id: _,
+                    state,
+                    button,
+                } => {
+                    app_state.mouse.register_button_event(button, state);
+                    if app_state.mouse.is_left_button_pressed() {
+                        match app_state.mouse.get_device_coordinates(app_state.size) {
+                            Ok(pos) => {
+                                if app_state.keyboard.is_control_pressed() {
+                                    app_state.projection.start_move(pos);
+                                } else {
+                                    app_state.transformation.start_move(Vec3::from((pos, 1.0)))
+                                };
+                            }
+                            Err(e) => error!("Failed to calculate pointer position: {}", e),
+                        }
                     }
                 }
-                app_state.get_window().request_redraw();
-                let pixel_value = app_state.pixel_value.read(&app_state.device);
-                match pixel_value {
-                    Ok((x, y, z)) => {
-                        info!("Pixel Value at [{}/{}]={:.3}", x, y, z);
-                    }
-                    Err(e) => {
-                        error!("Failed to read pixel value: {}", e);
-                    }
-                };
-            }
-            WindowEvent::MouseInput {
-                device_id: _,
-                state,
-                button,
-            } => {
-                app_state.mouse.register_button_event(button, state);
-                if app_state.mouse.is_left_button_pressed() {
-                    match app_state.mouse.get_device_coordinates(app_state.size) {
-                        Ok(pos) => {
-                            if app_state.keyboard.is_control_pressed() {
-                                app_state.projection.start_move(pos);
+                WindowEvent::MouseWheel {
+                    device_id: _,
+                    delta,
+                    phase: _,
+                } => {
+                    app_state.mouse.register_scroll_event(delta);
+                    app_state.projection.zoom(app_state.mouse.get_zoom());
+                    app_state.get_window().request_redraw();
+                }
+                WindowEvent::KeyboardInput {
+                    device_id: _,
+                    event,
+                    is_synthetic: _,
+                } => {
+                    app_state.keyboard.register_event(event.clone());
+                    if let winit::keyboard::Key::Character(ref c) = event.logical_key {
+                        // Toggle shader with 'S' key
+                        if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
+                            app_state.use_height_shader = !app_state.use_height_shader;
+                            app_state.get_window().request_redraw();
+                        }
+                        // Toggle overlay with 'T' key
+                        if c.as_str() == "t" && event.state == winit::event::ElementState::Pressed {
+                            if app_state.texture.overlay.overlays.is_empty() {
+                                app_state
+                                    .texture
+                                    .overlay
+                                    .set_overlays(Arc::new(overlay::example_overlays()));
                             } else {
-                                app_state.transformation.start_move(Vec3::from((pos, 1.0)))
-                            };
+                                app_state.texture.overlay.set_overlays(Arc::new(Vec::new()));
+                            }
+                            app_state.get_window().request_redraw();
                         }
-                        Err(e) => error!("Failed to calculate pointer position: {}", e),
+                        // Move object to origin with 'O' key
+                        if c.as_str() == "o" && event.state == winit::event::ElementState::Pressed {
+                            app_state.projection.reset();
+                            app_state.transformation.reset();
+                            app_state.get_window().request_redraw();
+                        }
                     }
                 }
+                _ => (),
             }
-            WindowEvent::MouseWheel {
-                device_id: _,
-                delta,
-                phase: _,
-            } => {
-                app_state.mouse.register_scroll_event(delta);
-                app_state.projection.zoom(app_state.mouse.get_zoom());
-                app_state.get_window().request_redraw();
-            }
-            WindowEvent::KeyboardInput {
-                device_id: _,
-                event,
-                is_synthetic: _,
-            } => {
-                app_state.keyboard.register_event(event.clone());
-                if let winit::keyboard::Key::Character(ref c) = event.logical_key {
-                    // Toggle shader with 'S' key
-                    if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
-                        app_state.use_height_shader = !app_state.use_height_shader;
-                        app_state.get_window().request_redraw();
-                    }
-                    // Toggle overlay with 'T' key
-                    if c.as_str() == "t" && event.state == winit::event::ElementState::Pressed {
-                        if app_state.texture.overlay.overlays.is_empty() {
-                            app_state
-                                .texture
-                                .overlay
-                                .set_overlays(Arc::new(overlay::example_overlays()));
-                        } else {
-                            app_state.texture.overlay.set_overlays(Arc::new(Vec::new()));
-                        }
-                        app_state.get_window().request_redraw();
-                    }
-                    // Move object to origin with 'O' key
-                    if c.as_str() == "o" && event.state == winit::event::ElementState::Pressed {
-                        app_state.projection.reset();
-                        app_state.transformation.reset();
-                        app_state.get_window().request_redraw();
-                    }
-                }
-            }
-            _ => (),
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
-        let Some(app_state) = self.state.as_mut() else {
-            log::error!("No app state found");
-            return;
-        };
+    #[allow(unused_mut)]
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Resize first while we still own the event
+            event.resize(event.window.inner_size());
+            // Update projection aspect ratio to match viewport
+            event.projection.update_aspect_ratio(event.aspect_ratio);
+            // Store window reference for JavaScript to request redraws
+            wasm_commands::set_window(event.window.clone());
+        }
 
-        match event {
-            UserEvent::BackToOrigin => {
-                app_state.projection.reset();
-                app_state.transformation.reset();
-                app_state.get_window().request_redraw();
-            }
-            UserEvent::SetAmplitudeShader => {
-                app_state.use_height_shader = false;
-                app_state.get_window().request_redraw();
-            }
-            UserEvent::SetHeightShader => {
-                app_state.use_height_shader = true;
-                app_state.get_window().request_redraw();
-            }
-            UserEvent::SetOverlays(overlays) => {
-                app_state.texture.overlay.set_overlays(overlays.clone());
-                app_state.get_window().request_redraw();
-            }
-            UserEvent::ClearOverlays => {
-                app_state.texture.overlay.set_overlays(Arc::new(Vec::new()));
-                app_state.get_window().request_redraw();
+        // Set state BEFORE requesting redraw so the RedrawRequested handler can access it
+        self.state = Some(event);
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Now request redraw - state is already set
+            if let Some(state) = self.state.as_ref() {
+                state.window.request_redraw();
             }
         }
     }
 }
 
-/// Creates the event loop and returns a handle that can be used to control
-/// the viewer from external code (e.g., JavaScript in WebAssembly).
-pub fn create_event_loop() -> (EventLoop<UserEvent>, ViewerHandle) {
-    let event_loop = EventLoop::<UserEvent>::with_user_event().build().unwrap();
-    let proxy = event_loop.create_proxy();
-    let handle = ViewerHandle { proxy };
-    (event_loop, handle)
+pub fn run() -> anyhow::Result<()> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_logger::init();
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        console_log::init_with_level(log::Level::Info).unwrap_throw();
+    }
+
+    let event_loop = EventLoop::with_user_event().build()?;
+    let mut app = ImageViewer3D::new(
+        #[cfg(target_arch = "wasm32")]
+        &event_loop,
+    );
+    event_loop.run_app(&mut app)?;
+
+    Ok(())
 }
 
-pub fn run_app(event_loop: EventLoop<UserEvent>) -> Result<(), winit::error::EventLoopError> {
-    let mut app = ImageViewer3D { state: None };
-    event_loop.run_app(&mut app)
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
+    console_error_panic_hook::set_once();
+    run().unwrap_throw();
+
+    Ok(())
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .format_timestamp_secs()
-        .init();
-
-    let (event_loop, _handle) = create_event_loop();
-
-    // The `_handle` can be cloned and sent to other threads or stored globally
-    // to allow external control of the viewer (e.g., from JavaScript via WebAssembly).
-    // Example usage:
-    //   handle.back_to_origin();
-    //   handle.toggle_shader();
-    //   handle.toggle_overlay();
-
-    if let Err(e) = run_app(event_loop) {
+    if let Err(e) = run() {
         log::error!("Failed to run image viewer: {}", e)
     };
 }

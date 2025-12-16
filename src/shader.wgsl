@@ -20,8 +20,8 @@ var<uniform> z_range: ZValueRange;
 @group(1) @binding(2)
 var<storage, read> mouse_pos: vec2<f32>;
 
-@group(1) @binding(3)
-var<storage, read_write> pixel_value: array<f32, 3>;
+// @group(1) @binding(3)
+// var<storage, read_write> pixel_value: array<f32, 3>;
 
 struct TransformationInput {
     col0: vec4<f32>,
@@ -82,11 +82,11 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     );
     out.points_z = data.z_values;
 
-    if abs(projected_position.x - mouse_pos.x) < 0.001 && abs(projected_position.y - mouse_pos.y) < 0.001 {
-        pixel_value[0] = f32(col);
-        pixel_value[1] = f32(row);
-        pixel_value[2] = data.z_values;
-    }
+    // if abs(projected_position.x - mouse_pos.x) < 0.001 && abs(projected_position.y - mouse_pos.y) < 0.001 {
+    //     pixel_value[0] = f32(col);
+    //     pixel_value[1] = f32(row);
+    //     pixel_value[2] = data.z_values;
+    // }
 
     return out;
 }
