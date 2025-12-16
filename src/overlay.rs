@@ -1,7 +1,8 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use crate::image::ImageSize;
 
+#[derive(Debug)]
 pub struct Overlay {
     pub pixels: Vec<Range<u32>>,
     pub color: [u8; 4],
@@ -10,7 +11,7 @@ pub struct Overlay {
 pub struct OverlayTexture {
     texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub overlays: Vec<Overlay>,
+    pub overlays: Arc<Vec<Overlay>>,
     size: wgpu::Extent3d,
 }
 
@@ -26,12 +27,12 @@ impl OverlayTexture {
         Self {
             texture,
             view,
-            overlays: Vec::new(),
+            overlays: Arc::new(Vec::new()),
             size,
         }
     }
 
-    pub fn set_overlays(&mut self, overlays: Vec<Overlay>) {
+    pub fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
         self.overlays = overlays;
     }
 
@@ -61,7 +62,7 @@ impl OverlayTexture {
         let total_pixels = (self.size.width * self.size.height) as usize;
         let mut data = vec![0u8; total_pixels * 4];
 
-        for overlay in &self.overlays {
+        for overlay in self.overlays.iter() {
             for range in &overlay.pixels {
                 for pixel_idx in range.start..range.end {
                     let idx = (pixel_idx as usize) * 4;

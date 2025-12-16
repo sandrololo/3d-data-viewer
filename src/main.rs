@@ -4,9 +4,42 @@ use std::{borrow::Cow, sync::Arc, vec};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum UserEvent {
+    BackToOrigin,
+    SetAmplitudeShader,
+    SetHeightShader,
+    SetOverlays(Arc<Vec<Overlay>>),
+    ClearOverlays,
+}
+
+/// Handle to control the 3D viewer from external code
+#[derive(Clone)]
+pub struct ViewerHandle {
+    proxy: EventLoopProxy<UserEvent>,
+}
+
+impl ViewerHandle {
+    pub fn back_to_origin(&self) {
+        let _ = self.proxy.send_event(UserEvent::BackToOrigin);
+    }
+
+    pub fn set_amplitude_shader(&self) {
+        let _ = self.proxy.send_event(UserEvent::SetAmplitudeShader);
+    }
+    pub fn set_height_shader(&self) {
+        let _ = self.proxy.send_event(UserEvent::SetHeightShader);
+    }
+
+    pub fn set_overlay(&self, overlays: Arc<Vec<Overlay>>) {
+        let _ = self.proxy.send_event(UserEvent::SetOverlays(overlays));
+    }
+}
 
 mod amplitude_texture;
 mod image;
@@ -27,7 +60,7 @@ use crate::{
     image::{ImageSize, ZValueRange},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
-    overlay::OverlayTexture,
+    overlay::{Overlay, OverlayTexture},
     pixel_value_reader::PixelValueReader,
     texture::Texture,
     transformation::Transformation,
@@ -43,6 +76,7 @@ struct State {
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
     mouse: Mouse,
+    keyboard: Keyboard,
     transformation: Transformation,
     projection: Projection,
     render_pipeline_amplitude: wgpu::RenderPipeline,
@@ -216,6 +250,7 @@ impl State {
             surface,
             surface_format,
             mouse: Mouse::new(),
+            keyboard: Keyboard::new(),
             transformation,
             projection,
             render_pipeline_amplitude,
@@ -356,13 +391,11 @@ impl State {
     }
 }
 
-#[derive(Default)]
 struct ImageViewer3D {
     state: Option<State>,
-    keyboard: Keyboard,
 }
 
-impl ApplicationHandler for ImageViewer3D {
+impl ApplicationHandler<UserEvent> for ImageViewer3D {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create window object
         let window = Arc::new(
@@ -401,7 +434,7 @@ impl ApplicationHandler for ImageViewer3D {
                     match app_state.mouse.get_device_coordinates(app_state.size) {
                         Ok(new_position) => {
                             if app_state.mouse.is_pointer_inside(Vec2::from(new_position)) {
-                                if self.keyboard.is_control_pressed() {
+                                if app_state.keyboard.is_control_pressed() {
                                     app_state.projection.change_position(new_position);
                                 } else {
                                     app_state
@@ -433,7 +466,7 @@ impl ApplicationHandler for ImageViewer3D {
                 if app_state.mouse.is_left_button_pressed() {
                     match app_state.mouse.get_device_coordinates(app_state.size) {
                         Ok(pos) => {
-                            if self.keyboard.is_control_pressed() {
+                            if app_state.keyboard.is_control_pressed() {
                                 app_state.projection.start_move(pos);
                             } else {
                                 app_state.transformation.start_move(Vec3::from((pos, 1.0)))
@@ -457,7 +490,7 @@ impl ApplicationHandler for ImageViewer3D {
                 event,
                 is_synthetic: _,
             } => {
-                self.keyboard.register_event(event.clone());
+                app_state.keyboard.register_event(event.clone());
                 if let winit::keyboard::Key::Character(ref c) = event.logical_key {
                     // Toggle shader with 'S' key
                     if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
@@ -470,9 +503,9 @@ impl ApplicationHandler for ImageViewer3D {
                             app_state
                                 .texture
                                 .overlay
-                                .set_overlays(overlay::example_overlays());
+                                .set_overlays(Arc::new(overlay::example_overlays()));
                         } else {
-                            app_state.texture.overlay.set_overlays(Vec::new());
+                            app_state.texture.overlay.set_overlays(Arc::new(Vec::new()));
                         }
                         app_state.get_window().request_redraw();
                     }
@@ -487,31 +520,68 @@ impl ApplicationHandler for ImageViewer3D {
             _ => (),
         }
     }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        let Some(app_state) = self.state.as_mut() else {
+            log::error!("No app state found");
+            return;
+        };
+
+        match event {
+            UserEvent::BackToOrigin => {
+                app_state.projection.reset();
+                app_state.transformation.reset();
+                app_state.get_window().request_redraw();
+            }
+            UserEvent::SetAmplitudeShader => {
+                app_state.use_height_shader = false;
+                app_state.get_window().request_redraw();
+            }
+            UserEvent::SetHeightShader => {
+                app_state.use_height_shader = true;
+                app_state.get_window().request_redraw();
+            }
+            UserEvent::SetOverlays(overlays) => {
+                app_state.texture.overlay.set_overlays(overlays.clone());
+                app_state.get_window().request_redraw();
+            }
+            UserEvent::ClearOverlays => {
+                app_state.texture.overlay.set_overlays(Arc::new(Vec::new()));
+                app_state.get_window().request_redraw();
+            }
+        }
+    }
+}
+
+/// Creates the event loop and returns a handle that can be used to control
+/// the viewer from external code (e.g., JavaScript in WebAssembly).
+pub fn create_event_loop() -> (EventLoop<UserEvent>, ViewerHandle) {
+    let event_loop = EventLoop::<UserEvent>::with_user_event().build().unwrap();
+    let proxy = event_loop.create_proxy();
+    let handle = ViewerHandle { proxy };
+    (event_loop, handle)
+}
+
+pub fn run_app(event_loop: EventLoop<UserEvent>) -> Result<(), winit::error::EventLoopError> {
+    let mut app = ImageViewer3D { state: None };
+    event_loop.run_app(&mut app)
 }
 
 fn main() {
-    // wgpu uses `log` for all of our logging, so we initialize a logger with the `env_logger` crate.
-    //
-    // To change the log level, set the `RUST_LOG` environment variable. See the `env_logger`
-    // documentation for more information.
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_secs()
         .init();
 
-    let event_loop = EventLoop::new().unwrap();
+    let (event_loop, _handle) = create_event_loop();
 
-    // When the current loop iteration finishes, immediately begin a new
-    // iteration regardless of whether or not new events are available to
-    // process. Preferred for applications that want to render as fast as
-    // possible, like games.
-    event_loop.set_control_flow(ControlFlow::Poll);
+    // The `_handle` can be cloned and sent to other threads or stored globally
+    // to allow external control of the viewer (e.g., from JavaScript via WebAssembly).
+    // Example usage:
+    //   handle.back_to_origin();
+    //   handle.toggle_shader();
+    //   handle.toggle_overlay();
 
-    // When the current loop iteration finishes, suspend the thread until
-    // another event arrives. Helps keeping CPU utilization low if nothing
-    // is happening, which is preferred if the application might be idling in
-    // the background.
-    // event_loop.set_control_flow(ControlFlow::Wait);
-
-    let mut app = ImageViewer3D::default();
-    event_loop.run_app(&mut app).unwrap();
+    if let Err(e) = run_app(event_loop) {
+        log::error!("Failed to run image viewer: {}", e)
+    };
 }
