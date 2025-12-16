@@ -80,12 +80,10 @@ pub fn viewer_clear_overlays() {
     wasm_commands::push_command(ViewerCommand::ClearOverlays);
 }
 
-mod amplitude_texture;
 mod image;
 mod index_buffer;
 mod keyboard;
 mod mouse;
-mod overlay;
 mod pixel_value_reader;
 mod projection;
 mod texture;
@@ -99,9 +97,8 @@ use crate::{
     image::{ImageSize, ZValueRange},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
-    overlay::{Overlay, OverlayTexture},
     pixel_value_reader::PixelValueReader,
-    texture::Texture,
+    texture::{Overlay, Texture},
     transformation::Transformation,
     vertex_buffer::VertexBuffer,
 };
@@ -165,18 +162,9 @@ impl State {
         .await
         .unwrap();
 
-        let amplitude_texture = amplitude_texture::AmplitudeTexture::new(image.amplitude, &device);
-        amplitude_texture.write_to_queue(&queue);
-
-        let overlay_texture = OverlayTexture::new(&image.surface.size, &device);
-        overlay_texture.write_to_queue(&queue);
-
-        let texture = Texture::new(&device, amplitude_texture, overlay_texture);
-
         let outlier_removed_data = image.surface.outlier_removed_data(5.0, 95.0);
         let z_range = image::value_range(&outlier_removed_data);
 
-        // Combined bind group: image dimensions (binding 0) + z range (binding 1) in group 1
         let image_dims_buffer = image.surface.size.create_buffer_init(&device);
         let z_value_range_buffer = z_range.create_buffer_init(&device);
         let image_info_bind_group_layout =
@@ -189,6 +177,14 @@ impl State {
                     // PixelValueReader::get_pixel_value_bind_group_layout_entry(),
                 ],
             });
+
+        let vertex_buffer = VertexBuffer::new(&image.surface.size, &outlier_removed_data, &device);
+        let index_buffer =
+            IndexBufferBuilder::new_triangle_strip(&image.surface.size).create_buffer_init(&device);
+
+        let texture = Texture::new(&device, image);
+        texture.write_to_queue(&queue);
+
         let pixel_value = PixelValueReader::new(&device);
 
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -266,10 +262,6 @@ impl State {
             targets: &texture_format,
         });
         let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
-
-        let vertex_buffer = VertexBuffer::new(&image.surface.size, &outlier_removed_data, &device);
-        let index_buffer =
-            IndexBufferBuilder::new_triangle_strip(&image.surface.size).create_buffer_init(&device);
 
         // Create depth texture view
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -634,7 +626,7 @@ impl ApplicationHandler<State> for ImageViewer3D {
                                 app_state
                                     .texture
                                     .overlay
-                                    .set_overlays(Arc::new(overlay::example_overlays()));
+                                    .set_overlays(Arc::new(texture::example_overlays()));
                             } else {
                                 app_state.texture.overlay.set_overlays(Arc::new(Vec::new()));
                             }

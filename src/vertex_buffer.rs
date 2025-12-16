@@ -5,7 +5,6 @@ use crate::image::ImageSize;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
-    position: [f32; 1],
     vertex_id: [u32; 1],
 }
 
@@ -20,7 +19,6 @@ impl VertexBuffer {
             Vec::with_capacity((image_size.width.get() * image_size.height.get()) as usize);
         for (i, &z) in data.iter().enumerate() {
             vertices.push(Vertex {
-                position: [z],
                 vertex_id: [i as u32],
             });
         }
@@ -36,18 +34,11 @@ impl VertexBuffer {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<f32>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-            ],
+            attributes: &[wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Uint32,
+            }],
         }
     }
 }
