@@ -17,7 +17,7 @@ impl VertexBuffer {
         // Interleave z values and vertex indices into a single vertex buffer
         let mut vertices: Vec<Vertex> =
             Vec::with_capacity((image_size.width.get() * image_size.height.get()) as usize);
-        for (i, &z) in data.iter().enumerate() {
+        for i in 0..data.len() {
             vertices.push(Vertex {
                 vertex_id: [i as u32],
             });
