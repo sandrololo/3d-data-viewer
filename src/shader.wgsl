@@ -60,7 +60,8 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let x = 2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0;
     let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
     let z_value = textureLoad(surface_texture, vec2<u32>(col, row), 0);
-    let z = 1.0 - (z_value.x - z_range.min) / (z_range.max - z_range.min);
+    let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
+    let z = 1.0 - (z_clamped - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
 
 
@@ -82,7 +83,7 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.position = projected_position;
     out.pixel = vec2<u32>(col, row);
-    out.z_value = z_value.x;
+    out.z_value = z_clamped;
 
     // if abs(projected_position.x - mouse_pos.x) < 0.001 && abs(projected_position.y - mouse_pos.y) < 0.001 {
     //     pixel_value[0] = f32(col);
