@@ -105,7 +105,7 @@ fn fs_height(in: VertexOutput) -> @location(0) vec4<f32> {
     let overlay_color = textureLoad(overlay_texture, in.pixel, 0);
     
     // Calculate base height color
-    let depth = 0.05 + 0.95 * (in.z_value - z_range.min) / (z_range.max - z_range.min);
+    let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
     let base_color = vec4<f32>(depth, depth, depth, 1.0);
     
     // Blend overlay if present (alpha > 0)
