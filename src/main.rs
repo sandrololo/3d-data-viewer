@@ -96,8 +96,14 @@ pub async fn viewer_get_pixel() -> Vec<f32> {
         Ok(future) => future
             .await
             .map(|(x, y, z)| vec![x as f32, y as f32, z])
-            .unwrap_or_default(),
-        Err(_) => vec![],
+            .unwrap_or_else(|_| {
+                log::error!("Failed to get pixel data");
+                vec![]
+            }),
+        Err(_) => {
+            log::error!("Failed to receive pixel data");
+            vec![]
+        }
     }
 }
 
@@ -171,7 +177,7 @@ impl State {
         #[cfg(not(target_arch = "wasm32"))]
         let image = SurfaceAmplitudeImage::from_file("example-img.tiff").unwrap();
         #[cfg(target_arch = "wasm32")]
-        let image = SurfaceAmplitudeImage::from_url("http://localhost:8081/img")
+        let image = SurfaceAmplitudeImage::from_url("http://localhost:8080/img")
             .await
             .unwrap();
 
