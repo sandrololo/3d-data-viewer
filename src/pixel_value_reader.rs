@@ -1,5 +1,6 @@
 use glam::Vec2;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use winit::dpi::PhysicalPosition;
 
 pub struct PixelValueReader {
     pub mouse_position_buffer: wgpu::Buffer,
@@ -19,7 +20,8 @@ impl PixelValueReader {
         }
     }
 
-    pub fn update_gpu(&self, queue: &wgpu::Queue, mouse_pos: &Vec2) {
+    pub fn update_gpu(&self, queue: &wgpu::Queue, mouse_pos: PhysicalPosition<f64>) {
+        let mouse_pos = Vec2::new(mouse_pos.x as f32, mouse_pos.y as f32);
         queue.write_buffer(
             &self.mouse_position_buffer,
             0,
@@ -74,7 +76,7 @@ impl PixelValueReader {
     pub fn get_mouse_position_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding: 2,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
@@ -87,7 +89,7 @@ impl PixelValueReader {
     pub fn get_pixel_value_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding: 3,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
@@ -113,7 +115,7 @@ impl PixelValueReader {
     fn create_mouse_position_buffer(device: &wgpu::Device) -> wgpu::Buffer {
         device.create_buffer_init(&BufferInitDescriptor {
             label: Some("mouse_position_buffer"),
-            contents: bytemuck::cast_slice(&[0u32, 0u32]),
+            contents: bytemuck::cast_slice(&[0f32, 0f32]),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
         })
     }

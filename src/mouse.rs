@@ -5,7 +5,7 @@ use winit::{
 };
 
 pub struct Mouse {
-    current_position: PhysicalPosition<f64>,
+    pub current_position: PhysicalPosition<f64>,
     left_button: ElementState,
     current_zoom: f32,
 }

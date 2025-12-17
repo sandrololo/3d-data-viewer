@@ -25,8 +25,8 @@ var<uniform> z_range: ZValueRange;
 @group(1) @binding(2)
 var<storage, read> mouse_pos: vec2<f32>;
 
-// @group(1) @binding(3)
-// var<storage, read_write> pixel_value: array<f32, 3>;
+@group(1) @binding(3)
+var<storage, read_write> pixel_value: array<f32, 3>;
 
 struct TransformationInput {
     col0: vec4<f32>,
@@ -85,12 +85,6 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     out.pixel = vec2<u32>(col, row);
     out.z_value = z_clamped;
 
-    // if abs(projected_position.x - mouse_pos.x) < 0.001 && abs(projected_position.y - mouse_pos.y) < 0.001 {
-    //     pixel_value[0] = f32(col);
-    //     pixel_value[1] = f32(row);
-    //     pixel_value[2] = data.z_values;
-    // }
-
     return out;
 }
 
@@ -107,6 +101,13 @@ fn fs_height(in: VertexOutput) -> @location(0) vec4<f32> {
     // Calculate base height color
     let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
     let base_color = vec4<f32>(depth, depth, depth, 1.0);
+
+    if abs(in.position.x - mouse_pos.x) < 1 && abs(in.position.y - mouse_pos.y) < 1 {
+        pixel_value[0] = f32(in.pixel.x);
+        pixel_value[1] = f32(in.pixel.y);
+        pixel_value[2] = in.z_value;
+        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
     
     // Blend overlay if present (alpha > 0)
     if (overlay_color.a > 0.0) {

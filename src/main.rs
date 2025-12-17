@@ -174,7 +174,7 @@ impl State {
                     ImageSize::get_bind_group_layout_entry(),
                     ZValueRange::<f32>::get_bind_group_layout_entry(),
                     PixelValueReader::get_mouse_position_bind_group_layout_entry(),
-                    // PixelValueReader::get_pixel_value_bind_group_layout_entry(),
+                    PixelValueReader::get_pixel_value_bind_group_layout_entry(),
                 ],
             });
 
@@ -194,7 +194,7 @@ impl State {
                 ImageSize::get_bind_group_entry(&image_dims_buffer),
                 ZValueRange::<f32>::get_bind_group_entry(&z_value_range_buffer),
                 pixel_value.get_mouse_position_bind_group_entry(),
-                // pixel_value.get_pixel_value_bind_group_entry(),
+                pixel_value.get_pixel_value_bind_group_entry(),
             ],
         });
 
@@ -418,11 +418,8 @@ impl State {
         self.texture.overlay.write_to_queue(&self.queue);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
-        let mouse_pos = self
-            .mouse
-            .get_device_coordinates(self.size)
-            .unwrap_or(Vec2::ZERO);
-        self.pixel_value.update_gpu(&self.queue, &mouse_pos);
+        self.pixel_value
+            .update_gpu(&self.queue, self.mouse.current_position);
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
@@ -570,15 +567,15 @@ impl ApplicationHandler<State> for ImageViewer3D {
                         }
                     }
                     app_state.get_window().request_redraw();
-                    // let pixel_value = app_state.pixel_value.read(&app_state.device);
-                    // match pixel_value {
-                    //     Ok((x, y, z)) => {
-                    //         info!("Pixel Value at [{}/{}]={:.3}", x, y, z);
-                    //     }
-                    //     Err(e) => {
-                    //         error!("Failed to read pixel value: {}", e);
-                    //     }
-                    // };
+                    let pixel_value = app_state.pixel_value.read(&app_state.device);
+                    match pixel_value {
+                        Ok((x, y, z)) => {
+                            log::info!("Pixel Value at [{}/{}]={:.3}", x, y, z);
+                        }
+                        Err(e) => {
+                            error!("Failed to read pixel value: {}", e);
+                        }
+                    };
                 }
                 WindowEvent::MouseInput {
                     device_id: _,
@@ -673,7 +670,9 @@ impl ApplicationHandler<State> for ImageViewer3D {
 pub fn run() -> anyhow::Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        env_logger::init();
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+            .format_timestamp_secs()
+            .init();
     }
     #[cfg(target_arch = "wasm32")]
     {
