@@ -386,7 +386,7 @@
         /* Pixel readout */
         .pixel-readout {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: 1fr 1fr 2fr;
             gap: 0.5rem;
             padding: 0.75rem;
             margin-top: 0.5rem;
@@ -621,7 +621,8 @@
                             <span class="pixel-value" id="pixel-z">--</span>
                         </div>
                     </div>
-                    <button class="btn btn-primary pixel-refresh" id="btn-sample-pixel">Sample Pixel</button>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px; text-align: center;">
+                        Updates as you move the cursor</p>
                 </div>
 
                 <div class="control-section">

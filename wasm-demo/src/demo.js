@@ -31,11 +31,11 @@ const btnAmplitude = document.getElementById('btn-amplitude');
 const btnReset = document.getElementById('btn-reset');
 const btnSetOverlay = document.getElementById('btn-set-overlay');
 const btnClearOverlay = document.getElementById('btn-clear-overlay');
-const btnSamplePixel = document.getElementById('btn-sample-pixel');
 
 // State
 let wasmModule = null;
 let isHeightMode = true;
+let isPollingEnabled = false;
 
 /**
  * Check if WebGPU is available
@@ -112,16 +112,19 @@ function renderPixelReadout(x, y, z) {
         return;
     }
 
-    const formatValue = (value, roundToInt) => {
+    const formatValue = (value, roundToInt, decimals) => {
         if (!Number.isFinite(value)) {
             return '--';
         }
-        return roundToInt ? Math.round(value).toString() : value.toString();
+        if (roundToInt) {
+            return Math.round(value).toString();
+        }
+        return decimals !== undefined ? value.toFixed(decimals) : value.toString();
     };
 
     pixelX.textContent = formatValue(x, true);
     pixelY.textContent = formatValue(y, true);
-    pixelZ.textContent = formatValue(z, false);
+    pixelZ.textContent = formatValue(z, false, 2);
 }
 
 /**
@@ -135,7 +138,10 @@ async function initWasm() {
     try {
         // Initialize the WASM module - run_web() is called automatically
         // via the #[wasm_bindgen(start)] attribute in Rust
+        console.log('Calling init()...');
         wasmModule = await init();
+        console.log('init() completed successfully');
+        console.log('wasmModule after init:', !!wasmModule);
 
         statusWasm.textContent = 'Ready';
         statusWasm.classList.add('success');
@@ -143,9 +149,12 @@ async function initWasm() {
         console.log('WASM module initialized, run_web() executed:', wasmModule);
         return true;
     } catch (e) {
+        console.log('Exception caught during init:', e.message);
+
         // winit uses exceptions for control flow on web - this is expected!
         if (e.message && e.message.includes("Using exceptions for control flow")) {
             console.log('WASM event loop started (this is normal)');
+            console.log('wasmModule after exception:', !!wasmModule);
             statusWasm.textContent = 'Running';
             statusWasm.classList.add('success');
             return true;
@@ -197,35 +206,64 @@ function setupControls() {
         viewer_clear_overlays();
     });
 
-    if (btnSamplePixel) {
-        btnSamplePixel.addEventListener('click', () => {
-            samplePixel();
+    // Set up mouse movement tracking
+    const canvas = document.getElementById('canvas');
+    if (canvas) {
+        console.log('Setting up canvas mouse tracking');
+        canvas.addEventListener('mousemove', () => {
+            console.log('Canvas mousemove, isPollingEnabled:', isPollingEnabled, 'viewer_get_pixel:', typeof viewer_get_pixel);
+            if (!isPollingEnabled && typeof viewer_get_pixel === 'function') {
+                isPollingEnabled = true;
+                console.log('Enabling polling');
+                startPixelPolling();
+            }
         });
+
+        canvas.addEventListener('mouseleave', () => {
+            console.log('Canvas mouseleave');
+            isPollingEnabled = false;
+        });
+    } else {
+        console.warn('Canvas element not found');
     }
 }
 
 /**
- * Request the current pixel from WASM and show it in the panel
+ * Continuously poll the current pixel from WASM and update the panel
  */
-async function samplePixel() {
-    if (!wasmModule) {
-        console.warn('WASM module is not ready yet.');
-        return;
-    }
+function startPixelPolling() {
+    console.log('Starting pixel polling');
 
-    try {
-        const result = await viewer_get_pixel();
-        if (!result || result.length < 3) {
-            renderPixelReadout(Number.NaN, Number.NaN, Number.NaN);
+    async function pollOnce() {
+        if (!isPollingEnabled || typeof viewer_get_pixel !== 'function') {
+            console.log('Polling stopped - isPollingEnabled:', isPollingEnabled, 'viewer_get_pixel:', typeof viewer_get_pixel);
             return;
         }
 
-        const [x, y, z] = result;
-        renderPixelReadout(x, y, z);
-    } catch (err) {
-        console.error('Failed to fetch pixel:', err);
-        renderPixelReadout(Number.NaN, Number.NaN, Number.NaN);
+        try {
+            console.log('Calling viewer_get_pixel()');
+            const result = await viewer_get_pixel();
+            console.log('Got result:', result, 'type:', result?.constructor?.name);
+
+            // Handle both Array and TypedArray (Float32Array, etc.)
+            if (result && (Array.isArray(result) || ArrayBuffer.isView(result)) && result.length >= 3) {
+                const x = result[0];
+                const y = result[1];
+                const z = result[2];
+                console.log(`Rendering values x=${x}, y=${y}, z=${z}`);
+                renderPixelReadout(x, y, z);
+            } else {
+                console.log('Invalid result format:', result);
+            }
+        } catch (err) {
+            console.error('Failed to fetch pixel:', err);
+        }
+
+        // Schedule next poll
+        setTimeout(pollOnce, 100);
     }
+
+    pollOnce();
 }
 
 /**
@@ -289,12 +327,20 @@ async function main() {
     updateLoadingText('Starting renderer...');
 
     // Small delay to allow WASM to initialize rendering
-    setTimeout(() => {
+    setTimeout(async () => {
         hideLoading();
         console.log('✅ 3D Data Viewer ready!');
+        console.log('wasmModule available:', !!wasmModule);
+        console.log('viewer_get_pixel available:', typeof viewer_get_pixel);
 
-        // Populate pixel readout once the viewer is ready
-        samplePixel();
+        // Start polling - it will work as long as viewer_get_pixel is available
+        if (typeof viewer_get_pixel === 'function') {
+            console.log('Starting polling');
+            isPollingEnabled = true;
+            startPixelPolling();
+        } else {
+            console.warn('viewer_get_pixel not available yet');
+        }
     }, 500);
 }
 
