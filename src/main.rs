@@ -164,7 +164,7 @@ impl State {
         .await
         .unwrap();
 
-        let outlier_removed_data = image.surface.outlier_removed_data(5.0, 95.0);
+        let outlier_removed_data = image.surface.outlier_removed_data(2.0, 98.0);
         let z_range = image::value_range(&outlier_removed_data);
 
         let image_dims_buffer = image.surface.size.create_buffer_init(&device);
