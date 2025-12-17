@@ -106,7 +106,7 @@ use crate::{
 
 struct State {
     window: Arc<Window>,
-    device: wgpu::Device,
+    device: Arc<wgpu::Device>,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
@@ -122,7 +122,7 @@ struct State {
     texture: Texture,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
-    pixel_value: PixelPicker,
+    pixel_picker: PixelPicker,
     zoom_buffer: wgpu::Buffer,
 }
 
@@ -137,6 +137,7 @@ impl State {
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
             .unwrap();
+        let device = Arc::new(device);
 
         let surface = instance.create_surface(window.clone()).unwrap();
         let cap = surface.get_capabilities(&adapter);
@@ -185,7 +186,7 @@ impl State {
         let texture = Texture::new(&device, image);
         texture.write_to_queue(&queue);
 
-        let pixel_value = PixelPicker::new(&device, window.inner_size());
+        let pixel_picker = PixelPicker::new(&device, window.inner_size());
         let zoom_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("mip_level_buffer"),
             contents: bytemuck::cast_slice(&[2u32]),
@@ -308,7 +309,7 @@ impl State {
             texture,
             image_info_bind_group,
             depth_view,
-            pixel_value,
+            pixel_picker,
             zoom_buffer,
         };
 
@@ -356,7 +357,7 @@ impl State {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.configure_surface();
         // Resize the picking texture to match the new window size
-        self.pixel_value.resize(&self.device, new_size);
+        self.pixel_picker.resize(&self.device, new_size);
     }
 
     fn render(&mut self) {
@@ -391,7 +392,7 @@ impl State {
                     },
                 }),
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &self.pixel_value.picking_texture_view,
+                    view: &self.pixel_picker.picking_texture_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -435,8 +436,7 @@ impl State {
         // End the renderpass.
         drop(renderpass);
 
-        // Copy the pixel at mouse position from picking texture to readback buffer
-        self.pixel_value.copy_pixel_at_mouse(&mut encoder);
+        self.pixel_picker.copy_pixel_at_mouse(&mut encoder);
 
         let zoom = self.mouse.get_zoom();
         if zoom > 0.8 {
@@ -456,6 +456,34 @@ impl State {
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
         surface_texture.present();
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let future = self.pixel_picker.get(self.device.clone());
+            wasm_bindgen_futures::spawn_local(async move {
+                match future.await {
+                    Ok((x, y)) => {
+                        log::info!("Pixel at [{}/{}]", x, y);
+                    }
+                    Err(e) => {
+                        log::error!("Pixel read failed: {}", e);
+                    }
+                }
+            });
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            match pollster::block_on(self.pixel_picker.get(self.device.clone())) {
+                Ok((x, y)) => {
+                    let z = self.texture.surface.image.get_pixel(x, y);
+                    log::info!("Pixel at [{}/{}]={:.3}", x, y, z);
+                }
+                Err(e) => {
+                    log::error!("Pixel read failed: {}", e);
+                }
+            };
+        }
     }
 
     /// Process any pending commands from JavaScript (WASM only)
@@ -583,7 +611,7 @@ impl ApplicationHandler<State> for ImageViewer3D {
                     position,
                 } => {
                     app_state.mouse.register_move_event(position);
-                    app_state.pixel_value.update_mouse_position(position);
+                    app_state.pixel_picker.update_mouse_position(position);
                     if app_state.mouse.is_left_button_pressed() {
                         match app_state
                             .mouse
@@ -604,16 +632,6 @@ impl ApplicationHandler<State> for ImageViewer3D {
                         }
                     }
                     app_state.get_window().request_redraw();
-                    let pixel = app_state.pixel_value.read(&app_state.device);
-                    match pixel {
-                        Ok((x, y)) => {
-                            let pixel_value = app_state.texture.surface.image.get_pixel(x, y);
-                            log::info!("Pixel Value at [{}/{}]={:.3}", x, y, pixel_value);
-                        }
-                        Err(e) => {
-                            error!("Failed to read pixel value: {}", e);
-                        }
-                    };
                 }
                 WindowEvent::MouseInput {
                     device_id: _,
