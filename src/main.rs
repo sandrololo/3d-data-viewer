@@ -3,6 +3,7 @@ use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -124,6 +125,7 @@ struct State {
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_value: PixelValueReader,
+    zoom_buffer: wgpu::Buffer,
 }
 
 impl State {
@@ -175,6 +177,16 @@ impl State {
                     ZValueRange::<f32>::get_bind_group_layout_entry(),
                     PixelValueReader::get_mouse_position_bind_group_layout_entry(),
                     PixelValueReader::get_pixel_value_bind_group_layout_entry(),
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
@@ -186,7 +198,11 @@ impl State {
         texture.write_to_queue(&queue);
 
         let pixel_value = PixelValueReader::new(&device);
-
+        let zoom_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("mip_level_buffer"),
+            contents: bytemuck::cast_slice(&[2u32]),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+        });
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
@@ -195,6 +211,10 @@ impl State {
                 ZValueRange::<f32>::get_bind_group_entry(&z_value_range_buffer),
                 pixel_value.get_mouse_position_bind_group_entry(),
                 pixel_value.get_pixel_value_bind_group_entry(),
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: zoom_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -301,6 +321,7 @@ impl State {
             image_info_bind_group,
             depth_view,
             pixel_value,
+            zoom_buffer,
         };
 
         // Configure surface for the first time
@@ -415,6 +436,17 @@ impl State {
 
         // End the renderpass.
         drop(renderpass);
+        let zoom = self.mouse.get_zoom();
+        if zoom > 0.8 {
+            self.queue
+                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[2u32]));
+        } else if zoom > 0.2 {
+            self.queue
+                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[1u32]));
+        } else {
+            self.queue
+                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[0u32]));
+        }
         self.texture.overlay.write_to_queue(&self.queue);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);

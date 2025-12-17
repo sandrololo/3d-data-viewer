@@ -28,6 +28,9 @@ var<storage, read> mouse_pos: vec2<f32>;
 @group(1) @binding(3)
 var<storage, read_write> pixel_value: array<f32, 3>;
 
+@group(1) @binding(4)
+var<uniform> mip_level: u32;
+
 struct TransformationInput {
     col0: vec4<f32>,
     col1: vec4<f32>,
@@ -50,16 +53,18 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) pixel: vec2<u32>,
     @location(1) z_value: f32,
+    @location(3) resize: u32,
 }
 
 @vertex
 fn vs_main(data: VertexInput) -> VertexOutput {
-    let col = data.index % image_dims.width;
-    let row = data.index / image_dims.width;
+    let resize = max(mip_level * 2u, 1u);
+    let col = data.index % (image_dims.width) / resize;
+    let row = data.index / (image_dims.width) / resize;
     // Map grid coordinates to NDC consistently across the full width/height
-    let x = 2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0;
-    let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
-    let z_value = textureLoad(surface_texture, vec2<u32>(col, row), 0);
+    let x = 2.0 * f32(col) / f32(image_dims.width / resize - 1u) - 1.0;
+    let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height / resize - 1u);
+    let z_value = textureLoad(surface_texture, vec2<u32>(col, row), i32(mip_level));
     let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
     let z = 1.0 - (z_clamped - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
@@ -84,19 +89,20 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     out.position = projected_position;
     out.pixel = vec2<u32>(col, row);
     out.z_value = z_clamped;
+    out.resize = resize;
 
     return out;
 }
 
 @fragment
 fn fs_amplitude(in: VertexOutput) -> @location(0) vec4<f32> {
-    let sampled = textureLoad(amplitude_texture, in.pixel, 0);
+    let sampled = textureLoad(amplitude_texture, in.pixel * in.resize, 0);
     return vec4<f32>(1.0 - sampled.r, sampled.r, 0.0, 1.0);
 }
 
 @fragment
 fn fs_height(in: VertexOutput) -> @location(0) vec4<f32> {    
-    let overlay_color = textureLoad(overlay_texture, in.pixel, 0);
+    let overlay_color = textureLoad(overlay_texture, in.pixel * in.resize, 0);
     
     // Calculate base height color
     let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
