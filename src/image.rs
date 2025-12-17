@@ -33,6 +33,13 @@ where
             .collect()
     }
 
+    pub fn get_pixel(&self, x: u32, y: u32) -> T
+    where
+        T: Copy,
+    {
+        self.data[(y * self.size.width.get() + x) as usize]
+    }
+
     pub fn scaled_data(&self, new_min: T, new_max: T) -> Vec<T>
     where
         T: num_traits::Float
