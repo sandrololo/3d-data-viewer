@@ -23,12 +23,6 @@ struct ZValueRange{
 var<uniform> z_range: ZValueRange;
 
 @group(1) @binding(2)
-var<storage, read> mouse_pos: vec2<f32>;
-
-@group(1) @binding(3)
-var<storage, read_write> pixel_value: array<f32, 3>;
-
-@group(1) @binding(4)
 var<uniform> mip_level: u32;
 
 struct TransformationInput {
@@ -51,9 +45,17 @@ var<uniform> projection: ProjectionInput;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) pixel: vec2<u32>,
+    @location(0) @interpolate(flat) pixel: vec2<u32>,
     @location(1) z_value: f32,
-    @location(3) resize: u32,
+    @location(2) @interpolate(flat) resize: u32,
+}
+
+// Fragment output with two render targets:
+// - location(0): visible color
+// - location(1): picking data (pixel_x, pixel_y)
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+    @location(1) picking: vec2<u32>,
 }
 
 @vertex
@@ -95,35 +97,34 @@ fn vs_main(data: VertexInput) -> VertexOutput {
 }
 
 @fragment
-fn fs_amplitude(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_amplitude(in: VertexOutput) -> FragmentOutput {
     let sampled = textureLoad(amplitude_texture, in.pixel * in.resize, 0);
-    return vec4<f32>(1.0 - sampled.r, sampled.r, 0.0, 1.0);
+    var out: FragmentOutput;
+    out.color = vec4<f32>(1.0 - sampled.r, sampled.r, 0.0, 1.0);
+    out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
+    return out;
 }
 
 @fragment
-fn fs_height(in: VertexOutput) -> @location(0) vec4<f32> {    
+fn fs_height(in: VertexOutput) -> FragmentOutput {    
     let overlay_color = textureLoad(overlay_texture, in.pixel * in.resize, 0);
     
     // Calculate base height color
     let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
-    let base_color = vec4<f32>(depth, depth, depth, 1.0);
-
-    if abs(in.position.x - mouse_pos.x) < 1 && abs(in.position.y - mouse_pos.y) < 1 {
-        pixel_value[0] = f32(in.pixel.x);
-        pixel_value[1] = f32(in.pixel.y);
-        pixel_value[2] = in.z_value;
-        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-    }
+    var base_color = vec4<f32>(depth, depth, depth, 1.0);
     
     // Blend overlay if present (alpha > 0)
     if (overlay_color.a > 0.0) {
         // Alpha blend: result = overlay * alpha + base * (1 - alpha)
         let alpha = overlay_color.a;
-        return vec4<f32>(
+        base_color = vec4<f32>(
             overlay_color.rgb * alpha + base_color.rgb * (1.0 - alpha),
             1.0
         );
     }
     
-    return base_color;
+    var out: FragmentOutput;
+    out.color = base_color;
+    out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
+    return out;
 }

@@ -5,7 +5,7 @@ use crate::image::{Image, ImageSize};
 pub struct SurfaceTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
-    image: Image<f32>,
+    pub image: Image<f32>,
     size: wgpu::Extent3d,
 }
 

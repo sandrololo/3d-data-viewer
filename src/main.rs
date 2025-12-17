@@ -85,7 +85,7 @@ mod image;
 mod index_buffer;
 mod keyboard;
 mod mouse;
-mod pixel_value_reader;
+mod pixel_picker;
 mod projection;
 mod texture;
 mod transformation;
@@ -98,7 +98,7 @@ use crate::{
     image::{ImageSize, ZValueRange},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
-    pixel_value_reader::PixelValueReader,
+    pixel_picker::PixelPicker,
     texture::{Overlay, Texture},
     transformation::Transformation,
     vertex_buffer::VertexBuffer,
@@ -108,8 +108,6 @@ struct State {
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    size: winit::dpi::PhysicalSize<u32>,
-    aspect_ratio: f32,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
     mouse: Mouse,
@@ -124,7 +122,7 @@ struct State {
     texture: Texture,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
-    pixel_value: PixelValueReader,
+    pixel_value: PixelPicker,
     zoom_buffer: wgpu::Buffer,
 }
 
@@ -136,14 +134,9 @@ impl State {
             .await
             .unwrap();
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
-                ..Default::default()
-            })
+            .request_device(&wgpu::DeviceDescriptor::default())
             .await
             .unwrap();
-
-        let size = window.inner_size();
 
         let surface = instance.create_surface(window.clone()).unwrap();
         let cap = surface.get_capabilities(&adapter);
@@ -172,10 +165,8 @@ impl State {
                 entries: &[
                     ImageSize::get_bind_group_layout_entry(),
                     ZValueRange::<f32>::get_bind_group_layout_entry(),
-                    PixelValueReader::get_mouse_position_bind_group_layout_entry(),
-                    PixelValueReader::get_pixel_value_bind_group_layout_entry(),
                     wgpu::BindGroupLayoutEntry {
-                        binding: 4,
+                        binding: 2,
                         visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
@@ -194,7 +185,7 @@ impl State {
         let texture = Texture::new(&device, image);
         texture.write_to_queue(&queue);
 
-        let pixel_value = PixelValueReader::new(&device);
+        let pixel_value = PixelPicker::new(&device, window.inner_size());
         let zoom_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("mip_level_buffer"),
             contents: bytemuck::cast_slice(&[2u32]),
@@ -206,10 +197,8 @@ impl State {
             entries: &[
                 ImageSize::get_bind_group_entry(&image_dims_buffer),
                 ZValueRange::<f32>::get_bind_group_entry(&z_value_range_buffer),
-                pixel_value.get_mouse_position_bind_group_entry(),
-                pixel_value.get_pixel_value_bind_group_entry(),
                 wgpu::BindGroupEntry {
-                    binding: 4,
+                    binding: 2,
                     resource: zoom_buffer.as_entire_binding(),
                 },
             ],
@@ -234,7 +223,11 @@ impl State {
 
         const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-        let texture_format = [Some(surface_format.add_srgb_suffix().into())];
+        // Two render targets: main color + picking texture
+        let texture_formats = [
+            Some(surface_format.add_srgb_suffix().into()),
+            Some(PixelPicker::PICKING_FORMAT.into()),
+        ];
         let amplitude_pipeline_descriptor = &wgpu::RenderPipelineDescriptor {
             label: Some("amplitude_pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -248,7 +241,7 @@ impl State {
                 module: &shader,
                 entry_point: Some("fs_amplitude"),
                 compilation_options: Default::default(),
-                targets: &texture_format,
+                targets: &texture_formats,
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
@@ -276,7 +269,7 @@ impl State {
             module: &shader,
             entry_point: Some("fs_height"),
             compilation_options: Default::default(),
-            targets: &texture_format,
+            targets: &texture_formats,
         });
         let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
 
@@ -284,8 +277,8 @@ impl State {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             size: wgpu::Extent3d {
-                width: size.width.max(1),
-                height: size.height.max(1),
+                width: window.inner_size().width.max(1),
+                height: window.inner_size().height.max(1),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -301,8 +294,6 @@ impl State {
             window,
             device,
             queue,
-            size,
-            aspect_ratio: size.width as f32 / size.height as f32,
             surface,
             surface_format,
             mouse: Mouse::new(),
@@ -338,8 +329,8 @@ impl State {
             // Request compatibility with the sRGB-format texture view we‘re going to create later.
             view_formats: vec![self.surface_format.add_srgb_suffix()],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: self.size.width,
-            height: self.size.height,
+            width: self.window.inner_size().width,
+            height: self.window.inner_size().height,
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::AutoVsync,
         };
@@ -348,8 +339,8 @@ impl State {
         let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             size: wgpu::Extent3d {
-                width: self.size.width.max(1),
-                height: self.size.height.max(1),
+                width: self.window.inner_size().width.max(1),
+                height: self.window.inner_size().height.max(1),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -363,9 +354,9 @@ impl State {
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.size = new_size;
-        self.aspect_ratio = new_size.width as f32 / new_size.height as f32;
         self.configure_surface();
+        // Resize the picking texture to match the new window size
+        self.pixel_value.resize(&self.device, new_size);
     }
 
     fn render(&mut self) {
@@ -385,20 +376,30 @@ impl State {
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
-        self.pixel_value
-            .copy_temp_buffer_to_output_buffer(&mut encoder);
         // Create the renderpass which will clear the screen.
+        // Two color attachments: main color + picking texture
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &texture_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &texture_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &self.pixel_value.picking_texture_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &self.depth_view,
                 depth_ops: Some(wgpu::Operations {
@@ -433,6 +434,10 @@ impl State {
 
         // End the renderpass.
         drop(renderpass);
+
+        // Copy the pixel at mouse position from picking texture to readback buffer
+        self.pixel_value.copy_pixel_at_mouse(&mut encoder);
+
         let zoom = self.mouse.get_zoom();
         if zoom > 0.8 {
             self.queue
@@ -447,8 +452,6 @@ impl State {
         self.texture.overlay.write_to_queue(&self.queue);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
-        self.pixel_value
-            .update_gpu(&self.queue, self.mouse.current_position);
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
@@ -570,17 +573,22 @@ impl ApplicationHandler<State> for ImageViewer3D {
                 }
                 WindowEvent::Resized(size) => {
                     app_state.resize(size);
-                    app_state
-                        .projection
-                        .update_aspect_ratio(app_state.aspect_ratio);
+                    app_state.projection.update_aspect_ratio(
+                        app_state.window.inner_size().width as f32
+                            / app_state.window.inner_size().height as f32,
+                    );
                 }
                 WindowEvent::CursorMoved {
                     device_id: _,
                     position,
                 } => {
                     app_state.mouse.register_move_event(position);
+                    app_state.pixel_value.update_mouse_position(position);
                     if app_state.mouse.is_left_button_pressed() {
-                        match app_state.mouse.get_device_coordinates(app_state.size) {
+                        match app_state
+                            .mouse
+                            .get_device_coordinates(app_state.window.inner_size())
+                        {
                             Ok(new_position) => {
                                 if app_state.mouse.is_pointer_inside(Vec2::from(new_position)) {
                                     if app_state.keyboard.is_control_pressed() {
@@ -596,10 +604,11 @@ impl ApplicationHandler<State> for ImageViewer3D {
                         }
                     }
                     app_state.get_window().request_redraw();
-                    let pixel_value = app_state.pixel_value.read(&app_state.device);
-                    match pixel_value {
-                        Ok((x, y, z)) => {
-                            log::info!("Pixel Value at [{}/{}]={:.3}", x, y, z);
+                    let pixel = app_state.pixel_value.read(&app_state.device);
+                    match pixel {
+                        Ok((x, y)) => {
+                            let pixel_value = app_state.texture.surface.image.get_pixel(x, y);
+                            log::info!("Pixel Value at [{}/{}]={:.3}", x, y, pixel_value);
                         }
                         Err(e) => {
                             error!("Failed to read pixel value: {}", e);
@@ -613,7 +622,10 @@ impl ApplicationHandler<State> for ImageViewer3D {
                 } => {
                     app_state.mouse.register_button_event(button, state);
                     if app_state.mouse.is_left_button_pressed() {
-                        match app_state.mouse.get_device_coordinates(app_state.size) {
+                        match app_state
+                            .mouse
+                            .get_device_coordinates(app_state.window.inner_size())
+                        {
                             Ok(pos) => {
                                 if app_state.keyboard.is_control_pressed() {
                                     app_state.projection.start_move(pos);
@@ -678,7 +690,9 @@ impl ApplicationHandler<State> for ImageViewer3D {
             // Resize first while we still own the event
             event.resize(event.window.inner_size());
             // Update projection aspect ratio to match viewport
-            event.projection.update_aspect_ratio(event.aspect_ratio);
+            event.projection.update_aspect_ratio(
+                event.window.inner_size().width as f32 / event.window.inner_size().height as f32,
+            );
             // Store window reference for JavaScript to request redraws
             wasm_commands::set_window(event.window.clone());
         }

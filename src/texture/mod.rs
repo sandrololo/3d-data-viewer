@@ -7,7 +7,7 @@ mod surface;
 
 pub(crate) struct Texture {
     pub overlay: OverlayTexture,
-    surface: SurfaceTexture,
+    pub surface: SurfaceTexture,
     amplitude: AmplitudeTexture,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
