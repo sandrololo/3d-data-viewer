@@ -71,7 +71,7 @@ pub fn viewer_set_height_shader() {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn viewer_set_overlays() {
-    let overlays = overlay::example_overlays();
+    let overlays = texture::example_overlays();
     wasm_commands::push_command(ViewerCommand::SetOverlays(Arc::new(overlays)));
 }
 
