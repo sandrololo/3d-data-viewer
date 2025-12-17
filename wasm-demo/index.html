@@ -383,6 +383,47 @@
             box-shadow: var(--glow-cyan), var(--glow-magenta);
         }
 
+        /* Pixel readout */
+        .pixel-readout {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-tertiary);
+        }
+
+        .pixel-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            padding: 0.5rem;
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .pixel-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .pixel-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            color: var(--accent-cyan);
+            word-break: break-word;
+        }
+
+        .pixel-refresh {
+            width: 100%;
+            margin-top: 0.75rem;
+        }
+
         /* Keyboard shortcuts */
         .shortcuts {
             background: var(--bg-tertiary);
@@ -562,6 +603,25 @@
                         <button class="btn" id="btn-set-overlay">Set Overlay</button>
                         <button class="btn" id="btn-clear-overlay">Clear Overlay</button>
                     </div>
+                </div>
+
+                <div class="control-section">
+                    <div class="section-label">Pixel Under Cursor</div>
+                    <div class="pixel-readout">
+                        <div class="pixel-stat">
+                            <span class="pixel-label">X</span>
+                            <span class="pixel-value" id="pixel-x">--</span>
+                        </div>
+                        <div class="pixel-stat">
+                            <span class="pixel-label">Y</span>
+                            <span class="pixel-value" id="pixel-y">--</span>
+                        </div>
+                        <div class="pixel-stat">
+                            <span class="pixel-label">Z</span>
+                            <span class="pixel-value" id="pixel-z">--</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary pixel-refresh" id="btn-sample-pixel">Sample Pixel</button>
                 </div>
 
                 <div class="control-section">

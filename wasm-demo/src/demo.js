@@ -10,7 +10,8 @@ import init, {
     viewer_set_amplitude_shader,
     viewer_set_height_shader,
     viewer_set_overlays,
-    viewer_clear_overlays
+    viewer_clear_overlays,
+    viewer_get_pixel
 } from './assets/wasm/data-viewer-3d.js';
 
 // DOM Elements
@@ -20,6 +21,9 @@ const errorMessage = document.getElementById('error-message');
 const statusWebGPU = document.getElementById('status-webgpu');
 const statusWasm = document.getElementById('status-wasm');
 const statusFps = document.getElementById('status-fps');
+const pixelX = document.getElementById('pixel-x');
+const pixelY = document.getElementById('pixel-y');
+const pixelZ = document.getElementById('pixel-z');
 
 // Control buttons
 const btnHeight = document.getElementById('btn-height');
@@ -27,6 +31,7 @@ const btnAmplitude = document.getElementById('btn-amplitude');
 const btnReset = document.getElementById('btn-reset');
 const btnSetOverlay = document.getElementById('btn-set-overlay');
 const btnClearOverlay = document.getElementById('btn-clear-overlay');
+const btnSamplePixel = document.getElementById('btn-sample-pixel');
 
 // State
 let wasmModule = null;
@@ -97,6 +102,26 @@ function showError(message) {
  */
 function hideLoading() {
     loadingOverlay.classList.add('hidden');
+}
+
+/**
+ * Update the pixel readout in the UI
+ */
+function renderPixelReadout(x, y, z) {
+    if (!pixelX || !pixelY || !pixelZ) {
+        return;
+    }
+
+    const formatValue = (value, roundToInt) => {
+        if (!Number.isFinite(value)) {
+            return '--';
+        }
+        return roundToInt ? Math.round(value).toString() : value.toString();
+    };
+
+    pixelX.textContent = formatValue(x, true);
+    pixelY.textContent = formatValue(y, true);
+    pixelZ.textContent = formatValue(z, false);
 }
 
 /**
@@ -171,6 +196,36 @@ function setupControls() {
     btnClearOverlay.addEventListener('click', () => {
         viewer_clear_overlays();
     });
+
+    if (btnSamplePixel) {
+        btnSamplePixel.addEventListener('click', () => {
+            samplePixel();
+        });
+    }
+}
+
+/**
+ * Request the current pixel from WASM and show it in the panel
+ */
+async function samplePixel() {
+    if (!wasmModule) {
+        console.warn('WASM module is not ready yet.');
+        return;
+    }
+
+    try {
+        const result = await viewer_get_pixel();
+        if (!result || result.length < 3) {
+            renderPixelReadout(Number.NaN, Number.NaN, Number.NaN);
+            return;
+        }
+
+        const [x, y, z] = result;
+        renderPixelReadout(x, y, z);
+    } catch (err) {
+        console.error('Failed to fetch pixel:', err);
+        renderPixelReadout(Number.NaN, Number.NaN, Number.NaN);
+    }
 }
 
 /**
@@ -237,6 +292,9 @@ async function main() {
     setTimeout(() => {
         hideLoading();
         console.log('✅ 3D Data Viewer ready!');
+
+        // Populate pixel readout once the viewer is ready
+        samplePixel();
     }, 500);
 }
 
