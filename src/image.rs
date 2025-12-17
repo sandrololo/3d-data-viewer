@@ -81,8 +81,8 @@ pub struct SurfaceAmplitudeImage {
 }
 
 impl SurfaceAmplitudeImage {
-    pub async fn from_url(surface_url: &str, amplitude_url: &str) -> anyhow::Result<Self> {
-        let response = reqwest::get(surface_url).await?;
+    pub async fn from_url(url: &str) -> anyhow::Result<Self> {
+        let response = reqwest::get(url).await?;
         let body = response.bytes().await?;
         let mut decoder = Decoder::new(std::io::Cursor::new(body))?;
         let dimensions = decoder.dimensions()?;
@@ -96,12 +96,10 @@ impl SurfaceAmplitudeImage {
             }),
             _ => Err(anyhow::anyhow!("Unsupported surface image format")),
         }?;
-        let response = reqwest::get(amplitude_url).await?;
-        let body = response.bytes().await?;
-        let mut decoder = Decoder::new(std::io::Cursor::new(body))?;
+        decoder.next_image()?;
         let dimensions = decoder.dimensions()?;
         let amplitude = match decoder.read_image()? {
-            DecodingResult::U16(data) => Ok(Image {
+            DecodingResult::F32(data) => Ok(Image {
                 size: ImageSize {
                     width: NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
                     height: NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
@@ -110,10 +108,10 @@ impl SurfaceAmplitudeImage {
             }),
             _ => Err(anyhow::anyhow!("Unsupported amplitude image format")),
         }?;
-        let amplitude = Image {
-            size: amplitude.size,
-            data: amplitude.data.iter().map(|&value| value as f32).collect(),
-        };
+        info!(
+            "Loaded surface & amplitude image with size {}x{} from {}",
+            surface.size.width, surface.size.height, url,
+        );
         Ok(Self { surface, amplitude })
     }
 

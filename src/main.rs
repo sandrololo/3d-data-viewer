@@ -157,12 +157,9 @@ impl State {
         #[cfg(not(target_arch = "wasm32"))]
         let image = SurfaceAmplitudeImage::from_file("example-img.tiff").unwrap();
         #[cfg(target_arch = "wasm32")]
-        let image = SurfaceAmplitudeImage::from_url(
-            "http://localhost:4242/api/temp_image/f6739d7f-5454-4fb6-b6ed-9f709d8414ba",
-            "http://localhost:4242/api/temp_image/43d7903c-20a7-4931-8980-ae3868d2841b",
-        )
-        .await
-        .unwrap();
+        let image = SurfaceAmplitudeImage::from_url("http://localhost:8081/img")
+            .await
+            .unwrap();
 
         let outlier_removed_data = image.surface.outlier_removed_data(2.0, 98.0);
         let z_range = image::value_range(&outlier_removed_data);

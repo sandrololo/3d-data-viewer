@@ -43,6 +43,29 @@ function handleRequest(req, res) {
         urlPath = '/index.html';
     }
 
+    // Special route for /img - serve ../example-img.tiff
+    if (urlPath === '/img') {
+        var imgPath = path.join(ROOT_DIR, '..', 'example-img.tiff');
+        fs.stat(imgPath, function (err, stats) {
+            if (err || !stats.isFile()) {
+                res.writeHead(404);
+                res.end('Not Found');
+                console.log('404: ' + urlPath + ' (example-img.tiff not found)');
+                return;
+            }
+
+            res.setHeader('Content-Type', 'image/tiff');
+            res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+            res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+
+            var stream = fs.createReadStream(imgPath);
+            stream.pipe(res);
+
+            console.log('200: ' + urlPath + ' -> ../example-img.tiff (image/tiff)');
+        });
+        return;
+    }
+
     // Construct file path
     var filePath = path.join(ROOT_DIR, urlPath);
 
