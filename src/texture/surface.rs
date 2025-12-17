@@ -1,16 +1,16 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, sync::Arc};
 
 use crate::image::{Image, ImageSize};
 
 pub struct SurfaceTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub image: Image<f32>,
+    pub image: Arc<Image<f32>>,
     size: wgpu::Extent3d,
 }
 
 impl SurfaceTexture {
-    pub fn new(image: Image<f32>, device: &wgpu::Device) -> Self {
+    pub fn new(image: Arc<Image<f32>>, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image.size.width.get(),
             height: image.size.height.get(),

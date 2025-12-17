@@ -1,3 +1,4 @@
+use futures::future::Shared;
 use glam::{Vec2, Vec3};
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
@@ -11,7 +12,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum ViewerCommand {
     BackToOrigin,
@@ -19,6 +20,11 @@ pub enum ViewerCommand {
     SetHeightShader,
     SetOverlays(Arc<Vec<Overlay>>),
     ClearOverlays,
+    GetPixel(
+        futures::channel::oneshot::Sender<
+            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
+        >,
+    ),
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -81,6 +87,20 @@ pub fn viewer_clear_overlays() {
     wasm_commands::push_command(ViewerCommand::ClearOverlays);
 }
 
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub async fn viewer_get_pixel() -> Vec<f32> {
+    let (sender, receiver) = futures::channel::oneshot::channel();
+    wasm_commands::push_command(ViewerCommand::GetPixel(sender));
+    match receiver.await {
+        Ok(future) => future
+            .await
+            .map(|(x, y, z)| vec![x as f32, y as f32, z])
+            .unwrap_or_default(),
+        Err(_) => vec![],
+    }
+}
+
 mod image;
 mod index_buffer;
 mod keyboard;
@@ -98,7 +118,7 @@ use crate::{
     image::{ImageSize, ZValueRange},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
-    pixel_picker::PixelPicker,
+    pixel_picker::{PixelPicker, PixelResult},
     texture::{Overlay, Texture},
     transformation::Transformation,
     vertex_buffer::VertexBuffer,
@@ -457,26 +477,13 @@ impl State {
         self.window.pre_present_notify();
         surface_texture.present();
 
-        #[cfg(target_arch = "wasm32")]
-        {
-            let future = self.pixel_picker.get(self.device.clone());
-            wasm_bindgen_futures::spawn_local(async move {
-                match future.await {
-                    Ok((x, y)) => {
-                        log::info!("Pixel at [{}/{}]", x, y);
-                    }
-                    Err(e) => {
-                        log::error!("Pixel read failed: {}", e);
-                    }
-                }
-            });
-        }
-
         #[cfg(not(target_arch = "wasm32"))]
         {
-            match pollster::block_on(self.pixel_picker.get(self.device.clone())) {
-                Ok((x, y)) => {
-                    let z = self.texture.surface.image.get_pixel(x, y);
+            match pollster::block_on(
+                self.pixel_picker
+                    .get(self.device.clone(), self.texture.surface.image.clone()),
+            ) {
+                Ok((x, y, z)) => {
                     log::info!("Pixel at [{}/{}]={:.3}", x, y, z);
                 }
                 Err(e) => {
@@ -506,6 +513,13 @@ impl State {
                 }
                 ViewerCommand::ClearOverlays => {
                     self.texture.overlay.set_overlays(Arc::new(Vec::new()));
+                }
+                ViewerCommand::GetPixel(sender) => {
+                    self.pixel_picker.write_to_channel(
+                        self.device.clone(),
+                        self.texture.surface.image.clone(),
+                        sender,
+                    );
                 }
             }
         }

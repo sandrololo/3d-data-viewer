@@ -3,8 +3,10 @@ use futures::future::Shared;
 use std::sync::{Arc, Mutex};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 
+use crate::image::Image;
+
 /// Result type for pixel reads - must be Clone for Shared futures
-pub type PixelResult = Result<(u32, u32), Arc<anyhow::Error>>;
+pub type PixelResult = Result<(u32, u32, f32), Arc<anyhow::Error>>;
 
 pub struct PixelPicker {
     /// Texture that stores picking data (pixel_x, pixel_y) for each fragment
@@ -84,9 +86,22 @@ impl PixelPicker {
         );
     }
 
+    #[allow(dead_code)]
+    pub fn write_to_channel(
+        &self,
+        device: Arc<wgpu::Device>,
+        image: Arc<Image<f32>>,
+        sender: futures::channel::oneshot::Sender<
+            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
+        >,
+    ) {
+        sender.send(self.get(device, image)).unwrap();
+    }
+
     pub fn get(
         &self,
         device: Arc<wgpu::Device>,
+        image: Arc<Image<f32>>,
     ) -> Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>> {
         let mut pending = self.pending_read.lock().unwrap();
 
@@ -123,8 +138,8 @@ impl PixelPicker {
 
                 // Clear the pending read so next call starts fresh
                 *pending_read.lock().unwrap() = None;
-
-                Ok(pixel)
+                let z = image.get_pixel(pixel.0, pixel.1);
+                Ok((pixel.0, pixel.1, z))
             });
 
         let shared = future.shared();

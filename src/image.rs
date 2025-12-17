@@ -88,6 +88,7 @@ pub struct SurfaceAmplitudeImage {
 }
 
 impl SurfaceAmplitudeImage {
+    #[allow(dead_code)]
     pub async fn from_url(url: &str) -> anyhow::Result<Self> {
         let response = reqwest::get(url).await?;
         let body = response.bytes().await?;

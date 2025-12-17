@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::image::SurfaceAmplitudeImage;
 pub use crate::texture::{amplitude::*, overlay::*, surface::*};
 
@@ -16,7 +18,7 @@ pub(crate) struct Texture {
 impl Texture {
     pub(crate) fn new(device: &wgpu::Device, image: SurfaceAmplitudeImage) -> Self {
         let overlay_texture = OverlayTexture::new(&image.surface.size, &device);
-        let surface_texture = SurfaceTexture::new(image.surface, &device);
+        let surface_texture = SurfaceTexture::new(Arc::new(image.surface), &device);
         let amplitude_texture = AmplitudeTexture::new(image.amplitude, &device);
         let layout = Self::create_bind_group_layout(&device);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
