@@ -34,6 +34,7 @@ impl IndexBufferBuilder {
             }
         }
         log::info!("Index buffer length: {:?}", indices.len());
+        log::info!("Number of triangles: {:?}", indices.len() - 2);
         Self { indices }
     }
 
