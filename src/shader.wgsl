@@ -111,20 +111,20 @@ fn fs_height(in: VertexOutput) -> FragmentOutput {
     
     // Calculate base height color
     let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
-    var base_color = vec4<f32>(depth, depth, depth, 1.0);
+    var color = vec4<f32>(depth, depth, depth, 1.0);
     
     // Blend overlay if present (alpha > 0)
     if (overlay_color.a > 0.0) {
         // Alpha blend: result = overlay * alpha + base * (1 - alpha)
         let alpha = overlay_color.a;
-        base_color = vec4<f32>(
-            overlay_color.rgb * alpha + base_color.rgb * (1.0 - alpha),
+        color = vec4<f32>(
+            overlay_color.rgb * alpha + color.rgb * (1.0 - alpha),
             1.0
         );
     }
     
     var out: FragmentOutput;
-    out.color = base_color;
+    out.color = color;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
