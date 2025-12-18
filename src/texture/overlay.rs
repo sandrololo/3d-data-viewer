@@ -224,7 +224,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 90168..90189,
                 90715..90726,
             ],
-            color: [0, 255, 255, 100],
+            color: [0, 255, 255, 200],
         },
         Overlay {
             pixels: vec![
@@ -236,7 +236,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 72832..72837,
                 73375..73378,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -248,7 +248,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142077..142082,
                 142620..142623,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -260,7 +260,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142334..142339,
                 142877..142880,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -272,7 +272,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 270361..270366,
                 270904..270907,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -405,7 +405,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 159413..159434,
                 159960..159971,
             ],
-            color: [0, 255, 255, 100],
+            color: [0, 255, 255, 200],
         },
         Overlay {
             pixels: vec![
@@ -417,7 +417,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 72832..72837,
                 73375..73378,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -429,7 +429,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142077..142082,
                 142620..142623,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -441,7 +441,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142334..142339,
                 142877..142880,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -453,7 +453,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 270361..270366,
                 270904..270907,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -586,7 +586,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 159670..159691,
                 160217..160228,
             ],
-            color: [0, 255, 255, 100],
+            color: [0, 255, 255, 200],
         },
         Overlay {
             pixels: vec![
@@ -598,7 +598,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 72832..72837,
                 73375..73378,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -610,7 +610,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142077..142082,
                 142620..142623,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -622,7 +622,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142334..142339,
                 142877..142880,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -634,7 +634,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 270361..270366,
                 270904..270907,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -734,7 +734,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 277377..277385,
                 277434..277442,
             ],
-            color: [0, 255, 255, 100],
+            color: [0, 255, 255, 200],
         },
         Overlay {
             pixels: vec![
@@ -746,7 +746,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 72832..72837,
                 73375..73378,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -758,7 +758,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142077..142082,
                 142620..142623,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -770,7 +770,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 142334..142339,
                 142877..142880,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
         Overlay {
             pixels: vec![
@@ -782,7 +782,7 @@ pub fn example_overlays() -> Vec<Overlay> {
                 270361..270366,
                 270904..270907,
             ],
-            color: [255, 0, 0, 100],
+            color: [255, 0, 0, 200],
         },
     ]
 }
