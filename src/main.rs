@@ -12,9 +12,10 @@ use winit::{
     window::{Window, WindowId},
 };
 
-#[derive(Debug)]
 #[non_exhaustive]
-pub enum ViewerCommand {
+#[allow(dead_code)]
+enum ViewerCommand {
+    SetState(State),
     BackToOrigin,
     SetAmplitudeShader,
     SetHeightShader,
@@ -28,82 +29,136 @@ pub enum ViewerCommand {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub struct WasmViewer {
+    proxy: Option<winit::event_loop::EventLoopProxy<ViewerCommand>>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl WasmViewer {
+    pub fn new() -> Result<Self, wasm_bindgen::JsValue> {
+        Ok(Self { proxy: None })
+    }
+
+    pub fn run(&mut self) -> Result<(), wasm_bindgen::JsValue> {
+        console_log::init_with_level(log::Level::Info).unwrap_throw();
+        console_error_panic_hook::set_once();
+
+        let event_loop = EventLoop::with_user_event().build().unwrap_throw();
+        self.proxy = Some(event_loop.create_proxy());
+        wasm_bindgen_futures::spawn_local(async move {
+            let mut app = ImageViewer3D::new(&event_loop);
+            event_loop.run_app(&mut app).unwrap_throw();
+        });
+        Ok(())
+    }
+
+    pub async fn get_pixel_value(&self) -> Vec<f32> {
+        if let Some(proxy) = &self.proxy {
+            let (sender, receiver) = futures::channel::oneshot::channel();
+            proxy
+                .send_event(ViewerCommand::GetPixel(sender))
+                .map_err(|e| e.to_string())
+                .unwrap_throw();
+            let pixels = receiver
+                .await
+                .unwrap_throw()
+                .await
+                .map(|(x, y, z)| vec![x as f32, y as f32, z])
+                .unwrap_throw();
+            pixels
+        } else {
+            wasm_bindgen::throw_str("Event loop proxy not initialized");
+        }
+    }
+
+    pub fn set_height_shader(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::SetHeightShader)
+                .map_err(|e| e.to_string())
+                .unwrap_throw();
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub fn set_amplitude_shader(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::SetAmplitudeShader)
+                .map_err(|e| e.to_string())
+                .unwrap_throw();
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub fn set_overlays(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::SetOverlays(Arc::new(
+                    texture::example_overlays(),
+                )))
+                .map_err(|e| e.to_string())
+                .unwrap_throw();
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub fn clear_overlays(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::ClearOverlays)
+                .map_err(|e| e.to_string())
+                .unwrap_throw();
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub fn back_to_origin(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::BackToOrigin)
+                .map_err(|e| e.to_string())
+                .unwrap_throw();
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 mod wasm_commands {
-    use super::ViewerCommand;
     use std::cell::RefCell;
-    use std::collections::VecDeque;
     use std::sync::Arc;
     use winit::window::Window;
 
     thread_local! {
-        /// Queue of commands from JavaScript to be processed by the viewer
-        pub static COMMAND_QUEUE: RefCell<VecDeque<ViewerCommand>> = RefCell::new(VecDeque::new());
         /// Reference to the window for requesting redraws
         pub static WINDOW: RefCell<Option<Arc<Window>>> = RefCell::new(None);
     }
 
     pub fn set_window(window: Arc<Window>) {
         WINDOW.with(|w| *w.borrow_mut() = Some(window));
-    }
-
-    pub fn push_command(cmd: ViewerCommand) {
-        COMMAND_QUEUE.with(|q| q.borrow_mut().push_back(cmd));
-    }
-
-    pub fn pop_command() -> Option<ViewerCommand> {
-        COMMAND_QUEUE.with(|q| q.borrow_mut().pop_front())
-    }
-}
-
-// JavaScript-callable functions
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn viewer_back_to_origin() {
-    wasm_commands::push_command(ViewerCommand::BackToOrigin);
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn viewer_set_amplitude_shader() {
-    wasm_commands::push_command(ViewerCommand::SetAmplitudeShader);
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn viewer_set_height_shader() {
-    wasm_commands::push_command(ViewerCommand::SetHeightShader);
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn viewer_set_overlays() {
-    let overlays = texture::example_overlays();
-    wasm_commands::push_command(ViewerCommand::SetOverlays(Arc::new(overlays)));
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn viewer_clear_overlays() {
-    wasm_commands::push_command(ViewerCommand::ClearOverlays);
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub async fn viewer_get_pixel() -> Vec<f32> {
-    let (sender, receiver) = futures::channel::oneshot::channel();
-    wasm_commands::push_command(ViewerCommand::GetPixel(sender));
-    match receiver.await {
-        Ok(future) => future
-            .await
-            .map(|(x, y, z)| vec![x as f32, y as f32, z])
-            .unwrap_or_else(|_| {
-                log::error!("Failed to get pixel data");
-                vec![]
-            }),
-        Err(_) => {
-            log::error!("Failed to receive pixel data");
-            vec![]
-        }
     }
 }
 
@@ -499,48 +554,49 @@ impl State {
         }
     }
 
-    /// Process any pending commands from JavaScript (WASM only)
-    #[cfg(target_arch = "wasm32")]
-    pub fn process_commands(&mut self) {
-        while let Some(cmd) = wasm_commands::pop_command() {
-            match cmd {
-                ViewerCommand::BackToOrigin => {
-                    self.projection.reset();
-                    self.transformation.reset();
-                }
-                ViewerCommand::SetAmplitudeShader => {
-                    self.use_height_shader = false;
-                }
-                ViewerCommand::SetHeightShader => {
-                    self.use_height_shader = true;
-                }
-                ViewerCommand::SetOverlays(overlays) => {
-                    self.texture.overlay.set_overlays(overlays.clone());
-                }
-                ViewerCommand::ClearOverlays => {
-                    self.texture.overlay.set_overlays(Arc::new(Vec::new()));
-                }
-                ViewerCommand::GetPixel(sender) => {
-                    self.pixel_picker.write_to_channel(
-                        self.device.clone(),
-                        self.texture.surface.image.clone(),
-                        sender,
-                    );
-                }
-            }
-        }
-        self.get_window().request_redraw();
+    fn get_pixel_value(
+        &mut self,
+        sender: futures::channel::oneshot::Sender<
+            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
+        >,
+    ) {
+        self.pixel_picker.write_to_channel(
+            self.device.clone(),
+            self.texture.surface.image.clone(),
+            sender,
+        );
+    }
+
+    fn set_amplitude_shader(&mut self) {
+        self.use_height_shader = false;
+    }
+
+    fn set_height_shader(&mut self) {
+        self.use_height_shader = true;
+    }
+
+    fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
+        self.texture.overlay.set_overlays(overlays);
+    }
+
+    fn clear_overlays(&mut self) {
+        self.texture.overlay.set_overlays(Arc::new(Vec::new()));
+    }
+
+    fn back_to_origin(&mut self) {
+        self.projection.reset();
+        self.transformation.reset();
     }
 }
 
 struct ImageViewer3D {
     #[cfg(target_arch = "wasm32")]
-    proxy: Option<winit::event_loop::EventLoopProxy<State>>,
+    proxy: Option<winit::event_loop::EventLoopProxy<ViewerCommand>>,
     state: Option<State>,
 }
 
 impl ImageViewer3D {
-    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>) -> Self {
+    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<ViewerCommand>) -> Self {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
         Self {
@@ -551,7 +607,7 @@ impl ImageViewer3D {
     }
 }
 
-impl ApplicationHandler<State> for ImageViewer3D {
+impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
@@ -585,22 +641,17 @@ impl ApplicationHandler<State> for ImageViewer3D {
             // proxy to send the results to the event loop
             if let Some(proxy) = self.proxy.take() {
                 wasm_bindgen_futures::spawn_local(async move {
-                    assert!(proxy.send_event(State::new(window).await).is_ok())
+                    assert!(
+                        proxy
+                            .send_event(ViewerCommand::SetState(State::new(window).await))
+                            .is_ok()
+                    )
                 });
             }
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        // Debug: log all events on WASM
-        #[cfg(target_arch = "wasm32")]
-        {
-            match &event {
-                WindowEvent::RedrawRequested => {} // Don't spam redraw logs
-                _ => log::info!("Window event: {:?}", event),
-            }
-        }
-
         if self.state.is_none() {
             log::warn!("State is None, ignoring event");
             return;
@@ -613,10 +664,6 @@ impl ApplicationHandler<State> for ImageViewer3D {
                     event_loop.exit();
                 }
                 WindowEvent::RedrawRequested => {
-                    // Process any pending commands from JavaScript (WASM only)
-                    #[cfg(target_arch = "wasm32")]
-                    app_state.process_commands();
-
                     app_state.render();
                 }
                 WindowEvent::Resized(size) => {
@@ -722,64 +769,85 @@ impl ApplicationHandler<State> for ImageViewer3D {
     }
 
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            // Resize first while we still own the event
-            event.resize(event.window.inner_size());
-            // Update projection aspect ratio to match viewport
-            event.projection.update_aspect_ratio(
-                event.window.inner_size().width as f32 / event.window.inner_size().height as f32,
-            );
-            // Store window reference for JavaScript to request redraws
-            wasm_commands::set_window(event.window.clone());
-        }
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: ViewerCommand) {
+        match event {
+            ViewerCommand::GetPixel(sender) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.get_pixel_value(sender);
+                }
+            }
+            ViewerCommand::SetAmplitudeShader => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.set_amplitude_shader();
+                }
+            }
+            ViewerCommand::SetHeightShader => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.set_height_shader();
+                }
+            }
+            ViewerCommand::SetOverlays(overlays) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.set_overlays(overlays.clone());
+                }
+            }
+            ViewerCommand::ClearOverlays => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.clear_overlays();
+                }
+            }
+            ViewerCommand::BackToOrigin => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.back_to_origin();
+                }
+            }
+            ViewerCommand::SetState(mut state) => {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    // Resize first while we still own the event
+                    state.resize(state.window.inner_size());
+                    // Update projection aspect ratio to match viewport
+                    state.projection.update_aspect_ratio(
+                        state.window.inner_size().width as f32
+                            / state.window.inner_size().height as f32,
+                    );
+                    // Store window reference for JavaScript to request redraws
+                    wasm_commands::set_window(state.window.clone());
+                }
 
-        // Set state BEFORE requesting redraw so the RedrawRequested handler can access it
-        self.state = Some(event);
+                // Set state BEFORE requesting redraw so the RedrawRequested handler can access it
+                self.state = Some(state);
 
-        #[cfg(target_arch = "wasm32")]
-        {
-            // Now request redraw - state is already set
-            if let Some(state) = self.state.as_ref() {
-                state.window.request_redraw();
+                #[cfg(target_arch = "wasm32")]
+                {
+                    // Now request redraw - state is already set
+                    if let Some(state) = self.state.as_ref() {
+                        state.window.request_redraw();
+                    }
+                }
+            }
+            _ => {
+                log::warn!("Unhandled user event");
             }
         }
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> anyhow::Result<()> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-            .format_timestamp_secs()
-            .init();
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        console_log::init_with_level(log::Level::Info).unwrap_throw();
-    }
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_secs()
+        .init();
 
     let event_loop = EventLoop::with_user_event().build()?;
-    let mut app = ImageViewer3D::new(
-        #[cfg(target_arch = "wasm32")]
-        &event_loop,
-    );
+    let mut app = ImageViewer3D::new();
     event_loop.run_app(&mut app)?;
 
     Ok(())
 }
 
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
-    console_error_panic_hook::set_once();
-    run().unwrap_throw();
-
-    Ok(())
-}
-
 fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
     if let Err(e) = run() {
         log::error!("Failed to run image viewer: {}", e)
     };

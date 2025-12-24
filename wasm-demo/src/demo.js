@@ -6,12 +6,7 @@
  */
 
 import init, {
-    viewer_back_to_origin,
-    viewer_set_amplitude_shader,
-    viewer_set_height_shader,
-    viewer_set_overlays,
-    viewer_clear_overlays,
-    viewer_get_pixel
+    WasmViewer
 } from './assets/wasm/data-viewer-3d.js';
 
 // DOM Elements
@@ -34,8 +29,10 @@ const btnClearOverlay = document.getElementById('btn-clear-overlay');
 
 // State
 let wasmModule = null;
+let wasmViewer = null;
 let isHeightMode = true;
 let isPollingEnabled = false;
+let isPolling = false;
 
 /**
  * Check if WebGPU is available
@@ -128,32 +125,32 @@ function renderPixelReadout(x, y, z) {
 }
 
 /**
- * Initialize the WASM module
- * The run_web() function is called automatically via #[wasm_bindgen(start)]
+ * Initialize the WASM module and create the viewer
  */
 async function initWasm() {
     updateLoadingText('Loading WebAssembly module...');
     statusWasm.textContent = 'Loading...';
 
     try {
-        // Initialize the WASM module - run_web() is called automatically
-        // via the #[wasm_bindgen(start)] attribute in Rust
+        // Initialize the WASM module and create the viewer instance
         console.log('Calling init()...');
         wasmModule = await init();
+        wasmViewer = WasmViewer.new();
+        wasmViewer.run()
         console.log('init() completed successfully');
         console.log('wasmModule after init:', !!wasmModule);
 
         statusWasm.textContent = 'Ready';
         statusWasm.classList.add('success');
 
-        console.log('WASM module initialized, run_web() executed:', wasmModule);
+        console.log('WASM module initialized:', wasmModule);
         return true;
     } catch (e) {
         console.log('Exception caught during init:', e.message);
 
-        // winit uses exceptions for control flow on web - this is expected!
+        // winit uses exceptions for control flow on web when starting the event loop
         if (e.message && e.message.includes("Using exceptions for control flow")) {
-            console.log('WASM event loop started (this is normal)');
+            console.log('WASM viewer started (this is normal - winit uses exceptions for control flow)');
             console.log('wasmModule after exception:', !!wasmModule);
             statusWasm.textContent = 'Running';
             statusWasm.classList.add('success');
@@ -172,38 +169,44 @@ async function initWasm() {
  * Set up button event handlers
  */
 function setupControls() {
-    // Shader mode buttons - call Rust functions directly
+    // Shader mode buttons - call viewer methods directly
     btnHeight.addEventListener('click', () => {
-        if (!isHeightMode) {
+        if (!isHeightMode && wasmViewer) {
             isHeightMode = true;
             btnHeight.classList.add('active');
             btnAmplitude.classList.remove('active');
-            viewer_set_height_shader();
+            wasmViewer.set_height_shader();
         }
     });
 
     btnAmplitude.addEventListener('click', () => {
-        if (isHeightMode) {
+        if (isHeightMode && wasmViewer) {
             isHeightMode = false;
             btnAmplitude.classList.add('active');
             btnHeight.classList.remove('active');
-            viewer_set_amplitude_shader();
+            wasmViewer.set_amplitude_shader();
         }
     });
 
-    // Reset view - call Rust function directly
+    // Reset view - call viewer method directly
     btnReset.addEventListener('click', () => {
-        viewer_back_to_origin();
+        if (wasmViewer) {
+            wasmViewer.back_to_origin();
+        }
     });
 
-    // Set overlay - call Rust function directly
+    // Set overlay - call viewer method directly
     btnSetOverlay.addEventListener('click', () => {
-        viewer_set_overlays();
+        if (wasmViewer) {
+            wasmViewer.set_overlays();
+        }
     });
 
-    // Clear overlay - call Rust function directly
+    // Clear overlay - call viewer method directly
     btnClearOverlay.addEventListener('click', () => {
-        viewer_clear_overlays();
+        if (wasmViewer) {
+            wasmViewer.clear_overlays();
+        }
     });
 
     // Set up mouse movement tracking
@@ -211,10 +214,8 @@ function setupControls() {
     if (canvas) {
         console.log('Setting up canvas mouse tracking');
         canvas.addEventListener('mousemove', () => {
-            console.log('Canvas mousemove, isPollingEnabled:', isPollingEnabled, 'viewer_get_pixel:', typeof viewer_get_pixel);
-            if (!isPollingEnabled && typeof viewer_get_pixel === 'function') {
+            if (wasmViewer) {
                 isPollingEnabled = true;
-                console.log('Enabling polling');
                 startPixelPolling();
             }
         });
@@ -232,34 +233,40 @@ function setupControls() {
  * Continuously poll the current pixel from WASM and update the panel
  */
 function startPixelPolling() {
+    // Prevent multiple polling loops
+    if (isPolling) {
+        return;
+    }
+
     console.log('Starting pixel polling');
+    isPolling = true;
 
     async function pollOnce() {
-        if (!isPollingEnabled || typeof viewer_get_pixel !== 'function') {
-            console.log('Polling stopped - isPollingEnabled:', isPollingEnabled, 'viewer_get_pixel:', typeof viewer_get_pixel);
+        if (!wasmViewer) {
+            console.log('Polling stopped - wasmViewer:', !!wasmViewer);
+            isPolling = false;
             return;
         }
 
         try {
-            console.log('Calling viewer_get_pixel()');
-            const result = await viewer_get_pixel();
-            console.log('Got result:', result, 'type:', result?.constructor?.name);
+            const result = await wasmViewer.get_pixel_value();
 
             // Handle both Array and TypedArray (Float32Array, etc.)
             if (result && (Array.isArray(result) || ArrayBuffer.isView(result)) && result.length >= 3) {
                 const x = result[0];
                 const y = result[1];
                 const z = result[2];
-                console.log(`Rendering values x=${x}, y=${y}, z=${z}`);
                 renderPixelReadout(x, y, z);
             } else {
                 console.log('Invalid result format:', result);
             }
         } catch (err) {
-            console.error('Failed to fetch pixel:', err);
+            console.error('Failed to fetch pixel (WASM error):', err);
+            console.error('Error type:', typeof err, 'Error message:', err.message);
+            // Continue polling even after WASM errors
         }
 
-        // Schedule next poll
+        // Continue polling
         setTimeout(pollOnce, 100);
     }
 
@@ -331,15 +338,15 @@ async function main() {
         hideLoading();
         console.log('✅ 3D Data Viewer ready!');
         console.log('wasmModule available:', !!wasmModule);
-        console.log('viewer_get_pixel available:', typeof viewer_get_pixel);
+        console.log('wasmViewer available:', !!wasmViewer);
 
-        // Start polling - it will work as long as viewer_get_pixel is available
-        if (typeof viewer_get_pixel === 'function') {
+        // Start polling if wasmViewer is available
+        if (wasmViewer) {
             console.log('Starting polling');
             isPollingEnabled = true;
             startPixelPolling();
         } else {
-            console.warn('viewer_get_pixel not available yet');
+            console.warn('wasmViewer not available yet');
         }
     }, 500);
 }
