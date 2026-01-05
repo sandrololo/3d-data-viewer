@@ -925,6 +925,9 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                 log::warn!("Unhandled user event");
             }
         }
+        if let Some(app_state) = self.state.as_mut() {
+            app_state.get_window().request_redraw();
+        }
     }
 }
 
