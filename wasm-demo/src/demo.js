@@ -102,6 +102,49 @@ function hideLoading() {
 }
 
 /**
+ * Load surface data from assets/data/surface.tiff
+ */
+async function loadSurfaceData() {
+    try {
+        console.log('Loading surface.tiff...');
+        const response = await fetch('./src/assets/data/surface.tiff');
+
+        if (!response.ok) {
+            throw new Error(`Failed to load surface.tiff: ${response.status} ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        console.log('Surface data loaded:', uint8Array.length, 'bytes');
+        return uint8Array;
+    } catch (error) {
+        console.error('Error loading surface data:', error);
+        throw error;
+    }
+}
+
+async function loadAmplitudeData() {
+    try {
+        console.log('Loading amplitude.tiff...');
+        const response = await fetch('./src/assets/data/amplitude.tiff');
+
+        if (!response.ok) {
+            throw new Error(`Failed to load amplitude.tiff: ${response.status} ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        console.log('Amplitude data loaded:', uint8Array.length, 'bytes');
+        return uint8Array;
+    } catch (error) {
+        console.error('Error loading amplitude data:', error);
+        throw error;
+    }
+}
+
+/**
  * Update the pixel readout in the UI
  */
 function renderPixelReadout(x, y, z) {
@@ -262,8 +305,6 @@ function startPixelPolling() {
             }
         } catch (err) {
             console.error('Failed to fetch pixel (WASM error):', err);
-            console.error('Error type:', typeof err, 'Error message:', err.message);
-            // Continue polling even after WASM errors
         }
 
         // Continue polling
@@ -333,9 +374,24 @@ async function main() {
     // Hide loading overlay
     updateLoadingText('Starting renderer...');
 
-    // Small delay to allow WASM to initialize rendering
     setTimeout(async () => {
-        hideLoading();
+        // Load surface data and set it in WASM
+        updateLoadingText('Loading surface data...');
+        try {
+            const surfaceData = await loadSurfaceData();
+            const amplitudeData = await loadAmplitudeData();
+            if (wasmViewer && typeof wasmViewer.set_surface === 'function') {
+                wasmViewer.set_surface(surfaceData);
+                wasmViewer.set_amplitude(amplitudeData);
+                console.log('✅ Surface data set in WASM viewer');
+                hideLoading();
+            } else {
+                console.warn('set_surface method not available on wasmViewer');
+            }
+        } catch (error) {
+            console.error('Failed to load surface data:', error);
+            // Continue without surface data rather than failing completely
+        }
         console.log('✅ 3D Data Viewer ready!');
         console.log('wasmModule available:', !!wasmModule);
         console.log('wasmViewer available:', !!wasmViewer);

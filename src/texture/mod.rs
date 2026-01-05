@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::image::SurfaceAmplitudeImage;
+use crate::image::Image;
 pub use crate::texture::{amplitude::*, overlay::*, surface::*};
 
 mod amplitude;
@@ -10,20 +10,22 @@ mod surface;
 pub(crate) struct Texture {
     pub overlay: OverlayTexture,
     pub surface: SurfaceTexture,
-    amplitude: AmplitudeTexture,
-    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub amplitude: AmplitudeTexture,
     pub bind_group: wgpu::BindGroup,
 }
 
 impl Texture {
-    pub(crate) fn new(device: &wgpu::Device, image: SurfaceAmplitudeImage) -> Self {
-        let overlay_texture = OverlayTexture::new(&image.surface.size, &device);
-        let surface_texture = SurfaceTexture::new(Arc::new(image.surface), &device);
-        let amplitude_texture = AmplitudeTexture::new(image.amplitude, &device);
-        let layout = Self::create_bind_group_layout(&device);
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        surface: Image<f32>,
+        layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        let overlay_texture = OverlayTexture::new(&surface.size, &device);
+        let amplitude_texture = AmplitudeTexture::new(&surface.size, &device);
+        let surface_texture = SurfaceTexture::new(Arc::new(surface), &device);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture_bind_group"),
-            layout: &layout,
+            layout: layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -40,7 +42,6 @@ impl Texture {
             ],
         });
         Self {
-            bind_group_layout: layout,
             overlay: overlay_texture,
             surface: surface_texture,
             amplitude: amplitude_texture,
@@ -48,13 +49,7 @@ impl Texture {
         }
     }
 
-    pub fn write_to_queue(&self, queue: &wgpu::Queue) {
-        self.overlay.write_to_queue(queue);
-        self.surface.write_to_queue(queue);
-        self.amplitude.write_to_queue(queue);
-    }
-
-    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    pub(crate) fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("texture_bind_group_layout"),
             entries: &[
@@ -74,7 +69,7 @@ impl Texture {
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
                         view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        sample_type: wgpu::TextureSampleType::Uint,
                     },
                     count: None,
                 },

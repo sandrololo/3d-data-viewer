@@ -1,4 +1,5 @@
-use futures::future::Shared;
+use anyhow::anyhow;
+use futures::{FutureExt, future::Shared};
 use glam::{Vec2, Vec3};
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
@@ -15,6 +16,8 @@ use winit::{
 #[non_exhaustive]
 #[allow(dead_code)]
 enum ViewerCommand {
+    SetSurface(Image<f32>),
+    SetAmplitude(Image<u16>),
     SetState(State),
     BackToOrigin,
     SetAmplitudeShader,
@@ -42,32 +45,73 @@ impl WasmViewer {
     }
 
     pub fn run(&mut self) -> Result<(), wasm_bindgen::JsValue> {
-        console_log::init_with_level(log::Level::Info).unwrap_throw();
+        console_log::init_with_level(log::Level::Info).map_err(|e| {
+            wasm_bindgen::JsValue::from_str(&format!("Error initializing console_log: {}", e))
+        })?;
         console_error_panic_hook::set_once();
 
-        let event_loop = EventLoop::with_user_event().build().unwrap_throw();
+        let event_loop = EventLoop::with_user_event().build().map_err(|e| {
+            wasm_bindgen::JsValue::from_str(&format!("Error initializing console_log: {}", e))
+        })?;
         self.proxy = Some(event_loop.create_proxy());
         wasm_bindgen_futures::spawn_local(async move {
             let mut app = ImageViewer3D::new(&event_loop);
-            event_loop.run_app(&mut app).unwrap_throw();
+            event_loop
+                .run_app(&mut app)
+                .map_err(|e| {
+                    wasm_bindgen::JsValue::from_str(&format!(
+                        "Error initializing console_log: {}",
+                        e
+                    ))
+                })
+                .unwrap_throw();
         });
         Ok(())
     }
 
-    pub async fn get_pixel_value(&self) -> Vec<f32> {
+    pub async fn set_surface(&self, data: Vec<u8>) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            let image = Image::<f32>::try_from(data)
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
+            proxy
+                .send_event(ViewerCommand::SetSurface(image))
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub async fn set_amplitude(&self, data: Vec<u8>) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            let image = Image::<u16>::try_from(data)
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
+            proxy
+                .send_event(ViewerCommand::SetAmplitude(image))
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub async fn get_pixel_value(&self) -> Result<Vec<f32>, wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             let (sender, receiver) = futures::channel::oneshot::channel();
             proxy
                 .send_event(ViewerCommand::GetPixel(sender))
-                .map_err(|e| e.to_string())
-                .unwrap_throw();
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             let pixels = receiver
                 .await
-                .unwrap_throw()
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?
                 .await
                 .map(|(x, y, z)| vec![x as f32, y as f32, z])
-                .unwrap_throw();
-            pixels
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
+            Ok(pixels)
         } else {
             wasm_bindgen::throw_str("Event loop proxy not initialized");
         }
@@ -77,8 +121,7 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             proxy
                 .send_event(ViewerCommand::SetHeightShader)
-                .map_err(|e| e.to_string())
-                .unwrap_throw();
+                .map_err(|e| e.to_string())?;
             Ok(())
         } else {
             Err(wasm_bindgen::JsValue::from_str(
@@ -91,8 +134,7 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             proxy
                 .send_event(ViewerCommand::SetAmplitudeShader)
-                .map_err(|e| e.to_string())
-                .unwrap_throw();
+                .map_err(|e| e.to_string())?;
             Ok(())
         } else {
             Err(wasm_bindgen::JsValue::from_str(
@@ -107,8 +149,7 @@ impl WasmViewer {
                 .send_event(ViewerCommand::SetOverlays(Arc::new(
                     texture::example_overlays(),
                 )))
-                .map_err(|e| e.to_string())
-                .unwrap_throw();
+                .map_err(|e| e.to_string())?;
             Ok(())
         } else {
             Err(wasm_bindgen::JsValue::from_str(
@@ -121,8 +162,7 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             proxy
                 .send_event(ViewerCommand::ClearOverlays)
-                .map_err(|e| e.to_string())
-                .unwrap_throw();
+                .map_err(|e| e.to_string())?;
             Ok(())
         } else {
             Err(wasm_bindgen::JsValue::from_str(
@@ -135,8 +175,7 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             proxy
                 .send_event(ViewerCommand::BackToOrigin)
-                .map_err(|e| e.to_string())
-                .unwrap_throw();
+                .map_err(|e| e.to_string())?;
             Ok(())
         } else {
             Err(wasm_bindgen::JsValue::from_str(
@@ -176,7 +215,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{ImageSize, ZValueRange},
+    image::{Image, ImageSize, ZValueRange},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
     pixel_picker::{PixelPicker, PixelResult},
@@ -198,9 +237,12 @@ struct State {
     render_pipeline_amplitude: wgpu::RenderPipeline,
     render_pipeline_height: wgpu::RenderPipeline,
     use_height_shader: bool,
-    vertex_buffer: VertexBuffer,
-    index_buffer: IndexBuffer,
-    texture: Texture,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    vertex_buffer: Option<VertexBuffer>,
+    index_buffer: Option<IndexBuffer>,
+    texture: Option<Texture>,
+    image_dims_buffer: wgpu::Buffer,
+    z_value_range_buffer: wgpu::Buffer,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_picker: PixelPicker,
@@ -229,18 +271,6 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let image = SurfaceAmplitudeImage::from_file("example-img.tiff").unwrap();
-        #[cfg(target_arch = "wasm32")]
-        let image = SurfaceAmplitudeImage::from_url("http://localhost:8080/img")
-            .await
-            .unwrap();
-
-        let outlier_removed_data = image.surface.outlier_removed_data(2.0, 98.0);
-        let z_range = image::value_range(&outlier_removed_data);
-
-        let image_dims_buffer = image.surface.size.create_buffer_init(&device);
-        let z_value_range_buffer = z_range.create_buffer_init(&device);
         let image_info_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("image_info_bind_group_layout"),
@@ -260,12 +290,7 @@ impl State {
                 ],
             });
 
-        let vertex_buffer = VertexBuffer::new(&image.surface.size, &outlier_removed_data, &device);
-        let index_buffer =
-            IndexBufferBuilder::new_triangle_strip(&image.surface.size).create_buffer_init(&device);
-
-        let texture = Texture::new(&device, image);
-        texture.write_to_queue(&queue);
+        let texture_bind_group_layout = Texture::create_bind_group_layout(&device);
 
         let pixel_picker = PixelPicker::new(&device, window.inner_size());
         let zoom_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -273,6 +298,9 @@ impl State {
             contents: bytemuck::cast_slice(&[2u32]),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         });
+
+        let image_dims_buffer = ImageSize::create_buffer(&device);
+        let z_value_range_buffer = ZValueRange::<f32>::create_buffer(&device);
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
@@ -295,7 +323,7 @@ impl State {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render_pipeline_layout"),
                 bind_group_layouts: &[
-                    &texture.bind_group_layout,
+                    &texture_bind_group_layout,
                     &image_info_bind_group_layout,
                     &transformation_bind_group_layout,
                     &projection_bind_group_layout,
@@ -385,9 +413,12 @@ impl State {
             render_pipeline_amplitude,
             render_pipeline_height,
             use_height_shader: true,
-            vertex_buffer,
-            index_buffer,
-            texture,
+            texture_bind_group_layout,
+            vertex_buffer: None,
+            index_buffer: None,
+            texture: None,
+            image_dims_buffer,
+            z_value_range_buffer,
             image_info_bind_group,
             depth_view,
             pixel_picker,
@@ -499,20 +530,23 @@ impl State {
             &self.render_pipeline_amplitude
         };
         renderpass.set_pipeline(pipeline);
-        renderpass.set_bind_group(0, &self.texture.bind_group, &[]);
+        if let Some(texture) = &self.texture {
+            renderpass.set_bind_group(0, &texture.bind_group, &[]);
+        }
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
         renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
         renderpass.set_bind_group(3, &self.projection.bind_group, &[]);
-        renderpass.set_vertex_buffer(0, self.vertex_buffer.buffer.slice(..));
-        renderpass.set_index_buffer(
-            self.index_buffer.buffer.slice(..),
-            wgpu::IndexFormat::Uint32,
-        );
-        renderpass.draw_indexed(
-            0..self.index_buffer.buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
-            0,
-            0..1,
-        );
+        if let Some(vertex_buffer) = &self.vertex_buffer {
+            renderpass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
+        }
+        if let Some(index_buffer) = &self.index_buffer {
+            renderpass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
+            renderpass.draw_indexed(
+                0..index_buffer.buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
+                0,
+                0..1,
+            );
+        }
 
         // End the renderpass.
         drop(renderpass);
@@ -530,7 +564,6 @@ impl State {
             self.queue
                 .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[0u32]));
         }
-        self.texture.overlay.write_to_queue(&self.queue);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
         // Submit the command in the queue to execute
@@ -540,17 +573,46 @@ impl State {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            match pollster::block_on(
-                self.pixel_picker
-                    .get(self.device.clone(), self.texture.surface.image.clone()),
-            ) {
-                Ok((x, y, z)) => {
-                    log::info!("Pixel at [{}/{}]={:.3}", x, y, z);
-                }
-                Err(e) => {
-                    log::error!("Pixel read failed: {}", e);
-                }
-            };
+            if let Some(texture) = &self.texture {
+                match pollster::block_on(
+                    self.pixel_picker
+                        .get(self.device.clone(), texture.surface.image.clone()),
+                ) {
+                    Ok((x, y, z)) => {
+                        log::info!("Pixel at [{}/{}]={:.3}", x, y, z);
+                    }
+                    Err(e) => {
+                        log::error!("Pixel read failed: {}", e);
+                    }
+                };
+            }
+        }
+    }
+
+    fn set_surface(&mut self, data: Image<f32>) {
+        log::info!("Setting new surface image");
+        let outlier_removed_data = data.outlier_removed_data(2.0, 98.0);
+        let z_range = image::value_range(&outlier_removed_data);
+        z_range.write_buffer(&self.queue, &self.z_value_range_buffer);
+
+        data.size.write_buffer(&self.queue, &self.image_dims_buffer);
+
+        self.vertex_buffer = Some(VertexBuffer::new(&data, &self.device));
+
+        self.index_buffer = Some(
+            IndexBufferBuilder::new_triangle_strip(&data.size).create_buffer_init(&self.device),
+        );
+
+        let texture = Texture::new(&self.device, data, &self.texture_bind_group_layout);
+        texture.surface.write_to_queue(&self.queue);
+        self.texture = Some(texture);
+    }
+
+    fn set_amplitude(&mut self, data: Image<u16>) {
+        log::info!("Setting new amplitude image");
+        if let Some(texture) = &mut self.texture {
+            texture.amplitude.set_image(data);
+            texture.amplitude.write_to_queue(&self.queue);
         }
     }
 
@@ -560,27 +622,49 @@ impl State {
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
         >,
     ) {
-        self.pixel_picker.write_to_channel(
-            self.device.clone(),
-            self.texture.surface.image.clone(),
-            sender,
-        );
+        if let Some(texture) = &self.texture {
+            self.pixel_picker.write_to_channel(
+                self.device.clone(),
+                texture.surface.image.clone(),
+                sender,
+            );
+        } else {
+            let future: std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>> =
+                Box::pin(async move {
+                    Err::<(u32, u32, f32), Arc<anyhow::Error>>(Arc::new(anyhow!(
+                        "Surface not initialized"
+                    )))
+                });
+            if let Err(_) = sender.send(future.shared()) {
+                log::error!("Failed to return error message");
+            }
+        }
     }
 
     fn set_amplitude_shader(&mut self) {
+        log::info!("Setting amplitude shader");
         self.use_height_shader = false;
     }
 
     fn set_height_shader(&mut self) {
+        log::info!("Setting height shader");
         self.use_height_shader = true;
     }
 
     fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
-        self.texture.overlay.set_overlays(overlays);
+        log::info!("Setting overlays");
+        if let Some(texture) = &mut self.texture {
+            texture.overlay.set_overlays(overlays);
+            texture.overlay.write_to_queue(&self.queue);
+        }
     }
 
     fn clear_overlays(&mut self) {
-        self.texture.overlay.set_overlays(Arc::new(Vec::new()));
+        log::info!("Clearing overlays");
+        if let Some(texture) = &mut self.texture {
+            texture.overlay.set_overlays(Arc::new(Vec::new()));
+            texture.overlay.write_to_queue(&self.queue);
+        }
     }
 
     fn back_to_origin(&mut self) {
@@ -745,13 +829,12 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                         }
                         // Toggle overlay with 'T' key
                         if c.as_str() == "t" && event.state == winit::event::ElementState::Pressed {
-                            if app_state.texture.overlay.overlays.is_empty() {
-                                app_state
-                                    .texture
-                                    .overlay
-                                    .set_overlays(Arc::new(texture::example_overlays()));
-                            } else {
-                                app_state.texture.overlay.set_overlays(Arc::new(Vec::new()));
+                            if let Some(texture) = &mut app_state.texture {
+                                if texture.overlay.overlays.is_empty() {
+                                    app_state.set_overlays(Arc::new(texture::example_overlays()));
+                                } else {
+                                    app_state.clear_overlays();
+                                }
                             }
                             app_state.get_window().request_redraw();
                         }
@@ -801,6 +884,18 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                     app_state.back_to_origin();
                 }
             }
+            ViewerCommand::SetSurface(data) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.set_surface(data);
+                } else {
+                    log::warn!("State is None, cannot set surface");
+                }
+            }
+            ViewerCommand::SetAmplitude(data) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.set_amplitude(data);
+                }
+            }
             ViewerCommand::SetState(mut state) => {
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -839,7 +934,14 @@ pub fn run() -> anyhow::Result<()> {
         .format_timestamp_secs()
         .init();
 
+    let image = SurfaceAmplitudeImage::from_file("example-img.tiff").unwrap();
     let event_loop = EventLoop::with_user_event().build()?;
+    let proxy = event_loop.create_proxy();
+    proxy
+        .send_event(ViewerCommand::SetSurface(image.surface))
+        .map_err(|e| anyhow!("Error: {}", e))
+        .unwrap();
+
     let mut app = ImageViewer3D::new();
     event_loop.run_app(&mut app)?;
 

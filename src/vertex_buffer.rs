@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::image::ImageSize;
+use crate::image::Image;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -13,11 +13,11 @@ pub(crate) struct VertexBuffer {
 }
 
 impl VertexBuffer {
-    pub(crate) fn new(image_size: &ImageSize, data: &Vec<f32>, device: &wgpu::Device) -> Self {
+    pub(crate) fn new<T>(image: &Image<T>, device: &wgpu::Device) -> Self {
         // Interleave z values and vertex indices into a single vertex buffer
         let mut vertices: Vec<Vertex> =
-            Vec::with_capacity((image_size.width.get() * image_size.height.get()) as usize);
-        for i in 0..data.len() {
+            Vec::with_capacity((image.size.width.get() * image.size.height.get()) as usize);
+        for i in 0..image.data.len() {
             vertices.push(Vertex {
                 vertex_id: [i as u32],
             });

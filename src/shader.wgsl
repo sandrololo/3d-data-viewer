@@ -4,7 +4,7 @@ struct VertexInput {
 @group(0) @binding(0)
 var surface_texture: texture_2d<f32>;
 @group(0) @binding(1)
-var amplitude_texture: texture_2d<f32>;
+var amplitude_texture: texture_2d<u32>;
 @group(0) @binding(2)
 var overlay_texture: texture_2d<f32>;
 
@@ -100,7 +100,7 @@ fn vs_main(data: VertexInput) -> VertexOutput {
 fn fs_amplitude(in: VertexOutput) -> FragmentOutput {
     let sampled = textureLoad(amplitude_texture, in.pixel * in.resize, 0);
     var out: FragmentOutput;
-    out.color = vec4<f32>(1.0 - sampled.r, sampled.r, 0.0, 1.0);
+    out.color = vec4<f32>(1.0 - f32(sampled.r) / 4000.0, f32(sampled.r) / 4000.0, 0.0, 1.0);
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }

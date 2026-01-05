@@ -5,7 +5,6 @@ use log::info;
 use std::fs::File;
 use std::{num::NonZeroU32, ops::Range};
 use tiff::decoder::{Decoder, DecodingResult};
-use wgpu::util::DeviceExt;
 
 pub struct Image<T> {
     pub size: ImageSize,
@@ -79,6 +78,56 @@ where
             size: new_size.clone(),
             data: new_data,
         }
+    }
+}
+
+impl TryFrom<Vec<u8>> for Image<f32> {
+    type Error = anyhow::Error;
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        let mut decoder = Decoder::new(std::io::Cursor::new(bytes))?;
+        let dimensions = decoder.dimensions()?;
+        let image = match decoder.read_image()? {
+            DecodingResult::F32(data) => Ok(Image {
+                size: ImageSize {
+                    width: NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
+                    height: NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
+                },
+                data,
+            }),
+            _ => Err(anyhow::anyhow!("Unsupported surface image format")),
+        }?;
+        Ok(Image {
+            size: ImageSize {
+                width: NonZeroU32::new(dimensions.0).unwrap(),
+                height: NonZeroU32::new(dimensions.1).unwrap(),
+            },
+            data: image.data,
+        })
+    }
+}
+
+impl TryFrom<Vec<u8>> for Image<u16> {
+    type Error = anyhow::Error;
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        let mut decoder = Decoder::new(std::io::Cursor::new(bytes))?;
+        let dimensions = decoder.dimensions()?;
+        let image = match decoder.read_image()? {
+            DecodingResult::U16(data) => Ok(Image {
+                size: ImageSize {
+                    width: NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
+                    height: NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
+                },
+                data,
+            }),
+            _ => Err(anyhow::anyhow!("Unsupported image format")),
+        }?;
+        Ok(Image {
+            size: ImageSize {
+                width: NonZeroU32::new(dimensions.0).unwrap(),
+                height: NonZeroU32::new(dimensions.1).unwrap(),
+            },
+            data: image.data,
+        })
     }
 }
 
@@ -165,12 +214,21 @@ pub(crate) struct ImageSize {
 }
 
 impl ImageSize {
-    pub(crate) fn create_buffer_init(&self, device: &wgpu::Device) -> wgpu::Buffer {
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    pub(crate) fn create_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("image_dims_buffer"),
-            contents: bytemuck::cast_slice(&[self.width.get(), self.height.get()]),
+            size: std::mem::size_of::<[u32; 2]>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         })
+    }
+
+    pub(crate) fn write_buffer(&self, queue: &wgpu::Queue, buffer: &wgpu::Buffer) {
+        queue.write_buffer(
+            buffer,
+            0,
+            bytemuck::cast_slice(&[self.width.get(), self.height.get()]),
+        );
     }
 
     pub fn get_bind_group_entry(buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
@@ -197,12 +255,17 @@ impl ImageSize {
 pub(crate) struct ZValueRange<T: NoUninit>(Range<T>);
 
 impl<T: NoUninit> ZValueRange<T> {
-    pub(crate) fn create_buffer_init(&self, device: &wgpu::Device) -> wgpu::Buffer {
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    pub(crate) fn create_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("z_value_range_buffer"),
-            contents: bytemuck::cast_slice(&[self.0.start, self.0.end]),
+            size: std::mem::size_of::<[T; 2]>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         })
+    }
+
+    pub(crate) fn write_buffer(&self, queue: &wgpu::Queue, buffer: &wgpu::Buffer) {
+        queue.write_buffer(buffer, 0, bytemuck::cast_slice(&[self.0.start, self.0.end]));
     }
 
     pub fn get_bind_group_entry(buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
