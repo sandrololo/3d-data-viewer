@@ -4,7 +4,7 @@
 set -e
 
 # Default values
-OUTPUT_DIR="./dist"
+OUTPUT_DIR="./wasm-demo/src/assets/wasm"
 OUTPUT_NAME="data-viewer-3d"
 
 # Parse command line arguments

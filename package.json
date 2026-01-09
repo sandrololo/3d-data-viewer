@@ -1,0 +1,13 @@
+{
+  "name": "3d-data-viewer",
+  "version": "0.3.0",
+  "main": "dist/data-viewer-3d.js",
+  "module": "dist/data-viewer-3d.js",
+  "types": "dist/data-viewer-3d.d.ts",
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "./build.sh"
+  }
+}
