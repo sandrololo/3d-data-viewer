@@ -35,13 +35,17 @@ enum ViewerCommand {
 #[wasm_bindgen]
 pub struct WasmViewer {
     proxy: Option<winit::event_loop::EventLoopProxy<ViewerCommand>>,
+    canvas_id: String,
 }
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 impl WasmViewer {
-    pub fn new() -> Result<Self, wasm_bindgen::JsValue> {
-        Ok(Self { proxy: None })
+    pub fn new(canvas_id: String) -> Result<Self, wasm_bindgen::JsValue> {
+        Ok(Self {
+            proxy: None,
+            canvas_id,
+        })
     }
 
     pub fn run(&mut self) -> Result<(), wasm_bindgen::JsValue> {
@@ -54,8 +58,9 @@ impl WasmViewer {
             wasm_bindgen::JsValue::from_str(&format!("Error building event loop: {}", e))
         })?;
         self.proxy = Some(event_loop.create_proxy());
+        let canvas_id = self.canvas_id.clone();
         wasm_bindgen_futures::spawn_local(async move {
-            let mut app = ImageViewer3D::new(&event_loop);
+            let mut app = ImageViewer3D::new(&event_loop, canvas_id);
             event_loop
                 .run_app(&mut app)
                 .map_err(|e| {
@@ -671,19 +676,26 @@ impl State {
 }
 
 struct ImageViewer3D {
+    state: Option<State>,
     #[cfg(target_arch = "wasm32")]
     proxy: Option<winit::event_loop::EventLoopProxy<ViewerCommand>>,
-    state: Option<State>,
+    #[cfg(target_arch = "wasm32")]
+    canvas_id: String,
 }
 
 impl ImageViewer3D {
-    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<ViewerCommand>) -> Self {
+    pub fn new(
+        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<ViewerCommand>,
+        #[cfg(target_arch = "wasm32")] canvas_id: String,
+    ) -> Self {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
         Self {
             state: None,
             #[cfg(target_arch = "wasm32")]
             proxy,
+            #[cfg(target_arch = "wasm32")]
+            canvas_id,
         }
     }
 }
@@ -698,11 +710,9 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
             use wasm_bindgen::JsCast;
             use winit::platform::web::WindowAttributesExtWebSys;
 
-            const CANVAS_ID: &str = "canvas";
-
             let window = wgpu::web_sys::window().unwrap_throw();
             let document = window.document().unwrap_throw();
-            let canvas = document.get_element_by_id(CANVAS_ID).unwrap_throw();
+            let canvas = document.get_element_by_id(&self.canvas_id).unwrap_throw();
             let html_canvas_element = canvas.unchecked_into();
             window_attributes = window_attributes.with_canvas(Some(html_canvas_element));
         }

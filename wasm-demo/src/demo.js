@@ -178,7 +178,7 @@ async function initWasm() {
         // Initialize the WASM module and create the viewer instance
         console.log('Calling init()...');
         wasmModule = await init();
-        wasmViewer = WasmViewer.new();
+        wasmViewer = WasmViewer.new('canvas');
         wasmViewer.run()
         console.log('init() completed successfully');
         console.log('wasmModule after init:', !!wasmModule);
