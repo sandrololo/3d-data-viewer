@@ -1,10 +1,12 @@
+pub(crate) use crate::image::percentile_range::*;
 use anyhow::anyhow;
-use bytemuck::NoUninit;
 use log::info;
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
-use std::{num::NonZeroU32, ops::Range};
+use std::num::NonZeroU32;
 use tiff::decoder::{Decoder, DecodingResult, Limits};
+
+mod percentile_range;
 
 pub struct Image<T> {
     pub size: ImageSize,
@@ -13,29 +15,9 @@ pub struct Image<T> {
 
 impl<T> Image<T>
 where
-    T: PartialOrd + Copy + NoUninit,
+    T: Copy,
 {
-    pub fn outlier_removed_data(&self, lower_percentile: f32, upper_percentile: f32) -> Vec<T>
-    where
-        T: num_traits::Float,
-    {
-        let mut sorted_data = self.data.clone();
-        sorted_data.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let len = sorted_data.len();
-        let lower_index = ((lower_percentile / 100.0) * len as f32).round() as usize;
-        let upper_index = ((upper_percentile / 100.0) * len as f32).round() as usize;
-        let min_value = sorted_data[lower_index];
-        let max_value = sorted_data[upper_index];
-        self.data
-            .iter()
-            .map(|&pixel| pixel.clamp(min_value, max_value))
-            .collect()
-    }
-
-    pub fn get_pixel(&self, x: u32, y: u32) -> T
-    where
-        T: Copy,
-    {
+    pub fn get_pixel(&self, x: u32, y: u32) -> T {
         self.data[(y * self.size.width.get() + x) as usize]
     }
 
@@ -235,55 +217,4 @@ impl ImageSize {
             count: None,
         }
     }
-}
-
-pub(crate) struct ZValueRange<T: NoUninit>(Range<T>);
-
-impl<T: NoUninit> ZValueRange<T> {
-    pub(crate) fn create_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-        device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("z_value_range_buffer"),
-            size: std::mem::size_of::<[T; 2]>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        })
-    }
-
-    pub(crate) fn write_buffer(&self, queue: &wgpu::Queue, buffer: &wgpu::Buffer) {
-        queue.write_buffer(buffer, 0, bytemuck::cast_slice(&[self.0.start, self.0.end]));
-    }
-
-    pub fn get_bind_group_entry(buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
-        wgpu::BindGroupEntry {
-            binding: 1,
-            resource: buffer.as_entire_binding(),
-        }
-    }
-
-    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding: 1,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }
-    }
-}
-
-pub fn value_range<T: PartialOrd + Copy + NoUninit>(data: &Vec<T>) -> ZValueRange<T> {
-    let mut min_value = data[0];
-    let mut max_value = data[0];
-    for &value in data {
-        if value < min_value {
-            min_value = value;
-        }
-        if value > max_value {
-            max_value = value;
-        }
-    }
-    ZValueRange(min_value..max_value)
 }

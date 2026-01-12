@@ -31,6 +31,7 @@ enum ViewerCommand {
     ),
     ZoomIn,
     ZoomOut,
+    SetPercentile(f32),
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -211,6 +212,19 @@ impl WasmViewer {
             ))
         }
     }
+
+    pub fn set_percentile(&self, percentile: f32) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::SetPercentile(percentile))
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -243,7 +257,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{Image, ImageSize, ZValueRange},
+    image::{Image, ImageSize, PercentileRangeBuffer},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
     pixel_picker::{PixelPicker, PixelResult},
@@ -270,7 +284,7 @@ struct State {
     index_buffer: Option<IndexBuffer>,
     texture: Option<Texture>,
     image_dims_buffer: wgpu::Buffer,
-    z_value_range_buffer: wgpu::Buffer,
+    percentile_range_buffer: PercentileRangeBuffer,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_picker: PixelPicker,
@@ -311,7 +325,7 @@ impl State {
                 label: Some("image_info_bind_group_layout"),
                 entries: &[
                     ImageSize::get_bind_group_layout_entry(),
-                    ZValueRange::<f32>::get_bind_group_layout_entry(),
+                    PercentileRangeBuffer::get_bind_group_layout_entry(),
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -335,13 +349,13 @@ impl State {
         });
 
         let image_dims_buffer = ImageSize::create_buffer(&device);
-        let z_value_range_buffer = ZValueRange::<f32>::create_buffer(&device);
+        let percentile_range_buffer = PercentileRangeBuffer::new(&device);
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
                 ImageSize::get_bind_group_entry(&image_dims_buffer),
-                ZValueRange::<f32>::get_bind_group_entry(&z_value_range_buffer),
+                percentile_range_buffer.get_bind_group_entry(),
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: zoom_buffer.as_entire_binding(),
@@ -453,7 +467,7 @@ impl State {
             index_buffer: None,
             texture: None,
             image_dims_buffer,
-            z_value_range_buffer,
+            percentile_range_buffer,
             image_info_bind_group,
             depth_view,
             pixel_picker,
@@ -626,9 +640,8 @@ impl State {
 
     fn set_surface(&mut self, data: Image<f32>) {
         log::info!("Setting new surface image");
-        let outlier_removed_data = data.outlier_removed_data(2.0, 98.0);
-        let z_range = image::value_range(&outlier_removed_data);
-        z_range.write_buffer(&self.queue, &self.z_value_range_buffer);
+        self.percentile_range_buffer
+            .update_data(&self.queue, &data.data);
 
         data.size.write_buffer(&self.queue, &self.image_dims_buffer);
 
@@ -716,6 +729,15 @@ impl State {
     fn zoom_out(&mut self) {
         self.mouse.zoom_out();
         self.projection.zoom(self.mouse.get_zoom());
+    }
+
+    fn set_percentile(&mut self, percentile: f32) {
+        let surface = self
+            .texture
+            .as_ref()
+            .and_then(|texture| Some(&texture.surface.image.data));
+        self.percentile_range_buffer
+            .update_percentile(&self.queue, percentile, surface);
     }
 }
 
@@ -944,6 +966,11 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
             ViewerCommand::ZoomOut => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.zoom_out();
+                }
+            }
+            ViewerCommand::SetPercentile(percentile) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.set_percentile(percentile);
                 }
             }
             ViewerCommand::SetState(mut state) => {
