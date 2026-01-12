@@ -10,3 +10,5 @@
 ⬜  Improve responsivenes\
 ✅  Add rendering of AOI's\
 ✅  Fix errors in the surface
+⬜  Different vertex/index buffer per MIP level\
+⬜  MIP level should not only depend on zoom level but also image size\
