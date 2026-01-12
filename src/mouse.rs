@@ -70,6 +70,18 @@ impl Mouse {
         self.current_zoom
     }
 
+    pub fn reset_zoom(&mut self) {
+        self.current_zoom = 1.0;
+    }
+
+    pub fn zoom_in(&mut self) {
+        self.current_zoom *= 1.1;
+    }
+
+    pub fn zoom_out(&mut self) {
+        self.current_zoom *= 0.9;
+    }
+
     pub fn is_pointer_inside(&self, pos: Vec2) -> bool {
         pos.x >= -1.0 && pos.x <= 1.0 && pos.y >= -1.0 && pos.y <= 1.0
     }

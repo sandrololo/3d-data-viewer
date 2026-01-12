@@ -29,6 +29,8 @@ enum ViewerCommand {
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
         >,
     ),
+    ZoomIn,
+    ZoomOut,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -173,7 +175,33 @@ impl WasmViewer {
         }
     }
 
-    pub fn back_to_origin(&self) -> Result<(), wasm_bindgen::JsValue> {
+    pub fn zoom_in(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::ZoomIn)
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub fn zoom_out(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::ZoomOut)
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
+
+    pub fn reset_view(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
                 .send_event(ViewerCommand::BackToOrigin)
@@ -669,9 +697,20 @@ impl State {
         }
     }
 
-    fn back_to_origin(&mut self) {
+    fn reset_view(&mut self) {
         self.projection.reset();
         self.transformation.reset();
+        self.mouse.reset_zoom();
+    }
+
+    fn zoom_in(&mut self) {
+        self.mouse.zoom_in();
+        self.projection.zoom(self.mouse.get_zoom());
+    }
+
+    fn zoom_out(&mut self) {
+        self.mouse.zoom_out();
+        self.projection.zoom(self.mouse.get_zoom());
     }
 }
 
@@ -888,7 +927,7 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
             }
             ViewerCommand::BackToOrigin => {
                 if let Some(app_state) = self.state.as_mut() {
-                    app_state.back_to_origin();
+                    app_state.reset_view();
                 }
             }
             ViewerCommand::SetSurface(data) => {
@@ -901,6 +940,16 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
             ViewerCommand::SetAmplitude(data) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_amplitude(data);
+                }
+            }
+            ViewerCommand::ZoomIn => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.zoom_in();
+                }
+            }
+            ViewerCommand::ZoomOut => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.zoom_out();
                 }
             }
             ViewerCommand::SetState(mut state) => {
