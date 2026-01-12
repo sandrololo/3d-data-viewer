@@ -147,12 +147,10 @@ impl WasmViewer {
         }
     }
 
-    pub fn set_overlays(&self) -> Result<(), wasm_bindgen::JsValue> {
+    pub fn set_overlays(&self, overlays: Vec<Overlay>) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::SetOverlays(Arc::new(
-                    texture::example_overlays(),
-                )))
+                .send_event(ViewerCommand::SetOverlays(Arc::new(overlays)))
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -871,17 +869,6 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                         // Toggle shader with 'S' key
                         if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
                             app_state.use_height_shader = !app_state.use_height_shader;
-                            app_state.get_window().request_redraw();
-                        }
-                        // Toggle overlay with 'T' key
-                        if c.as_str() == "t" && event.state == winit::event::ElementState::Pressed {
-                            if let Some(texture) = &mut app_state.texture {
-                                if texture.overlay.overlays.is_empty() {
-                                    app_state.set_overlays(Arc::new(texture::example_overlays()));
-                                } else {
-                                    app_state.clear_overlays();
-                                }
-                            }
                             app_state.get_window().request_redraw();
                         }
                         // Move object to origin with 'O' key
