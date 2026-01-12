@@ -22,7 +22,14 @@ struct ZValueRange{
 @group(1) @binding(1)
 var<uniform> z_range: ZValueRange;
 
+struct AmplitudeRange{
+    start: u32,
+    end: u32,
+}
 @group(1) @binding(2)
+var<uniform> amplitude_range: AmplitudeRange;
+
+@group(1) @binding(3)
 var<uniform> mip_level: u32;
 
 struct TransformationInput {
@@ -99,8 +106,11 @@ fn vs_main(data: VertexInput) -> VertexOutput {
 @fragment
 fn fs_amplitude(in: VertexOutput) -> FragmentOutput {
     let sampled = textureLoad(amplitude_texture, in.pixel * in.resize, 0);
+    let range = f32(amplitude_range.end - amplitude_range.start);
+    let red = 1.0 - f32(sampled.r - amplitude_range.start) / range;
+    let green = f32(sampled.r - amplitude_range.start) / range;
     var out: FragmentOutput;
-    out.color = vec4<f32>(1.0 - f32(sampled.r) / 4000.0, f32(sampled.r) / 4000.0, 0.0, 1.0);
+    out.color = vec4<f32>(red, green, 0.0, 1.0);
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }

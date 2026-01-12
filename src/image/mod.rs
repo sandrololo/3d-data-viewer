@@ -1,4 +1,5 @@
-pub(crate) use crate::image::percentile_range::*;
+pub(crate) use crate::image::{amplitude_range::*, percentile_range::*};
+
 use anyhow::anyhow;
 use log::info;
 #[cfg(not(target_arch = "wasm32"))]
@@ -6,6 +7,7 @@ use std::fs::File;
 use std::num::NonZeroU32;
 use tiff::decoder::{Decoder, DecodingResult, Limits};
 
+mod amplitude_range;
 mod percentile_range;
 
 pub struct Image<T> {

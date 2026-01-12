@@ -32,6 +32,7 @@ enum ViewerCommand {
     ZoomIn,
     ZoomOut,
     SetPercentile(f32),
+    SetAmplitudeRange(u16, u16),
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -225,6 +226,19 @@ impl WasmViewer {
             ))
         }
     }
+
+    pub fn set_amplitude_range(&self, start: u16, end: u16) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::SetAmplitudeRange(start, end))
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -257,7 +271,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{Image, ImageSize, PercentileRangeBuffer},
+    image::{AmplitudeRangeBuffer, Image, ImageSize, PercentileRangeBuffer},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
     pixel_picker::{PixelPicker, PixelResult},
@@ -285,6 +299,7 @@ struct State {
     texture: Option<Texture>,
     image_dims_buffer: wgpu::Buffer,
     percentile_range_buffer: PercentileRangeBuffer,
+    amplitude_range_buffer: AmplitudeRangeBuffer,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_picker: PixelPicker,
@@ -326,8 +341,9 @@ impl State {
                 entries: &[
                     ImageSize::get_bind_group_layout_entry(),
                     PercentileRangeBuffer::get_bind_group_layout_entry(),
+                    AmplitudeRangeBuffer::get_bind_group_layout_entry(),
                     wgpu::BindGroupLayoutEntry {
-                        binding: 2,
+                        binding: 3,
                         visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
@@ -350,14 +366,16 @@ impl State {
 
         let image_dims_buffer = ImageSize::create_buffer(&device);
         let percentile_range_buffer = PercentileRangeBuffer::new(&device);
+        let amplitude_range_buffer = AmplitudeRangeBuffer::new(&device);
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
                 ImageSize::get_bind_group_entry(&image_dims_buffer),
                 percentile_range_buffer.get_bind_group_entry(),
+                amplitude_range_buffer.get_bind_group_entry(),
                 wgpu::BindGroupEntry {
-                    binding: 2,
+                    binding: 3,
                     resource: zoom_buffer.as_entire_binding(),
                 },
             ],
@@ -468,6 +486,7 @@ impl State {
             texture: None,
             image_dims_buffer,
             percentile_range_buffer,
+            amplitude_range_buffer,
             image_info_bind_group,
             depth_view,
             pixel_picker,
@@ -739,6 +758,10 @@ impl State {
         self.percentile_range_buffer
             .update_percentile(&self.queue, percentile, surface);
     }
+
+    fn set_amplitude_range(&mut self, start: u16, end: u16) {
+        self.amplitude_range_buffer.update(&self.queue, start, end);
+    }
 }
 
 struct ImageViewer3D {
@@ -971,6 +994,11 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
             ViewerCommand::SetPercentile(percentile) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_percentile(percentile);
+                }
+            }
+            ViewerCommand::SetAmplitudeRange(start, end) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.set_amplitude_range(start, end);
                 }
             }
             ViewerCommand::SetState(mut state) => {

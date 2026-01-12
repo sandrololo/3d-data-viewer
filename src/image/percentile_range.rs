@@ -26,6 +26,7 @@ impl PercentileRangeBuffer {
     ) {
         assert!(percentile >= 0.5, "Percentile must be greater than 0.5");
         assert!(percentile < 1.0, "Percentile must be less than 1.0");
+        log::info!("Updating percentile: {}", percentile);
         self.percentile = percentile;
         if let Some(data) = data {
             self.update_data(queue, data);
