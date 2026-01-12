@@ -6,6 +6,9 @@
  */
 
 import init, {
+    Overlay,
+    OverlayColor,
+    WasmBindgenPixelRange,
     WasmViewer
 } from './assets/wasm/data-viewer-3d.js';
 
@@ -241,7 +244,7 @@ function setupControls() {
     // Set overlay - call viewer method directly
     btnSetOverlay.addEventListener('click', () => {
         if (wasmViewer) {
-            wasmViewer.set_overlays();
+            wasmViewer.set_overlays(example_overlays());
         }
     });
 
@@ -434,3 +437,13 @@ main().catch(e => {
     showError(`An unexpected error occurred: ${e.message}`);
 });
 
+function example_overlays() {
+    let pixel_ranges = [
+        WasmBindgenPixelRange.new(0, 100),
+        WasmBindgenPixelRange.new(512, 612),
+    ]
+    let color = OverlayColor.new(255, 0, 0, 255)
+    return [
+        Overlay.new(pixel_ranges, color),
+    ]
+}
