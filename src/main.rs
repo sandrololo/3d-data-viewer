@@ -680,6 +680,8 @@ impl State {
         if let Some(texture) = &mut self.texture {
             texture.amplitude.set_image(data);
             texture.amplitude.write_to_queue(&self.queue);
+        } else {
+            log::warn!("Can't set amplitude image, texture not initialized");
         }
     }
 
