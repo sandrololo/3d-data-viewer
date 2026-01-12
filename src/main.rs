@@ -51,7 +51,7 @@ impl WasmViewer {
         console_error_panic_hook::set_once();
 
         let event_loop = EventLoop::with_user_event().build().map_err(|e| {
-            wasm_bindgen::JsValue::from_str(&format!("Error initializing console_log: {}", e))
+            wasm_bindgen::JsValue::from_str(&format!("Error building event loop: {}", e))
         })?;
         self.proxy = Some(event_loop.create_proxy());
         wasm_bindgen_futures::spawn_local(async move {
@@ -59,10 +59,7 @@ impl WasmViewer {
             event_loop
                 .run_app(&mut app)
                 .map_err(|e| {
-                    wasm_bindgen::JsValue::from_str(&format!(
-                        "Error initializing console_log: {}",
-                        e
-                    ))
+                    wasm_bindgen::JsValue::from_str(&format!("Error running event loop: {}", e))
                 })
                 .unwrap_throw();
         });
