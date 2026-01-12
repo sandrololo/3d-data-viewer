@@ -285,7 +285,14 @@ impl State {
             .await
             .unwrap();
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_limits: wgpu::Limits {
+                    max_buffer_size: 2u64.pow(31),
+                    max_texture_dimension_2d: 2u32.pow(14),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
             .await
             .unwrap();
         let device = Arc::new(device);

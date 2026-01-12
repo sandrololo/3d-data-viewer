@@ -4,7 +4,7 @@ use log::info;
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs::File;
 use std::{num::NonZeroU32, ops::Range};
-use tiff::decoder::{Decoder, DecodingResult};
+use tiff::decoder::{Decoder, DecodingResult, Limits};
 
 pub struct Image<T> {
     pub size: ImageSize,
@@ -39,24 +39,6 @@ where
         self.data[(y * self.size.width.get() + x) as usize]
     }
 
-    pub fn scaled_data(&self, new_min: T, new_max: T) -> Vec<T>
-    where
-        T: num_traits::Float
-            + std::ops::Sub<Output = T>
-            + std::ops::Add<Output = T>
-            + std::ops::Mul<Output = T>
-            + std::ops::Div<Output = T>,
-    {
-        let value_range = value_range(&self.data);
-        let old_min = value_range.0.start;
-        let old_max = value_range.0.end;
-        let scale = (new_max - new_min) / (old_max - old_min);
-        self.data
-            .iter()
-            .map(|&value| new_min + (value - old_min) * scale)
-            .collect()
-    }
-
     pub fn resize(&self, new_size: &ImageSize) -> Image<T>
     where
         T: num_traits::Float,
@@ -84,7 +66,8 @@ where
 impl TryFrom<Vec<u8>> for Image<f32> {
     type Error = anyhow::Error;
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let mut decoder = Decoder::new(std::io::Cursor::new(bytes))?;
+        let mut decoder =
+            Decoder::new(std::io::Cursor::new(bytes))?.with_limits(Limits::unlimited());
         let dimensions = decoder.dimensions()?;
         let image = match decoder.read_image()? {
             DecodingResult::F32(data) => Ok(Image {
@@ -109,7 +92,8 @@ impl TryFrom<Vec<u8>> for Image<f32> {
 impl TryFrom<Vec<u8>> for Image<u16> {
     type Error = anyhow::Error;
     fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
-        let mut decoder = Decoder::new(std::io::Cursor::new(bytes))?;
+        let mut decoder =
+            Decoder::new(std::io::Cursor::new(bytes))?.with_limits(Limits::unlimited());
         let dimensions = decoder.dimensions()?;
         let image = match decoder.read_image()? {
             DecodingResult::U16(data) => Ok(Image {
@@ -141,7 +125,8 @@ impl SurfaceAmplitudeImage {
     pub async fn from_url(url: &str) -> anyhow::Result<Self> {
         let response = reqwest::get(url).await?;
         let body = response.bytes().await?;
-        let mut decoder = Decoder::new(std::io::Cursor::new(body))?;
+        let mut decoder =
+            Decoder::new(std::io::Cursor::new(body))?.with_limits(Limits::unlimited());
         let dimensions = decoder.dimensions()?;
         let surface = match decoder.read_image()? {
             DecodingResult::F32(data) => Ok(Image {
@@ -175,7 +160,7 @@ impl SurfaceAmplitudeImage {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
         let img_file = File::open(path)?;
-        let mut decoder = Decoder::new(img_file)?;
+        let mut decoder = Decoder::new(img_file)?.with_limits(Limits::unlimited());
         let dimensions = decoder.dimensions()?;
         let surface = match decoder.read_image()? {
             DecodingResult::F32(data) => Ok(Image {
