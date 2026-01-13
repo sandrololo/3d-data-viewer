@@ -1,27 +1,14 @@
 use wgpu::util::DeviceExt;
 
-use crate::image::Image;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    vertex_id: [u32; 1],
-}
+use crate::image::ImageSize;
 
 pub(crate) struct VertexBuffer {
     pub buffer: wgpu::Buffer,
 }
 
 impl VertexBuffer {
-    pub(crate) fn new<T>(image: &Image<T>, device: &wgpu::Device) -> Self {
-        // Interleave z values and vertex indices into a single vertex buffer
-        let mut vertices: Vec<Vertex> =
-            Vec::with_capacity((image.size.width.get() * image.size.height.get()) as usize);
-        for i in 0..image.data.len() {
-            vertices.push(Vertex {
-                vertex_id: [i as u32],
-            });
-        }
+    pub(crate) fn new(image_size: &ImageSize, device: &wgpu::Device) -> Self {
+        let vertices: Vec<u32> = (0..image_size.width.get() * image_size.height.get()).collect();
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
@@ -32,7 +19,7 @@ impl VertexBuffer {
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<u32>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[wgpu::VertexAttribute {
                 offset: 0,

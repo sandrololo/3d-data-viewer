@@ -259,6 +259,7 @@ mod wasm_commands {
 mod image;
 mod index_buffer;
 mod keyboard;
+mod mip;
 mod mouse;
 mod pixel_picker;
 mod projection;
@@ -271,8 +272,8 @@ use projection::Projection;
 
 use crate::{
     image::{AmplitudeRangeBuffer, Image, ImageSize, PercentileRangeBuffer},
-    index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
+    mip::Mip,
     pixel_picker::{PixelPicker, PixelResult, PixelValue},
     texture::{Overlay, Texture},
     transformation::Transformation,
@@ -293,16 +294,13 @@ struct State {
     render_pipeline_height: wgpu::RenderPipeline,
     use_height_shader: bool,
     texture_bind_group_layout: wgpu::BindGroupLayout,
-    vertex_buffer: Option<VertexBuffer>,
-    index_buffer: Option<IndexBuffer>,
+    mip: Mip,
     texture: Option<Texture>,
-    image_dims_buffer: wgpu::Buffer,
     percentile_range_buffer: PercentileRangeBuffer,
     amplitude_range_buffer: AmplitudeRangeBuffer,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_picker: PixelPicker,
-    zoom_buffer: wgpu::Buffer,
 }
 
 impl State {
@@ -357,25 +355,21 @@ impl State {
         let texture_bind_group_layout = Texture::create_bind_group_layout(&device);
 
         let pixel_picker = PixelPicker::new(&device, window.inner_size());
-        let zoom_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("mip_level_buffer"),
-            contents: bytemuck::cast_slice(&[2u32]),
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        });
 
-        let image_dims_buffer = ImageSize::create_buffer(&device);
+        let mip = Mip::new(&device);
+
         let percentile_range_buffer = PercentileRangeBuffer::new(&device);
         let amplitude_range_buffer = AmplitudeRangeBuffer::new(&device);
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
-                ImageSize::get_bind_group_entry(&image_dims_buffer),
+                ImageSize::get_bind_group_entry(&mip.image_dims_buffer),
                 percentile_range_buffer.get_bind_group_entry(),
                 amplitude_range_buffer.get_bind_group_entry(),
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: zoom_buffer.as_entire_binding(),
+                    resource: mip.mip_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -480,16 +474,13 @@ impl State {
             render_pipeline_height,
             use_height_shader: true,
             texture_bind_group_layout,
-            vertex_buffer: None,
-            index_buffer: None,
+            mip,
             texture: None,
-            image_dims_buffer,
             percentile_range_buffer,
             amplitude_range_buffer,
             image_info_bind_group,
             depth_view,
             pixel_picker,
-            zoom_buffer,
         };
 
         // Configure surface for the first time
@@ -604,31 +595,7 @@ impl State {
         renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
         renderpass.set_bind_group(3, &self.projection.bind_group, &[]);
 
-        if let (Some(index_buffer), Some(vertex_buffer), Some(texture)) =
-            (&self.index_buffer, &self.vertex_buffer, &self.texture)
-        {
-            let zoom = self.mouse.get_zoom();
-            let mip_level = if zoom > 0.8 {
-                2u32
-            } else if zoom > 0.2 {
-                1u32
-            } else {
-                0u32
-            };
-            let (w, h) = (
-                texture.surface.image.size.width.get() / 2u32.pow(mip_level),
-                texture.surface.image.size.height.get() / 2u32.pow(mip_level),
-            );
-            renderpass.set_vertex_buffer(0, vertex_buffer.buffer.slice(0..(w * h * 4) as u64));
-            index_buffer.set_mip_level_buffer(mip_level, &mut renderpass);
-            self.queue
-                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[mip_level]));
-            ImageSize {
-                width: NonZeroU32::new(w).expect("Width can't be zero"),
-                height: NonZeroU32::new(h).expect("Height can't be zero"),
-            }
-            .write_buffer(&self.queue, &self.image_dims_buffer);
-        }
+        self.mip.update_gpu(&mut renderpass, &self.queue);
 
         // End the renderpass.
         drop(renderpass);
@@ -677,10 +644,7 @@ impl State {
         self.percentile_range_buffer
             .update_data(&self.queue, &data.data);
 
-        self.vertex_buffer = Some(VertexBuffer::new(&data, &self.device));
-
-        self.index_buffer =
-            Some(IndexBufferBuilder::new_triangle_strip(&data.size, 3).create_buffer(&self.device));
+        self.mip.set_image(&data.size, &self.device);
 
         let texture = Texture::new(&self.device, data, &self.texture_bind_group_layout);
         texture.surface.write_to_queue(&self.queue);
@@ -770,11 +734,13 @@ impl State {
     fn zoom_in(&mut self) {
         self.mouse.zoom_in();
         self.projection.zoom(self.mouse.get_zoom());
+        self.mip.set_zoom(self.mouse.get_zoom());
     }
 
     fn zoom_out(&mut self) {
         self.mouse.zoom_out();
         self.projection.zoom(self.mouse.get_zoom());
+        self.mip.set_zoom(self.mouse.get_zoom());
     }
 
     fn set_percentile(&mut self, percentile: f32) {
@@ -936,6 +902,7 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                 } => {
                     app_state.mouse.register_scroll_event(delta);
                     app_state.projection.zoom(app_state.mouse.get_zoom());
+                    app_state.mip.set_zoom(app_state.mouse.get_zoom());
                     app_state.get_window().request_redraw();
                 }
                 WindowEvent::KeyboardInput {
@@ -948,12 +915,6 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                         // Toggle shader with 'S' key
                         if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
                             app_state.use_height_shader = !app_state.use_height_shader;
-                            app_state.get_window().request_redraw();
-                        }
-                        // Move object to origin with 'O' key
-                        if c.as_str() == "o" && event.state == winit::event::ElementState::Pressed {
-                            app_state.projection.reset();
-                            app_state.transformation.reset();
                             app_state.get_window().request_redraw();
                         }
                     }
