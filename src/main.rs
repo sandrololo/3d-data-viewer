@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use futures::{FutureExt, future::Shared};
 use glam::{Vec2, Vec3};
 use log::error;
-use std::{borrow::Cow, sync::Arc, vec};
+use std::{borrow::Cow, num::NonZeroU32, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -603,34 +603,39 @@ impl State {
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
         renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
         renderpass.set_bind_group(3, &self.projection.bind_group, &[]);
-        if let Some(vertex_buffer) = &self.vertex_buffer {
-            renderpass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
-        }
-        if let Some(index_buffer) = &self.index_buffer {
-            renderpass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
-            renderpass.draw_indexed(
-                0..index_buffer.buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
-                0,
-                0..1,
+
+        if let (Some(index_buffer), Some(vertex_buffer), Some(texture)) =
+            (&self.index_buffer, &self.vertex_buffer, &self.texture)
+        {
+            let zoom = self.mouse.get_zoom();
+            let mip_level = if zoom > 0.8 {
+                2u32
+            } else if zoom > 0.2 {
+                1u32
+            } else {
+                0u32
+            };
+            let (w, h) = (
+                texture.surface.image.size.width.get() / 2u32.pow(mip_level),
+                texture.surface.image.size.height.get() / 2u32.pow(mip_level),
             );
+            let range = index_buffer.get_mip_level_range(mip_level as u8);
+            renderpass.set_vertex_buffer(0, vertex_buffer.buffer.slice(0..(w * h * 4) as u64));
+            renderpass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
+            renderpass.draw_indexed(range, 0, 0..1);
+            self.queue
+                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[mip_level]));
+            ImageSize {
+                width: NonZeroU32::new(w).expect("Width can't be zero"),
+                height: NonZeroU32::new(h).expect("Height can't be zero"),
+            }
+            .write_buffer(&self.queue, &self.image_dims_buffer);
         }
 
         // End the renderpass.
         drop(renderpass);
 
         self.pixel_picker.copy_pixel_at_mouse(&mut encoder);
-
-        let zoom = self.mouse.get_zoom();
-        if zoom > 0.8 {
-            self.queue
-                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[2u32]));
-        } else if zoom > 0.2 {
-            self.queue
-                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[1u32]));
-        } else {
-            self.queue
-                .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[0u32]));
-        }
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
         // Submit the command in the queue to execute
@@ -674,12 +679,10 @@ impl State {
         self.percentile_range_buffer
             .update_data(&self.queue, &data.data);
 
-        data.size.write_buffer(&self.queue, &self.image_dims_buffer);
-
         self.vertex_buffer = Some(VertexBuffer::new(&data, &self.device));
 
         self.index_buffer = Some(
-            IndexBufferBuilder::new_triangle_strip(&data.size).create_buffer_init(&self.device),
+            IndexBufferBuilder::new_triangle_strip(&data.size, 3).create_buffer_init(&self.device),
         );
 
         let texture = Texture::new(&self.device, data, &self.texture_bind_group_layout);

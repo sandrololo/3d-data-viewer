@@ -22,29 +22,6 @@ where
     pub fn get_pixel(&self, x: u32, y: u32) -> T {
         self.data[(y * self.size.width.get() + x) as usize]
     }
-
-    pub fn resize(&self, new_size: &ImageSize) -> Image<T>
-    where
-        T: num_traits::Float,
-    {
-        let mut new_data = vec![T::zero(); (new_size.width.get() * new_size.height.get()) as usize];
-        let x_ratio = self.size.width.get() as f32 / new_size.width.get() as f32;
-        let y_ratio = self.size.height.get() as f32 / new_size.height.get() as f32;
-
-        for j in 0..new_size.height.get() {
-            for i in 0..new_size.width.get() {
-                let px = (i as f32 * x_ratio).floor() as u32;
-                let py = (j as f32 * y_ratio).floor() as u32;
-                new_data[(j * new_size.width.get() + i) as usize] =
-                    self.data[(py * self.size.width.get() + px) as usize];
-            }
-        }
-
-        Image {
-            size: new_size.clone(),
-            data: new_data,
-        }
-    }
 }
 
 impl TryFrom<Vec<u8>> for Image<f32> {

@@ -68,12 +68,12 @@ struct FragmentOutput {
 @vertex
 fn vs_main(data: VertexInput) -> VertexOutput {
     let resize = max(mip_level * 2u, 1u);
-    let col = data.index % (image_dims.width) / resize;
-    let row = data.index / (image_dims.width) / resize;
+    let col = data.index % image_dims.width;
+    let row = data.index / image_dims.width;
     // Map grid coordinates to NDC consistently across the full width/height
-    let x = 2.0 * f32(col) / f32(image_dims.width / resize - 1u) - 1.0;
-    let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height / resize - 1u);
-    let z_value = textureLoad(surface_texture, vec2<u32>(col, row), i32(mip_level));
+    let x = 2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0;
+    let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
+    let z_value = textureLoad(surface_texture, vec2<u32>(col, row) * resize, 0);
     let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
     let z = 1.0 - (z_clamped - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
