@@ -619,10 +619,8 @@ impl State {
                 texture.surface.image.size.width.get() / 2u32.pow(mip_level),
                 texture.surface.image.size.height.get() / 2u32.pow(mip_level),
             );
-            let range = index_buffer.get_mip_level_range(mip_level as u8);
             renderpass.set_vertex_buffer(0, vertex_buffer.buffer.slice(0..(w * h * 4) as u64));
-            renderpass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
-            renderpass.draw_indexed(range, 0, 0..1);
+            index_buffer.set_mip_level_buffer(mip_level, &mut renderpass);
             self.queue
                 .write_buffer(&self.zoom_buffer, 0, bytemuck::cast_slice(&[mip_level]));
             ImageSize {
@@ -681,9 +679,8 @@ impl State {
 
         self.vertex_buffer = Some(VertexBuffer::new(&data, &self.device));
 
-        self.index_buffer = Some(
-            IndexBufferBuilder::new_triangle_strip(&data.size, 3).create_buffer_init(&self.device),
-        );
+        self.index_buffer =
+            Some(IndexBufferBuilder::new_triangle_strip(&data.size, 3).create_buffer(&self.device));
 
         let texture = Texture::new(&self.device, data, &self.texture_bind_group_layout);
         texture.surface.write_to_queue(&self.queue);
