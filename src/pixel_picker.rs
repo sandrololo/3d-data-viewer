@@ -1,12 +1,23 @@
 use futures::FutureExt;
 use futures::future::Shared;
 use std::sync::{Arc, Mutex};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 
 use crate::image::Image;
 
+#[derive(Clone)]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub struct PixelValue {
+    pub x: u32,
+    pub y: u32,
+    pub z: f32,
+    pub amplitude: u16,
+}
+
 /// Result type for pixel reads - must be Clone for Shared futures
-pub type PixelResult = Result<(u32, u32, f32), Arc<anyhow::Error>>;
+pub type PixelResult = Result<PixelValue, Arc<anyhow::Error>>;
 
 pub struct PixelPicker {
     /// Texture that stores picking data (pixel_x, pixel_y) for each fragment
@@ -90,18 +101,20 @@ impl PixelPicker {
     pub fn write_to_channel(
         &self,
         device: Arc<wgpu::Device>,
-        image: Arc<Image<f32>>,
+        surface: Arc<Image<f32>>,
+        amplitude: Arc<Image<u16>>,
         sender: futures::channel::oneshot::Sender<
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
         >,
     ) {
-        sender.send(self.get(device, image)).unwrap();
+        sender.send(self.get(device, surface, amplitude)).unwrap();
     }
 
     pub fn get(
         &self,
         device: Arc<wgpu::Device>,
-        image: Arc<Image<f32>>,
+        surface: Arc<Image<f32>>,
+        amplitude: Arc<Image<u16>>,
     ) -> Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>> {
         let mut pending = self.pending_read.lock().unwrap();
 
@@ -138,8 +151,13 @@ impl PixelPicker {
 
                 // Clear the pending read so next call starts fresh
                 *pending_read.lock().unwrap() = None;
-                let z = image.get_pixel(pixel.0, pixel.1);
-                Ok((pixel.0, pixel.1, z))
+                let z = surface.get_pixel(pixel.0, pixel.1);
+                Ok(PixelValue {
+                    x: pixel.0,
+                    y: pixel.1,
+                    z,
+                    amplitude: amplitude.get_pixel(pixel.0, pixel.1),
+                })
             });
 
         let shared = future.shared();

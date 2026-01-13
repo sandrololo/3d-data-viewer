@@ -1,9 +1,10 @@
 use crate::image::{Image, ImageSize};
+use std::sync::Arc;
 
 pub struct AmplitudeTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
-    image: Option<Image<u16>>,
+    pub image: Option<Arc<Image<u16>>>,
     size: wgpu::Extent3d,
 }
 
@@ -36,11 +37,11 @@ impl AmplitudeTexture {
     }
 
     pub fn set_image(&mut self, image: Image<u16>) {
-        self.image = Some(image);
+        self.image = Some(Arc::new(image));
     }
 
     pub fn write_to_queue(&self, queue: &wgpu::Queue) {
-        if let Some(image) = &self.image {
+        if let Some(image) = &self.image.as_ref() {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: &self.data,

@@ -105,7 +105,7 @@ impl WasmViewer {
         }
     }
 
-    pub async fn get_pixel_value(&self) -> Result<Vec<f32>, wasm_bindgen::JsValue> {
+    pub async fn get_pixel_value(&self) -> Result<PixelValue, wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             let (sender, receiver) = futures::channel::oneshot::channel();
             proxy
@@ -115,7 +115,6 @@ impl WasmViewer {
                 .await
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?
                 .await
-                .map(|(x, y, z)| vec![x as f32, y as f32, z])
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(pixels)
         } else {
@@ -274,7 +273,7 @@ use crate::{
     image::{AmplitudeRangeBuffer, Image, ImageSize, PercentileRangeBuffer},
     index_buffer::{IndexBuffer, IndexBufferBuilder},
     keyboard::Keyboard,
-    pixel_picker::{PixelPicker, PixelResult},
+    pixel_picker::{PixelPicker, PixelResult, PixelValue},
     texture::{Overlay, Texture},
     transformation::Transformation,
     vertex_buffer::VertexBuffer,
@@ -642,17 +641,30 @@ impl State {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Some(texture) = &self.texture {
-                match pollster::block_on(
-                    self.pixel_picker
-                        .get(self.device.clone(), texture.surface.image.clone()),
-                ) {
-                    Ok((x, y, z)) => {
-                        log::info!("Pixel at [{}/{}]={:.3}", x, y, z);
+                if let Some(amplitude) = &texture.amplitude.image {
+                    match pollster::block_on(self.pixel_picker.get(
+                        self.device.clone(),
+                        texture.surface.image.clone(),
+                        amplitude.clone(),
+                    )) {
+                        Ok(pixel_value) => {
+                            log::info!(
+                                "Pixel at [{}/{}]={:.3}, amplitude={}",
+                                pixel_value.x,
+                                pixel_value.y,
+                                pixel_value.z,
+                                pixel_value.amplitude
+                            );
+                        }
+                        Err(e) => {
+                            log::error!("Pixel read failed: {}", e);
+                        }
                     }
-                    Err(e) => {
-                        log::error!("Pixel read failed: {}", e);
-                    }
-                };
+                } else {
+                    log::error!("Amplitude image not initialized");
+                }
+            } else {
+                log::error!("Texture not initialized");
             }
         }
     }
@@ -692,16 +704,29 @@ impl State {
         >,
     ) {
         if let Some(texture) = &self.texture {
-            self.pixel_picker.write_to_channel(
-                self.device.clone(),
-                texture.surface.image.clone(),
-                sender,
-            );
+            if let Some(amplitude) = &texture.amplitude.image {
+                self.pixel_picker.write_to_channel(
+                    self.device.clone(),
+                    texture.surface.image.clone(),
+                    amplitude.clone(),
+                    sender,
+                );
+            } else {
+                let future: std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>> =
+                    Box::pin(async move {
+                        Err::<PixelValue, Arc<anyhow::Error>>(Arc::new(anyhow!(
+                            "Amplitude image not initialized"
+                        )))
+                    });
+                if let Err(_) = sender.send(future.shared()) {
+                    log::error!("Failed to return error message");
+                }
+            }
         } else {
             let future: std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>> =
                 Box::pin(async move {
-                    Err::<(u32, u32, f32), Arc<anyhow::Error>>(Arc::new(anyhow!(
-                        "Surface not initialized"
+                    Err::<PixelValue, Arc<anyhow::Error>>(Arc::new(anyhow!(
+                        "Texture not initialized"
                     )))
                 });
             if let Err(_) = sender.send(future.shared()) {
