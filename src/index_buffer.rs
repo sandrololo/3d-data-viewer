@@ -9,13 +9,20 @@ pub(crate) struct IndexBufferBuilder {
 }
 
 impl IndexBufferBuilder {
-    pub(crate) fn new_triangle_strip(image_size: &ImageSize, mip_levels: u32) -> Self {
+    pub(crate) fn triangle_strip_length(image_size: &ImageSize, mip_level: u32) -> u64 {
+        let width = image_size.width.get() / 2u32.pow(mip_level as u32);
+        let height = image_size.height.get() / 2u32.pow(mip_level as u32);
+        (width * height * 2) as u64
+    }
+
+    pub(crate) fn new_triangle_strip(image_size: &ImageSize, mip_levels: &Vec<u32>) -> Self {
         let mut mip_level_indices: HashMap<u32, Vec<u32>> = HashMap::new();
-        for mip_level in 0..mip_levels {
+        log::info!("Creating index buffer for mip levels: {:?}", mip_levels);
+        for mip_level in mip_levels {
             let triangle_strip = triangle_strip(&ImageSize {
-                width: NonZeroU32::new(image_size.width.get() / 2u32.pow(mip_level as u32))
+                width: NonZeroU32::new(image_size.width.get() / 2u32.pow(*mip_level as u32))
                     .expect("Can't be zero"),
-                height: NonZeroU32::new(image_size.height.get() / 2u32.pow(mip_level as u32))
+                height: NonZeroU32::new(image_size.height.get() / 2u32.pow(*mip_level as u32))
                     .expect("Can't be zero"),
             });
             log::info!(
@@ -24,7 +31,7 @@ impl IndexBufferBuilder {
                 triangle_strip.len()
             );
             log::info!("Number of triangles: {:?}", triangle_strip.len() - 2);
-            mip_level_indices.insert(mip_level, triangle_strip);
+            mip_level_indices.insert(*mip_level, triangle_strip);
         }
         Self { mip_level_indices }
     }
@@ -34,7 +41,7 @@ impl IndexBufferBuilder {
         for (mip_level, indices) in &self.mip_level_indices {
             let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&indices),
+                contents: bytemuck::cast_slice(indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
             mip_level_buffers.insert(*mip_level, buffer);
@@ -60,7 +67,9 @@ impl IndexBuffer {
 }
 
 fn triangle_strip(image_size: &ImageSize) -> Vec<u32> {
-    let mut indices: Vec<u32> = vec![0];
+    let mut indices: Vec<u32> =
+        Vec::with_capacity((image_size.width.get() * image_size.height.get() * 2) as usize);
+    indices.push(0);
     for row in 0..image_size.height.get() - 1 {
         for mut col in 0..(image_size.width.get()) {
             if row % 2 == 0 {

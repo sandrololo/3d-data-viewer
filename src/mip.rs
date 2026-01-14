@@ -1,4 +1,5 @@
 use std::num::NonZeroU32;
+use std::u32;
 
 use wgpu::util::DeviceExt;
 
@@ -7,6 +8,7 @@ use crate::index_buffer::{IndexBuffer, IndexBufferBuilder};
 use crate::vertex_buffer::VertexBuffer;
 
 struct MipData {
+    mip_levels: Vec<u32>,
     index_buffer: IndexBuffer,
     vertex_buffer: VertexBuffer,
     image_size: ImageSize,
@@ -31,16 +33,24 @@ impl Mip {
             mip_buffer,
             image_dims_buffer,
             mip_data: None,
-            current_level: 0,
+            current_level: 2,
         }
     }
 
     pub(crate) fn set_image(&mut self, image_size: &ImageSize, device: &wgpu::Device) {
+        let mip_levels = (0..10u32)
+            .filter(|level| {
+                let num_indices = IndexBufferBuilder::triangle_strip_length(image_size, *level);
+                // A higher number of indices doesn't make sense to render. 2^15 is no problem, therefore no need to go lower.
+                num_indices < 2u32.pow(28) as u64 && num_indices > 2u32.pow(15) as u64
+            })
+            .collect();
         let index_buffer =
-            IndexBufferBuilder::new_triangle_strip(&image_size, 3).create_buffer(&device);
+            IndexBufferBuilder::new_triangle_strip(&image_size, &mip_levels).create_buffer(&device);
         let vertex_buffer = VertexBuffer::new(&image_size, &device);
         let image_size = image_size.clone();
         let mip_data = MipData {
+            mip_levels,
             index_buffer,
             vertex_buffer,
             image_size,
@@ -49,13 +59,16 @@ impl Mip {
     }
 
     pub(crate) fn set_zoom(&mut self, zoom: f32) {
-        self.current_level = if zoom > 0.8 {
-            2u32
-        } else if zoom > 0.2 {
-            1u32
+        if let Some(mip_data) = &self.mip_data {
+            let levels = mip_data.mip_levels.clone();
+            let index = ((zoom * 1.2 * levels.len() as f32) as usize)
+                .min(levels.len() - 1)
+                .max(0);
+            self.current_level = levels[index];
         } else {
-            0u32
-        };
+            self.current_level = 2;
+        }
+        log::info!("Set MIP level to: {}", self.current_level);
     }
 
     pub(crate) fn update_gpu(&self, renderpass: &mut wgpu::RenderPass, queue: &wgpu::Queue) {

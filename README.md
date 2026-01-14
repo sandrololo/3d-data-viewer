@@ -11,4 +11,6 @@
 ✅  Add rendering of AOI's\
 ✅  Fix errors in the surface\
 ✅  Different vertex/index buffer per MIP level\
-⬜  MIP level should not only depend on zoom level but also image size\
+✅  MIP level should not only depend on zoom level but also image size\
+✅  Don't create high resolution index buffer for large images that would create overflow \
+⬜  Method to clear view
