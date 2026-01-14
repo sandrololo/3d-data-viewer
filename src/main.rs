@@ -2,10 +2,9 @@ use anyhow::anyhow;
 use futures::{FutureExt, future::Shared};
 use glam::{Vec2, Vec3};
 use log::error;
-use std::{borrow::Cow, num::NonZeroU32, sync::Arc, vec};
+use std::{borrow::Cow, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -16,10 +15,11 @@ use winit::{
 #[non_exhaustive]
 #[allow(dead_code)]
 enum ViewerCommand {
+    ResetView,
     SetSurface(Image<f32>),
     SetAmplitude(Image<u16>),
     SetState(State),
-    BackToOrigin,
+    ResetOrientation,
     SetAmplitudeShader,
     SetHeightShader,
     SetOverlays(Arc<Vec<Overlay>>),
@@ -73,6 +73,19 @@ impl WasmViewer {
                 .unwrap_throw();
         });
         Ok(())
+    }
+
+    pub async fn reset_view(&self) -> Result<(), wasm_bindgen::JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(ViewerCommand::ResetView)
+                .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
+            Ok(())
+        } else {
+            Err(wasm_bindgen::JsValue::from_str(
+                "Event loop proxy not initialized",
+            ))
+        }
     }
 
     pub async fn set_surface(&self, data: Vec<u8>) -> Result<(), wasm_bindgen::JsValue> {
@@ -200,10 +213,10 @@ impl WasmViewer {
         }
     }
 
-    pub fn reset_view(&self) -> Result<(), wasm_bindgen::JsValue> {
+    pub fn reset_orientation(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::BackToOrigin)
+                .send_event(ViewerCommand::ResetOrientation)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -639,6 +652,14 @@ impl State {
         }
     }
 
+    fn reset_view(&mut self) {
+        self.projection.reset();
+        self.transformation.reset();
+        self.mouse.reset_zoom();
+        self.texture = None;
+        self.mip.reset();
+    }
+
     fn set_surface(&mut self, data: Image<f32>) {
         log::info!("Setting new surface image");
         self.percentile_range_buffer
@@ -725,7 +746,7 @@ impl State {
         }
     }
 
-    fn reset_view(&mut self) {
+    fn reset_orientation(&mut self) {
         self.projection.reset();
         self.transformation.reset();
         self.mouse.reset_zoom();
@@ -927,6 +948,11 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
     #[allow(unused_mut)]
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: ViewerCommand) {
         match event {
+            ViewerCommand::ResetView => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.reset_view();
+                }
+            }
             ViewerCommand::GetPixel(sender) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.get_pixel_value(sender);
@@ -952,9 +978,9 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                     app_state.clear_overlays();
                 }
             }
-            ViewerCommand::BackToOrigin => {
+            ViewerCommand::ResetOrientation => {
                 if let Some(app_state) = self.state.as_mut() {
-                    app_state.reset_view();
+                    app_state.reset_orientation();
                 }
             }
             ViewerCommand::SetSurface(data) => {

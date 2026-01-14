@@ -37,6 +37,11 @@ impl Mip {
         }
     }
 
+    pub(crate) fn reset(&mut self) {
+        self.mip_data = None;
+        self.current_level = 2;
+    }
+
     pub(crate) fn set_image(&mut self, image_size: &ImageSize, device: &wgpu::Device) {
         let mip_levels = (0..10u32)
             .filter(|level| {
