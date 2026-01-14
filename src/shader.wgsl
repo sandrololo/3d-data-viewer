@@ -67,7 +67,7 @@ struct FragmentOutput {
 
 @vertex
 fn vs_main(data: VertexInput) -> VertexOutput {
-    let resize = max(mip_level * 2u, 1u);
+    let resize = u32(exp2(f32(mip_level)));
     let col = data.index % image_dims.width;
     let row = data.index / image_dims.width;
     // Map grid coordinates to NDC consistently across the full width/height
