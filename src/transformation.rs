@@ -50,10 +50,12 @@ impl Transformation {
     }
 
     pub fn rotate(&mut self, new_position: Vec3) {
-        let rot_axis = self.initial_position.cross(new_position);
-        let axis_len = rot_axis.length();
-        let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
-        self.current = rot * self.initial;
+        if self.initial_position != new_position {
+            let rot_axis = self.initial_position.cross(new_position);
+            let axis_len = rot_axis.length();
+            let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
+            self.current = rot * self.initial;
+        }
     }
 
     pub(crate) fn create_bind_group(&mut self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
