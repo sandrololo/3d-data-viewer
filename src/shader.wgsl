@@ -54,7 +54,8 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) @interpolate(flat) pixel: vec2<u32>,
     @location(1) z_value: f32,
-    @location(2) @interpolate(flat) resize: u32,
+    @location(2) @interpolate(linear) light_intensity: f32,
+    @location(3) @interpolate(flat) resize: u32,
 }
 
 // Fragment output with two render targets:
@@ -75,6 +76,18 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
     let z_value = textureLoad(surface_texture, vec2<u32>(col, row) * resize, 0);
     let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
+
+    let light = normalize(vec3(-1.0, 1.0, 1.0));
+    let z_up = textureLoad(surface_texture, vec2<u32>(col, max(row, 1u) - 1u) * resize, 0).x;
+    let z_down = textureLoad(surface_texture, vec2<u32>(col, min(row + 1u, image_dims.height - 1u)) * resize, 0).x;
+    let z_left = textureLoad(surface_texture, vec2<u32>(max(col, 1u) - 1u, row) * resize, 0).x;
+    let z_right = textureLoad(surface_texture, vec2<u32>(min(col + 1u, image_dims.width - 1u), row) * resize, 0).x;
+
+    let tangent_x = normalize(vec3(2.0, 0.0, (z_right - z_left) * (z_range.max - z_range.min)));
+    let tangent_y = normalize(vec3(0.0, 2.0, (z_down - z_up) * (z_range.max - z_range.min)));
+    let normal = normalize(cross(tangent_y, tangent_x));
+
+
     let z = 1.0 - (z_clamped - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
 
@@ -98,6 +111,7 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     out.position = projected_position;
     out.pixel = vec2<u32>(col, row);
     out.z_value = z_clamped;
+    out.light_intensity = max(dot(light, normal), 0.5);
     out.resize = resize;
 
     return out;
@@ -110,7 +124,7 @@ fn fs_amplitude(in: VertexOutput) -> FragmentOutput {
     let red = 1.0 - f32(sampled.r - amplitude_range.start) / range;
     let green = f32(sampled.r - amplitude_range.start) / range;
     var out: FragmentOutput;
-    out.color = vec4<f32>(red, green, 0.0, 1.0);
+    out.color = vec4<f32>(red, green, 0.0, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
@@ -134,7 +148,7 @@ fn fs_height(in: VertexOutput) -> FragmentOutput {
     }
     
     var out: FragmentOutput;
-    out.color = color;
+    out.color = color * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
