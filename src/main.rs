@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use futures::{FutureExt, future::Shared};
 use glam::{Vec2, Vec3};
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
@@ -12,33 +11,10 @@ use winit::{
     window::{Window, WindowId},
 };
 
-#[non_exhaustive]
-#[allow(dead_code)]
-enum ViewerCommand {
-    ResetView,
-    SetSurface(Image<f32>),
-    SetAmplitude(Image<u16>),
-    SetState(State),
-    ResetOrientation,
-    SetAmplitudeShader,
-    SetHeightShader,
-    SetOverlays(Arc<Vec<Overlay>>),
-    ClearOverlays,
-    GetPixel(
-        futures::channel::oneshot::Sender<
-            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
-        >,
-    ),
-    ZoomIn,
-    ZoomOut,
-    SetPercentile(f32),
-    SetAmplitudeRange(u16, u16),
-}
-
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub struct WasmViewer {
-    proxy: Option<winit::event_loop::EventLoopProxy<ViewerCommand>>,
+    proxy: Option<winit::event_loop::EventLoopProxy<UserEvent>>,
     canvas_id: String,
 }
 
@@ -78,7 +54,7 @@ impl WasmViewer {
     pub async fn reset_view(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::ResetView)
+                .send_event(UserEvent::ResetView)
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
@@ -93,7 +69,7 @@ impl WasmViewer {
             let image = Image::<f32>::try_from(data)
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             proxy
-                .send_event(ViewerCommand::SetSurface(image))
+                .send_event(UserEvent::SetSurface(image))
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
@@ -108,7 +84,7 @@ impl WasmViewer {
             let image = Image::<u16>::try_from(data)
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             proxy
-                .send_event(ViewerCommand::SetAmplitude(image))
+                .send_event(UserEvent::SetAmplitude(image))
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
@@ -122,7 +98,7 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             let (sender, receiver) = futures::channel::oneshot::channel();
             proxy
-                .send_event(ViewerCommand::GetPixel(sender))
+                .send_event(UserEvent::GetPixel(sender))
                 .map_err(|e| wasm_bindgen::JsValue::from_str(&format!("Error: {}", e)))?;
             let pixels = receiver
                 .await
@@ -138,7 +114,7 @@ impl WasmViewer {
     pub fn set_height_shader(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::SetHeightShader)
+                .send_event(UserEvent::SetHeightShader)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -151,7 +127,7 @@ impl WasmViewer {
     pub fn set_amplitude_shader(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::SetAmplitudeShader)
+                .send_event(UserEvent::SetAmplitudeShader)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -164,7 +140,7 @@ impl WasmViewer {
     pub fn set_overlays(&self, overlays: Vec<Overlay>) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::SetOverlays(Arc::new(overlays)))
+                .send_event(UserEvent::SetOverlays(Arc::new(overlays)))
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -177,7 +153,7 @@ impl WasmViewer {
     pub fn clear_overlays(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::ClearOverlays)
+                .send_event(UserEvent::ClearOverlays)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -190,7 +166,7 @@ impl WasmViewer {
     pub fn zoom_in(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::ZoomIn)
+                .send_event(UserEvent::ZoomIn)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -203,7 +179,7 @@ impl WasmViewer {
     pub fn zoom_out(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::ZoomOut)
+                .send_event(UserEvent::ZoomOut)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -216,7 +192,7 @@ impl WasmViewer {
     pub fn reset_orientation(&self) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::ResetOrientation)
+                .send_event(UserEvent::ResetOrientation)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -229,7 +205,7 @@ impl WasmViewer {
     pub fn set_percentile(&self, percentile: f32) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::SetPercentile(percentile))
+                .send_event(UserEvent::SetPercentile(percentile))
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -242,7 +218,7 @@ impl WasmViewer {
     pub fn set_amplitude_range(&self, start: u16, end: u16) -> Result<(), wasm_bindgen::JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(ViewerCommand::SetAmplitudeRange(start, end))
+                .send_event(UserEvent::SetAmplitudeRange(start, end))
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -278,6 +254,7 @@ mod pixel_picker;
 mod projection;
 mod texture;
 mod transformation;
+mod user_events;
 mod vertex_buffer;
 use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
@@ -290,6 +267,7 @@ use crate::{
     pixel_picker::{PixelPicker, PixelResult, PixelValue},
     texture::{Overlay, Texture},
     transformation::Transformation,
+    user_events::{UserEvent, UserEventHandler},
     vertex_buffer::VertexBuffer,
 };
 
@@ -537,12 +515,6 @@ impl State {
         self.depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 
-    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.configure_surface();
-        // Resize the picking texture to match the new window size
-        self.pixel_picker.resize(&self.device, new_size);
-    }
-
     fn render(&mut self) {
         // Create texture view
         let surface_texture = self
@@ -651,144 +623,19 @@ impl State {
             }
         }
     }
-
-    fn reset_view(&mut self) {
-        self.projection.reset();
-        self.transformation.reset();
-        self.mouse.reset_zoom();
-        self.texture = None;
-        self.mip.reset();
-    }
-
-    fn set_surface(&mut self, data: Image<f32>) {
-        log::info!("Setting new surface image");
-        self.percentile_range_buffer
-            .update_data(&self.queue, &data.data);
-
-        self.mip.set_image(&data.size, &self.device);
-
-        let texture = Texture::new(&self.device, data, &self.texture_bind_group_layout);
-        texture.surface.write_to_queue(&self.queue);
-        self.texture = Some(texture);
-    }
-
-    fn set_amplitude(&mut self, data: Image<u16>) {
-        log::info!("Setting new amplitude image");
-        if let Some(texture) = &mut self.texture {
-            texture.amplitude.set_image(data);
-            texture.amplitude.write_to_queue(&self.queue);
-        } else {
-            log::warn!("Can't set amplitude image, texture not initialized");
-        }
-    }
-
-    fn get_pixel_value(
-        &mut self,
-        sender: futures::channel::oneshot::Sender<
-            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
-        >,
-    ) {
-        if let Some(texture) = &self.texture {
-            if let Some(amplitude) = &texture.amplitude.image {
-                self.pixel_picker.write_to_channel(
-                    self.device.clone(),
-                    texture.surface.image.clone(),
-                    amplitude.clone(),
-                    sender,
-                );
-            } else {
-                let future: std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>> =
-                    Box::pin(async move {
-                        Err::<PixelValue, Arc<anyhow::Error>>(Arc::new(anyhow!(
-                            "Amplitude image not initialized"
-                        )))
-                    });
-                if let Err(_) = sender.send(future.shared()) {
-                    log::error!("Failed to return error message");
-                }
-            }
-        } else {
-            let future: std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>> =
-                Box::pin(async move {
-                    Err::<PixelValue, Arc<anyhow::Error>>(Arc::new(anyhow!(
-                        "Texture not initialized"
-                    )))
-                });
-            if let Err(_) = sender.send(future.shared()) {
-                log::error!("Failed to return error message");
-            }
-        }
-    }
-
-    fn set_amplitude_shader(&mut self) {
-        log::info!("Setting amplitude shader");
-        self.use_height_shader = false;
-    }
-
-    fn set_height_shader(&mut self) {
-        log::info!("Setting height shader");
-        self.use_height_shader = true;
-    }
-
-    fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
-        log::info!("Setting overlays");
-        if let Some(texture) = &mut self.texture {
-            texture.overlay.set_overlays(overlays);
-            texture.overlay.write_to_queue(&self.queue);
-        }
-    }
-
-    fn clear_overlays(&mut self) {
-        log::info!("Clearing overlays");
-        if let Some(texture) = &mut self.texture {
-            texture.overlay.set_overlays(Arc::new(Vec::new()));
-            texture.overlay.write_to_queue(&self.queue);
-        }
-    }
-
-    fn reset_orientation(&mut self) {
-        self.projection.reset();
-        self.transformation.reset();
-        self.mouse.reset_zoom();
-    }
-
-    fn zoom_in(&mut self) {
-        self.mouse.zoom_in();
-        self.projection.zoom(self.mouse.get_zoom());
-        self.mip.set_zoom(self.mouse.get_zoom());
-    }
-
-    fn zoom_out(&mut self) {
-        self.mouse.zoom_out();
-        self.projection.zoom(self.mouse.get_zoom());
-        self.mip.set_zoom(self.mouse.get_zoom());
-    }
-
-    fn set_percentile(&mut self, percentile: f32) {
-        let surface = self
-            .texture
-            .as_ref()
-            .and_then(|texture| Some(&texture.surface.image.data));
-        self.percentile_range_buffer
-            .update_percentile(&self.queue, percentile, surface);
-    }
-
-    fn set_amplitude_range(&mut self, start: u16, end: u16) {
-        self.amplitude_range_buffer.update(&self.queue, start, end);
-    }
 }
 
 struct ImageViewer3D {
     state: Option<State>,
     #[cfg(target_arch = "wasm32")]
-    proxy: Option<winit::event_loop::EventLoopProxy<ViewerCommand>>,
+    proxy: Option<winit::event_loop::EventLoopProxy<UserEvent>>,
     #[cfg(target_arch = "wasm32")]
     canvas_id: String,
 }
 
 impl ImageViewer3D {
     pub fn new(
-        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<ViewerCommand>,
+        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<UserEvent>,
         #[cfg(target_arch = "wasm32")] canvas_id: String,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
@@ -803,7 +650,7 @@ impl ImageViewer3D {
     }
 }
 
-impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
+impl ApplicationHandler<UserEvent> for ImageViewer3D {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
@@ -837,7 +684,7 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                 wasm_bindgen_futures::spawn_local(async move {
                     assert!(
                         proxy
-                            .send_event(ViewerCommand::SetState(State::new(window).await))
+                            .send_event(UserEvent::SetState(State::new(window).await))
                             .is_ok()
                     )
                 });
@@ -939,76 +786,76 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
     }
 
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: ViewerCommand) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: UserEvent) {
         match event {
-            ViewerCommand::ResetView => {
+            UserEvent::ResetView => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.reset_view();
                 }
             }
-            ViewerCommand::GetPixel(sender) => {
+            UserEvent::GetPixel(sender) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.get_pixel_value(sender);
                 }
             }
-            ViewerCommand::SetAmplitudeShader => {
+            UserEvent::SetAmplitudeShader => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_amplitude_shader();
                 }
             }
-            ViewerCommand::SetHeightShader => {
+            UserEvent::SetHeightShader => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_height_shader();
                 }
             }
-            ViewerCommand::SetOverlays(overlays) => {
+            UserEvent::SetOverlays(overlays) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_overlays(overlays.clone());
                 }
             }
-            ViewerCommand::ClearOverlays => {
+            UserEvent::ClearOverlays => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.clear_overlays();
                 }
             }
-            ViewerCommand::ResetOrientation => {
+            UserEvent::ResetOrientation => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.reset_orientation();
                 }
             }
-            ViewerCommand::SetSurface(data) => {
+            UserEvent::SetSurface(data) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_surface(data);
                 } else {
                     log::warn!("State is None, cannot set surface");
                 }
             }
-            ViewerCommand::SetAmplitude(data) => {
+            UserEvent::SetAmplitude(data) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_amplitude(data);
                 }
             }
-            ViewerCommand::ZoomIn => {
+            UserEvent::ZoomIn => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.zoom_in();
                 }
             }
-            ViewerCommand::ZoomOut => {
+            UserEvent::ZoomOut => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.zoom_out();
                 }
             }
-            ViewerCommand::SetPercentile(percentile) => {
+            UserEvent::SetPercentile(percentile) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_percentile(percentile);
                 }
             }
-            ViewerCommand::SetAmplitudeRange(start, end) => {
+            UserEvent::SetAmplitudeRange(start, end) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.set_amplitude_range(start, end);
                 }
             }
-            ViewerCommand::SetState(mut state) => {
+            UserEvent::SetState(mut state) => {
                 #[cfg(target_arch = "wasm32")]
                 {
                     // Resize first while we still own the event
@@ -1053,7 +900,7 @@ pub fn run() -> anyhow::Result<()> {
     let event_loop = EventLoop::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
     proxy
-        .send_event(ViewerCommand::SetSurface(image.surface))
+        .send_event(UserEvent::SetSurface(image.surface))
         .map_err(|e| anyhow!("Error: {}", e))
         .unwrap();
 
