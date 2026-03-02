@@ -1,19 +1,18 @@
+use imbuf::Image;
 use std::sync::Arc;
-
-use crate::image::Image;
 
 pub struct SurfaceTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub image: Arc<Image<f32>>,
+    pub image: Arc<Image<f32, 1>>,
     size: wgpu::Extent3d,
 }
 
 impl SurfaceTexture {
-    pub fn new(image: Arc<Image<f32>>, device: &wgpu::Device) -> Self {
+    pub fn new(image: Arc<Image<f32, 1>>, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
-            width: image.size.width.get(),
-            height: image.size.height.get(),
+            width: image.width().get(),
+            height: image.height().get(),
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -45,11 +44,11 @@ impl SurfaceTexture {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            bytemuck::cast_slice(&self.image.data),
+            bytemuck::cast_slice(&self.image.buffer()),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * self.image.size.width.get()),
-                rows_per_image: Some(self.image.size.height.get()),
+                bytes_per_row: Some(4 * self.image.width().get()),
+                rows_per_image: Some(self.image.height().get()),
             },
             self.size,
         );

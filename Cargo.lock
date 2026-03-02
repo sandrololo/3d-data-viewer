@@ -484,6 +484,7 @@ dependencies = [
  "env_logger",
  "futures",
  "glam",
+ "imbuf",
  "log",
  "num-traits",
  "pollster",
@@ -1204,6 +1205,15 @@ checksum = "3acae9609540aa318d1bc588455225fb2085b9ed0c4f6bd0d9d5bcd86f1a0344"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "imbuf"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b05a56bb701ac84a2cad0bdb8d04b656590bf32744d3433ca3f90efed81345"
+dependencies = [
+ "thiserror 2.0.16",
 ]
 
 [[package]]

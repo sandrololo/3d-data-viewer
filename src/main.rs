@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use glam::{Vec2, Vec3};
+use imbuf::Image;
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
@@ -40,12 +41,11 @@ mod user_events;
 mod vertex_buffer;
 #[cfg(target_arch = "wasm32")]
 mod wasm_viewer;
-use image::SurfaceAmplitudeImage;
 use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{AmplitudeRangeBuffer, Image, ImageSize, PercentileRangeBuffer},
+    image::{AmplitudeRangeBuffer, ImageSize, PercentileRangeBuffer},
     keyboard::Keyboard,
     mip::Mip,
     pixel_picker::{PixelPicker, PixelResult, PixelValue},
@@ -664,6 +664,8 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> anyhow::Result<()> {
+    use crate::image::SurfaceAmplitudeImage;
+
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_secs()
         .init();

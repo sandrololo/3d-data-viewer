@@ -1,10 +1,11 @@
-use crate::image::{Image, ImageSize};
+use crate::image::ImageSize;
+use imbuf::Image;
 use std::sync::Arc;
 
 pub struct AmplitudeTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub image: Option<Arc<Image<u16>>>,
+    pub image: Option<Arc<Image<u16, 1>>>,
     size: wgpu::Extent3d,
 }
 
@@ -36,7 +37,7 @@ impl AmplitudeTexture {
         }
     }
 
-    pub fn set_image(&mut self, image: Image<u16>) {
+    pub fn set_image(&mut self, image: Image<u16, 1>) {
         self.image = Some(Arc::new(image));
     }
 
@@ -49,11 +50,11 @@ impl AmplitudeTexture {
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
-                bytemuck::cast_slice(&image.data),
+                bytemuck::cast_slice(&image.buffer()),
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(2 * image.size.width.get()),
-                    rows_per_image: Some(image.size.height.get()),
+                    bytes_per_row: Some(2 * image.width().get()),
+                    rows_per_image: Some(image.height().get()),
                 },
                 self.size,
             );

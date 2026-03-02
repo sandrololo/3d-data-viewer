@@ -1,6 +1,6 @@
+use imbuf::Image;
 use std::sync::Arc;
 
-use crate::image::Image;
 pub use crate::texture::{amplitude::*, overlay::*, surface::*};
 
 mod amplitude;
@@ -17,11 +17,11 @@ pub(crate) struct Texture {
 impl Texture {
     pub(crate) fn new(
         device: &wgpu::Device,
-        surface: Image<f32>,
+        surface: Image<f32, 1>,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let overlay_texture = OverlayTexture::new(&surface.size, &device);
-        let amplitude_texture = AmplitudeTexture::new(&surface.size, &device);
+        let overlay_texture = OverlayTexture::new(&surface.dimensions().into(), &device);
+        let amplitude_texture = AmplitudeTexture::new(&surface.dimensions().into(), &device);
         let surface_texture = SurfaceTexture::new(Arc::new(surface), &device);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture_bind_group"),

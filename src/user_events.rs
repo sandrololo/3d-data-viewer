@@ -1,10 +1,10 @@
 use anyhow::anyhow;
 use futures::{FutureExt, future::Shared};
+use imbuf::Image;
 use std::sync::Arc;
 
 use crate::{
     State,
-    image::Image,
     pixel_picker::{PixelResult, PixelValue},
     texture::{Overlay, Texture},
 };
@@ -13,8 +13,8 @@ use crate::{
 #[allow(dead_code)]
 pub(crate) enum UserEvent {
     ResetView,
-    SetSurface(Image<f32>),
-    SetAmplitude(Image<u16>),
+    SetSurface(Image<f32, 1>),
+    SetAmplitude(Image<u16, 1>),
     SetState(State),
     ResetOrientation,
     SetAmplitudeShader,
@@ -35,8 +35,8 @@ pub(crate) enum UserEvent {
 pub(crate) trait UserEventHandler {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>);
     fn reset_view(&mut self);
-    fn set_surface(&mut self, data: Image<f32>);
-    fn set_amplitude(&mut self, data: Image<u16>);
+    fn set_surface(&mut self, data: Image<f32, 1>);
+    fn set_amplitude(&mut self, data: Image<u16, 1>);
     fn get_pixel_value(
         &mut self,
         sender: futures::channel::oneshot::Sender<
@@ -69,19 +69,19 @@ impl UserEventHandler for State {
         self.mip.reset();
     }
 
-    fn set_surface(&mut self, data: Image<f32>) {
+    fn set_surface(&mut self, data: Image<f32, 1>) {
         log::info!("Setting new surface image");
         self.percentile_range_buffer
-            .update_data(&self.queue, &data.data);
+            .update_data(&self.queue, data.buffer());
 
-        self.mip.set_image(&data.size, &self.device);
+        self.mip.set_image(&data.dimensions().into(), &self.device);
 
         let texture = Texture::new(&self.device, data, &self.texture_bind_group_layout);
         texture.surface.write_to_queue(&self.queue);
         self.texture = Some(texture);
     }
 
-    fn set_amplitude(&mut self, data: Image<u16>) {
+    fn set_amplitude(&mut self, data: Image<u16, 1>) {
         log::info!("Setting new amplitude image");
         if let Some(texture) = &mut self.texture {
             texture.amplitude.set_image(data);
@@ -177,7 +177,7 @@ impl UserEventHandler for State {
         let surface = self
             .texture
             .as_ref()
-            .and_then(|texture| Some(&texture.surface.image.data));
+            .and_then(|texture| Some(texture.surface.image.buffer()));
         self.percentile_range_buffer
             .update_percentile(&self.queue, percentile, surface);
     }

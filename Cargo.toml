@@ -17,6 +17,7 @@ reqwest = "0.12.26"
 tiff = "0.10.3"
 wgpu = "26.0.1"
 winit = "0.30.12"
+imbuf = "0.3.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"

@@ -1,11 +1,10 @@
 use futures::FutureExt;
 use futures::future::Shared;
+use imbuf::Image;
 use std::sync::{Arc, Mutex};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
-
-use crate::image::Image;
 
 #[derive(Clone)]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -101,8 +100,8 @@ impl PixelPicker {
     pub fn write_to_channel(
         &self,
         device: Arc<wgpu::Device>,
-        surface: Arc<Image<f32>>,
-        amplitude: Arc<Image<u16>>,
+        surface: Arc<Image<f32, 1>>,
+        amplitude: Arc<Image<u16, 1>>,
         sender: futures::channel::oneshot::Sender<
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
         >,
@@ -113,8 +112,8 @@ impl PixelPicker {
     pub fn get(
         &self,
         device: Arc<wgpu::Device>,
-        surface: Arc<Image<f32>>,
-        amplitude: Arc<Image<u16>>,
+        surface: Arc<Image<f32, 1>>,
+        amplitude: Arc<Image<u16, 1>>,
     ) -> Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>> {
         let mut pending = self.pending_read.lock().unwrap();
 
@@ -151,12 +150,13 @@ impl PixelPicker {
 
                 // Clear the pending read so next call starts fresh
                 *pending_read.lock().unwrap() = None;
-                let z = surface.get_pixel(pixel.0, pixel.1);
+                let z = surface.buffer()[(pixel.0 + surface.width().get() * pixel.1) as usize];
                 Ok(PixelValue {
                     x: pixel.0,
                     y: pixel.1,
                     z,
-                    amplitude: amplitude.get_pixel(pixel.0, pixel.1),
+                    amplitude: amplitude.buffer()
+                        [(pixel.0 + surface.width().get() * pixel.1) as usize],
                 })
             });
 

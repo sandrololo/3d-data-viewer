@@ -22,7 +22,7 @@ impl PercentileRangeBuffer {
         &mut self,
         queue: &wgpu::Queue,
         percentile: f32,
-        data: Option<&Vec<f32>>,
+        data: Option<&[f32]>,
     ) {
         assert!(percentile >= 0.5, "Percentile must be greater than 0.5");
         assert!(percentile < 1.0, "Percentile must be less than 1.0");
@@ -33,7 +33,7 @@ impl PercentileRangeBuffer {
         }
     }
 
-    pub fn update_data(&self, queue: &wgpu::Queue, data: &Vec<f32>) {
+    pub fn update_data(&self, queue: &wgpu::Queue, data: &[f32]) {
         let mut vec = data.to_vec();
         let (_, lower, _) = vec.select_nth_unstable_by(
             (data.len() as f32 * (1. - self.percentile)) as usize,
