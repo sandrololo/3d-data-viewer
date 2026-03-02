@@ -330,16 +330,7 @@ impl State {
                     ImageSize::get_bind_group_layout_entry(),
                     PercentileRangeBuffer::get_bind_group_layout_entry(),
                     AmplitudeRangeBuffer::get_bind_group_layout_entry(),
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
+                    Mip::get_bind_group_layout_entry(),
                 ],
             });
 
@@ -358,10 +349,7 @@ impl State {
                 ImageSize::get_bind_group_entry(&mip.image_dims_buffer),
                 percentile_range_buffer.get_bind_group_entry(),
                 amplitude_range_buffer.get_bind_group_entry(),
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: mip.mip_buffer.as_entire_binding(),
-                },
+                mip.get_bind_group_entry(),
             ],
         });
 

@@ -101,4 +101,24 @@ impl Mip {
             .write_buffer(queue, &self.image_dims_buffer);
         }
     }
+
+    pub fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
+        wgpu::BindGroupEntry {
+            binding: 3,
+            resource: self.mip_buffer.as_entire_binding(),
+        }
+    }
+
+    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding: 3,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }
+    }
 }
