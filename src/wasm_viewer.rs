@@ -15,10 +15,6 @@ mod wasm_commands {
         /// Reference to the window for requesting redraws
         pub static WINDOW: RefCell<Option<Arc<Window>>> = RefCell::new(None);
     }
-
-    pub fn set_window(window: Arc<Window>) {
-        WINDOW.with(|w| *w.borrow_mut() = Some(window));
-    }
 }
 
 #[wasm_bindgen]

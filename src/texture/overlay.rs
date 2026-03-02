@@ -47,7 +47,7 @@ impl OverlayColor {
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub(crate) struct Overlay {
+pub struct Overlay {
     pixelrange: Vec<WasmBindgenPixelRange>,
     color: OverlayColor,
 }

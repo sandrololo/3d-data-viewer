@@ -1,5 +1,4 @@
 pub(crate) use crate::image::{amplitude_range::*, percentile_range::*};
-use anyhow::anyhow;
 use imbuf::Image;
 use std::num::NonZeroU32;
 
@@ -16,6 +15,7 @@ impl SurfaceAmplitudeImage {
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
         use std::fs::File;
 
+        use anyhow::anyhow;
         use log::info;
         use tiff::decoder::{Decoder, DecodingResult, Limits};
 

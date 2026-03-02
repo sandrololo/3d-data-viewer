@@ -1,6 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
 use anyhow::anyhow;
 use glam::{Vec2, Vec3};
-use imbuf::Image;
 use log::error;
 use std::{borrow::Cow, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
@@ -48,8 +48,8 @@ use crate::{
     image::{AmplitudeRangeBuffer, ImageSize, PercentileRangeBuffer},
     keyboard::Keyboard,
     mip::Mip,
-    pixel_picker::{PixelPicker, PixelResult, PixelValue},
-    texture::{Overlay, Texture},
+    pixel_picker::PixelPicker,
+    texture::Texture,
     transformation::Transformation,
     user_events::{UserEvent, UserEventHandler},
     vertex_buffer::VertexBuffer,
