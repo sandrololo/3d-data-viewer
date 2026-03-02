@@ -14,4 +14,4 @@
 ✅  MIP level should not only depend on zoom level but also image size\
 ✅  Don't create high resolution index buffer for large images that would create overflow \
 ✅  Method to clear view \
-⬜  Fix bug that object disapears when clicked on
+✅  Fix bug that object disapears when clicked on

@@ -932,13 +932,6 @@ impl ApplicationHandler<ViewerCommand> for ImageViewer3D {
                     is_synthetic: _,
                 } => {
                     app_state.keyboard.register_event(event.clone());
-                    if let winit::keyboard::Key::Character(ref c) = event.logical_key {
-                        // Toggle shader with 'S' key
-                        if c.as_str() == "s" && event.state == winit::event::ElementState::Pressed {
-                            app_state.use_height_shader = !app_state.use_height_shader;
-                            app_state.get_window().request_redraw();
-                        }
-                    }
                 }
                 _ => (),
             }
