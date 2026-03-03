@@ -26,3 +26,5 @@ target
 /target
 **/assets/wasm/**
 dist/**
+build/
+node_modules/

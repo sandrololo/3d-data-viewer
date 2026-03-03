@@ -2,10 +2,13 @@
     "name": "3d-data-viewer-wasm-demo",
     "version": "0.1.0",
     "description": "WebAssembly demo for the 3D Data Viewer - visualize surface data using Rust + WebGPU",
+    "homepage": "https://sandrololo.github.io/3d-data-viewer",
     "type": "module",
     "scripts": {
         "serve": "node serve.js",
-        "start": "node serve.js 8080"
+        "start": "node serve.js 8080",
+        "predeploy": "rm -rf build && mkdir -p build && cp -R index.html src build/",
+        "deploy": "gh-pages -d build"
     },
     "keywords": [
         "wasm",
@@ -15,6 +18,9 @@
         "visualization",
         "rust"
     ],
-    "author": "",
-    "license": "MIT"
+    "author": "sandrololo",
+    "license": "MIT",
+    "devDependencies": {
+        "gh-pages": "0.12.0"
+    }
 }
