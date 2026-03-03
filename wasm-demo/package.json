@@ -19,7 +19,7 @@
         "rust"
     ],
     "author": "sandrololo",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "devDependencies": {
         "gh-pages": "0.12.0"
     }
