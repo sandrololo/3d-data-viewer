@@ -38,6 +38,9 @@ let isHeightMode = true;
 let isOverlayVisible = false;
 let isPollingEnabled = false;
 let isPolling = false;
+let overlayDefinitions = null;
+
+const OVERLAY_DATA_PATH = './src/assets/data/overlay.json';
 
 /**
  * Check if WebGPU is available
@@ -295,9 +298,15 @@ function setupControls() {
         }
     };
 
-    const setOverlay = () => {
+    const setOverlay = async () => {
         if (wasmViewer) {
-            wasmViewer.set_overlays(example_overlays());
+            const overlays = await example_overlays();
+            if (overlays.length === 0) {
+                console.warn('No overlays loaded from overlay.json');
+                return;
+            }
+
+            wasmViewer.set_overlays(overlays);
             isOverlayVisible = true;
         }
     };
@@ -309,7 +318,7 @@ function setupControls() {
         }
     };
 
-    const toggleOverlay = () => {
+    const toggleOverlay = async () => {
         if (!wasmViewer) {
             return;
         }
@@ -317,7 +326,7 @@ function setupControls() {
         if (isOverlayVisible) {
             clearOverlay();
         } else {
-            setOverlay();
+            await setOverlay();
         }
     };
 
@@ -351,7 +360,7 @@ function setupControls() {
 
     // Set overlay - call viewer method directly
     btnSetOverlay.addEventListener('click', () => {
-        setOverlay();
+        void setOverlay();
     });
 
     // Clear overlay - call viewer method directly
@@ -382,7 +391,7 @@ function setupControls() {
             toggleShader();
         } else if (key === 't') {
             event.preventDefault();
-            toggleOverlay();
+            void toggleOverlay();
         } else if (key === 'r') {
             event.preventDefault();
             resetView();
@@ -613,13 +622,63 @@ main().catch(e => {
     showError(`An unexpected error occurred: ${e.message}`);
 });
 
-function example_overlays() {
-    let pixel_ranges = [
-        WasmBindgenPixelRange.new(0, 100),
-        WasmBindgenPixelRange.new(512, 612),
-    ]
-    let color = OverlayColor.new(255, 0, 0, 255)
-    return [
-        Overlay.new(pixel_ranges, color),
-    ]
+async function loadOverlayDefinitions() {
+    if (overlayDefinitions) {
+        return overlayDefinitions;
+    }
+
+    try {
+        const response = await fetch(OVERLAY_DATA_PATH);
+        if (!response.ok) {
+            throw new Error(`Failed to load overlay data: ${response.status} ${response.statusText}`);
+        }
+
+        const parsed = await response.json();
+        overlayDefinitions = parsed;
+        return overlayDefinitions;
+    } catch (error) {
+        console.error('Failed to load overlay definitions:', error);
+        return null;
+    }
+}
+
+function buildOverlay(ranges, colorRgba) {
+    if (!Array.isArray(ranges) || ranges.length === 0) {
+        return null;
+    }
+
+    const pixelRanges = [];
+    for (const range of ranges) {
+        if (!Array.isArray(range) || range.length < 2) {
+            continue;
+        }
+
+        const start = Number(range[0]);
+        const end = Number(range[1]);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) {
+            continue;
+        }
+
+        pixelRanges.push(WasmBindgenPixelRange.new(Math.trunc(start), Math.trunc(end)));
+    }
+
+    if (pixelRanges.length === 0) {
+        return null;
+    }
+
+    const [r, g, b, a] = colorRgba;
+    const color = OverlayColor.new(r, g, b, a);
+    return Overlay.new(pixelRanges, color);
+}
+
+async function example_overlays() {
+    const definitions = await loadOverlayDefinitions();
+    if (!definitions || typeof definitions !== 'object') {
+        return [];
+    }
+
+    const firstOverlay = buildOverlay(definitions.overlay1, [255, 64, 64, 220]);
+    const secondOverlay = buildOverlay(definitions.overlay2, [64, 196, 64, 220]);
+
+    return [firstOverlay, secondOverlay].filter(Boolean);
 }
