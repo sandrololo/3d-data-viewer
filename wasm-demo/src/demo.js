@@ -571,6 +571,7 @@ async function main() {
             if (wasmViewer && typeof wasmViewer.set_surface === 'function') {
                 wasmViewer.set_surface(surfaceData);
                 wasmViewer.set_amplitude(amplitudeData);
+                wasmViewer.set_amplitude_range(0, 100);
                 console.log('✅ Surface data set in WASM viewer');
                 hideLoading();
             } else {
