@@ -2,7 +2,7 @@
 use anyhow::anyhow;
 use glam::{Vec2, Vec3};
 use log::error;
-use std::{borrow::Cow, sync::Arc, vec};
+use std::{borrow::Cow, num::NonZeroU32, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use winit::{
@@ -45,7 +45,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{AmplitudeRangeBuffer, ImageSize, PercentileRangeBuffer},
+    image::{AmplitudeRangeBuffer, Capture, ImageSize, PercentileRangeBuffer},
     keyboard::Keyboard,
     mip::Mip,
     pixel_picker::PixelPicker,
@@ -76,6 +76,7 @@ struct State {
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_picker: PixelPicker,
+    image_capture: Capture,
 }
 
 impl State {
@@ -121,6 +122,16 @@ impl State {
         let texture_bind_group_layout = Texture::create_bind_group_layout(&device);
 
         let pixel_picker = PixelPicker::new(&device, window.inner_size());
+        let image_capture = Capture::new(
+            &device,
+            ImageSize {
+                width: NonZeroU32::new(window.inner_size().width)
+                    .expect("Windows size should not be 0"),
+                height: NonZeroU32::new(window.inner_size().height)
+                    .expect("Windows size should not be 0"),
+            },
+            surface_format,
+        );
 
         let mip = Mip::new(&device);
 
@@ -244,6 +255,7 @@ impl State {
             image_info_bind_group,
             depth_view,
             pixel_picker,
+            image_capture,
         };
 
         // Configure surface for the first time
@@ -258,7 +270,7 @@ impl State {
 
     fn configure_surface(&mut self) {
         let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             format: self.surface_format,
             // Request compatibility with the sRGB-format texture view we‘re going to create later.
             view_formats: vec![self.surface_format.add_srgb_suffix()],
@@ -357,6 +369,8 @@ impl State {
         // End the renderpass.
         drop(renderpass);
 
+        self.image_capture
+            .copy_texture(&mut encoder, &surface_texture);
         self.pixel_picker.copy_pixel_at_mouse(&mut encoder);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
@@ -568,6 +582,11 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
             UserEvent::GetPixel(sender) => {
                 if let Some(app_state) = self.state.as_mut() {
                     app_state.get_pixel_value(sender);
+                }
+            }
+            UserEvent::CaptureImage(sender) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    app_state.capture_image(sender);
                 }
             }
             UserEvent::SetAmplitudeShader => {

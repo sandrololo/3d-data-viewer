@@ -1,10 +1,11 @@
 use anyhow::anyhow;
 use futures::{FutureExt, future::Shared};
 use imbuf::Image;
-use std::sync::Arc;
+use std::{num::NonZeroU32, sync::Arc};
 
 use crate::{
     State,
+    image::{CaptureResult, ImageSize},
     pixel_picker::{PixelResult, PixelValue},
     texture::{Overlay, Texture},
 };
@@ -30,6 +31,11 @@ pub(crate) enum UserEvent {
     ZoomOut,
     SetPercentile(f32),
     SetAmplitudeRange(u16, u16),
+    CaptureImage(
+        futures::channel::oneshot::Sender<
+            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>,
+        >,
+    ),
 }
 
 pub(crate) trait UserEventHandler {
@@ -52,6 +58,12 @@ pub(crate) trait UserEventHandler {
     fn zoom_out(&mut self);
     fn set_percentile(&mut self, percentile: f32);
     fn set_amplitude_range(&mut self, start: u16, end: u16);
+    fn capture_image(
+        &mut self,
+        sender: futures::channel::oneshot::Sender<
+            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>,
+        >,
+    );
 }
 
 impl UserEventHandler for State {
@@ -59,6 +71,13 @@ impl UserEventHandler for State {
         self.configure_surface();
         // Resize the picking texture to match the new window size
         self.pixel_picker.resize(&self.device, new_size);
+        self.image_capture.resize(
+            &self.device,
+            ImageSize {
+                width: NonZeroU32::new(new_size.width).expect("Windows size should not be 0"),
+                height: NonZeroU32::new(new_size.height).expect("Windows size should not be 0"),
+            },
+        );
     }
 
     fn reset_view(&mut self) {
@@ -184,5 +203,25 @@ impl UserEventHandler for State {
 
     fn set_amplitude_range(&mut self, start: u16, end: u16) {
         self.amplitude_range_buffer.update(&self.queue, start, end);
+    }
+
+    fn capture_image(
+        &mut self,
+        sender: futures::channel::oneshot::Sender<
+            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>,
+        >,
+    ) {
+        if self.texture.is_some() {
+            self.image_capture
+                .write_to_channel(self.device.clone(), sender)
+        } else {
+            let future: std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>> =
+                Box::pin(async move {
+                    Err::<Vec<u8>, Arc<anyhow::Error>>(Arc::new(anyhow!("Texture not initialized")))
+                });
+            if let Err(_) = sender.send(future.shared()) {
+                log::error!("Failed to return error message");
+            }
+        }
     }
 }

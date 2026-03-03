@@ -1,8 +1,10 @@
+pub(crate) use crate::image::capture::{Capture, CaptureResult};
 pub(crate) use crate::image::{amplitude_range::*, percentile_range::*};
 use imbuf::Image;
 use std::num::NonZeroU32;
 
 mod amplitude_range;
+mod capture;
 mod percentile_range;
 
 pub struct SurfaceAmplitudeImage {
@@ -50,7 +52,7 @@ impl SurfaceAmplitudeImage {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct ImageSize {
     pub width: NonZeroU32,
     pub height: NonZeroU32,

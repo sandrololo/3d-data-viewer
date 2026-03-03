@@ -144,6 +144,23 @@ impl WasmViewer {
         }
     }
 
+    pub async fn capture_image(&self) -> Result<Vec<u8>, JsValue> {
+        if let Some(proxy) = &self.proxy {
+            let (sender, receiver) = futures::channel::oneshot::channel();
+            proxy
+                .send_event(UserEvent::CaptureImage(sender))
+                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+            let image = receiver
+                .await
+                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
+                .await
+                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+            Ok(image)
+        } else {
+            throw_str("Event loop proxy not initialized");
+        }
+    }
+
     pub fn set_height_shader(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy

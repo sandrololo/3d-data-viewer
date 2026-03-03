@@ -65,7 +65,6 @@ impl PixelPicker {
     }
 
     /// Copy the pixel at the current mouse position from the picking texture to the readback buffer.
-    /// Only call this when is_idle() returns true!
     pub fn copy_pixel_at_mouse(&self, encoder: &mut wgpu::CommandEncoder) {
         if self.pending_read.lock().unwrap().is_some() {
             return;
