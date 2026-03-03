@@ -167,8 +167,14 @@
         /* Main layout */
         .main-layout {
             display: grid;
-            grid-template-columns: 1fr 300px;
+            grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 420px);
             gap: 2rem;
+        }
+
+        @media (max-width: 1280px) {
+            .main-layout {
+                grid-template-columns: minmax(0, 1fr) 360px;
+            }
         }
 
         @media (max-width: 1024px) {
@@ -300,6 +306,7 @@
             border-radius: 16px;
             padding: 1.5rem;
             height: fit-content;
+            min-width: 0;
         }
 
         .panel-title {
@@ -337,12 +344,13 @@
         }
 
         .btn-group {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0.5rem;
         }
 
         .btn {
-            flex: 1;
+            width: 100%;
             padding: 0.75rem 1rem;
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -386,13 +394,23 @@
         /* Pixel readout */
         .pixel-readout {
             display: grid;
-            grid-template-columns: 1fr 1fr 2fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0.5rem;
             padding: 0.75rem;
             margin-top: 0.5rem;
             border: 1px solid var(--border-color);
             border-radius: 10px;
             background: var(--bg-tertiary);
+        }
+
+        @media (max-width: 560px) {
+            .btn-group {
+                grid-template-columns: 1fr;
+            }
+
+            .pixel-readout {
+                grid-template-columns: 1fr;
+            }
         }
 
         .pixel-stat {
@@ -602,6 +620,7 @@
                         <button class="btn" id="btn-reset">Reset View</button>
                         <button class="btn" id="btn-set-overlay">Set Overlay</button>
                         <button class="btn" id="btn-clear-overlay">Clear Overlay</button>
+                        <button class="btn" id="btn-download-image">Download Image</button>
                     </div>
                 </div>
 
@@ -619,6 +638,10 @@
                         <div class="pixel-stat">
                             <span class="pixel-label">Z</span>
                             <span class="pixel-value" id="pixel-z">--</span>
+                        </div>
+                        <div class="pixel-stat">
+                            <span class="pixel-label">A</span>
+                            <span class="pixel-value" id="pixel-a">--</span>
                         </div>
                     </div>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px; text-align: center;">
@@ -638,7 +661,7 @@
                         </div>
                         <div class="shortcut">
                             <span class="shortcut-label">Reset View</span>
-                            <span class="shortcut-key">O</span>
+                            <span class="shortcut-key">R</span>
                         </div>
                         <div class="shortcut">
                             <span class="shortcut-label">Rotate</span>
@@ -663,10 +686,6 @@
                     <div class="status-item">
                         <span class="status-label">WASM</span>
                         <span class="status-value" id="status-wasm">Loading...</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">FPS</span>
-                        <span class="status-value" id="status-fps">--</span>
                     </div>
                 </div>
             </div>
@@ -703,7 +722,7 @@
         </footer>
     </div>
 
-    <script type="module" src="./src/demo.js?v=7"></script>
+    <script type="module" src="./src/demo.js?v=8"></script>
     <script>
         // Auto-focus canvas for keyboard events
         document.getElementById('canvas').addEventListener('click', function () {

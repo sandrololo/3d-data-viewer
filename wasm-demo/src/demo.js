@@ -18,10 +18,10 @@ const errorOverlay = document.getElementById('error-overlay');
 const errorMessage = document.getElementById('error-message');
 const statusWebGPU = document.getElementById('status-webgpu');
 const statusWasm = document.getElementById('status-wasm');
-const statusFps = document.getElementById('status-fps');
 const pixelX = document.getElementById('pixel-x');
 const pixelY = document.getElementById('pixel-y');
 const pixelZ = document.getElementById('pixel-z');
+const pixelA = document.getElementById('pixel-a');
 
 // Control buttons
 const btnHeight = document.getElementById('btn-height');
@@ -29,11 +29,13 @@ const btnAmplitude = document.getElementById('btn-amplitude');
 const btnReset = document.getElementById('btn-reset');
 const btnSetOverlay = document.getElementById('btn-set-overlay');
 const btnClearOverlay = document.getElementById('btn-clear-overlay');
+const btnDownloadImage = document.getElementById('btn-download-image');
 
 // State
 let wasmModule = null;
 let wasmViewer = null;
 let isHeightMode = true;
+let isOverlayVisible = false;
 let isPollingEnabled = false;
 let isPolling = false;
 
@@ -105,6 +107,53 @@ function hideLoading() {
 }
 
 /**
+ * Download current canvas image
+ */
+async function downloadCurrentImage() {
+    if (wasmViewer && typeof wasmViewer.capture_image === 'function') {
+        try {
+            const bytes = await wasmViewer.capture_image();
+            const bytesCopy = new Uint8Array(bytes);
+            const blob = new Blob([bytesCopy], { type: 'image/png' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'capture.png';
+            a.click();
+            URL.revokeObjectURL(url);
+            return;
+        } catch (error) {
+            console.error('Failed to capture image via WASM capture_image:', error);
+        }
+    }
+
+    const canvas = document.getElementById('canvas');
+
+    if (!canvas) {
+        console.warn('Canvas element not found');
+        return;
+    }
+
+    const filename = `3d-viewer-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+
+    canvas.toBlob((blob) => {
+        if (!blob) {
+            console.error('Failed to export canvas image');
+            return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }, 'image/png');
+}
+
+/**
  * Load surface data from assets/data/surface.tiff
  */
 async function loadSurfaceData() {
@@ -150,8 +199,8 @@ async function loadAmplitudeData() {
 /**
  * Update the pixel readout in the UI
  */
-function renderPixelReadout(x, y, z) {
-    if (!pixelX || !pixelY || !pixelZ) {
+function renderPixelReadout(x, y, z, amplitude) {
+    if (!pixelX || !pixelY || !pixelZ || !pixelA) {
         return;
     }
 
@@ -168,6 +217,7 @@ function renderPixelReadout(x, y, z) {
     pixelX.textContent = formatValue(x, true);
     pixelY.textContent = formatValue(y, true);
     pixelZ.textContent = formatValue(z, false, 2);
+    pixelA.textContent = formatValue(amplitude, true);
 }
 
 /**
@@ -215,43 +265,127 @@ async function initWasm() {
  * Set up button event handlers
  */
 function setupControls() {
-    // Shader mode buttons - call viewer methods directly
-    btnHeight.addEventListener('click', () => {
-        if (!isHeightMode && wasmViewer) {
+    const setHeightShader = () => {
+        if (wasmViewer && !isHeightMode) {
             isHeightMode = true;
             btnHeight.classList.add('active');
             btnAmplitude.classList.remove('active');
             wasmViewer.set_height_shader();
         }
-    });
+    };
 
-    btnAmplitude.addEventListener('click', () => {
-        if (isHeightMode && wasmViewer) {
+    const setAmplitudeShader = () => {
+        if (wasmViewer && isHeightMode) {
             isHeightMode = false;
             btnAmplitude.classList.add('active');
             btnHeight.classList.remove('active');
             wasmViewer.set_amplitude_shader();
         }
+    };
+
+    const toggleShader = () => {
+        if (!wasmViewer) {
+            return;
+        }
+
+        if (isHeightMode) {
+            setAmplitudeShader();
+        } else {
+            setHeightShader();
+        }
+    };
+
+    const setOverlay = () => {
+        if (wasmViewer) {
+            wasmViewer.set_overlays(example_overlays());
+            isOverlayVisible = true;
+        }
+    };
+
+    const clearOverlay = () => {
+        if (wasmViewer) {
+            wasmViewer.clear_overlays();
+            isOverlayVisible = false;
+        }
+    };
+
+    const toggleOverlay = () => {
+        if (!wasmViewer) {
+            return;
+        }
+
+        if (isOverlayVisible) {
+            clearOverlay();
+        } else {
+            setOverlay();
+        }
+    };
+
+    const resetView = () => {
+        if (!wasmViewer) {
+            return;
+        }
+
+        if (typeof wasmViewer.reset_orientation === 'function') {
+            try {
+                wasmViewer.reset_orientation();
+            } catch (error) {
+                console.error('Failed to reset view:', error);
+            }
+        }
+    };
+
+    // Shader mode buttons - call viewer methods directly
+    btnHeight.addEventListener('click', () => {
+        setHeightShader();
+    });
+
+    btnAmplitude.addEventListener('click', () => {
+        setAmplitudeShader();
     });
 
     // Reset view - call viewer method directly
     btnReset.addEventListener('click', () => {
-        if (wasmViewer) {
-            wasmViewer.back_to_origin();
-        }
+        resetView();
     });
 
     // Set overlay - call viewer method directly
     btnSetOverlay.addEventListener('click', () => {
-        if (wasmViewer) {
-            wasmViewer.set_overlays(example_overlays());
-        }
+        setOverlay();
     });
 
     // Clear overlay - call viewer method directly
     btnClearOverlay.addEventListener('click', () => {
-        if (wasmViewer) {
-            wasmViewer.clear_overlays();
+        clearOverlay();
+    });
+
+    // Download current canvas image
+    btnDownloadImage.addEventListener('click', () => {
+        downloadCurrentImage();
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (event) => {
+        if (event.repeat) {
+            return;
+        }
+
+        const activeEl = document.activeElement;
+        const tag = activeEl && activeEl.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl && activeEl.isContentEditable)) {
+            return;
+        }
+
+        const key = event.key.toLowerCase();
+        if (key === 's') {
+            event.preventDefault();
+            toggleShader();
+        } else if (key === 't') {
+            event.preventDefault();
+            toggleOverlay();
+        } else if (key === 'r') {
+            event.preventDefault();
+            resetView();
         }
     });
 
@@ -273,6 +407,79 @@ function setupControls() {
     } else {
         console.warn('Canvas element not found');
     }
+}
+
+function toFiniteNumber(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : Number.NaN;
+    }
+
+    if (typeof value === 'bigint') {
+        const converted = Number(value);
+        return Number.isFinite(converted) ? converted : Number.NaN;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return Number.NaN;
+        }
+        const converted = Number(trimmed);
+        return Number.isFinite(converted) ? converted : Number.NaN;
+    }
+
+    return Number.NaN;
+}
+
+function readNumericMember(source, key) {
+    if (!source || typeof source !== 'object') {
+        return Number.NaN;
+    }
+
+    const capitalizedKey = key.length > 0 ? `${key[0].toUpperCase()}${key.slice(1)}` : key;
+    const candidates = [
+        key,
+        `get_${key}`,
+        `get${capitalizedKey}`,
+    ];
+
+    for (const candidate of candidates) {
+        let value;
+        try {
+            value = source[candidate];
+        } catch (_) {
+            continue;
+        }
+
+        if (typeof value === 'function') {
+            try {
+                value = value.call(source);
+            } catch (_) {
+                continue;
+            }
+        }
+
+        const numeric = toFiniteNumber(value);
+        if (Number.isFinite(numeric)) {
+            return numeric;
+        }
+    }
+
+    return Number.NaN;
+}
+
+function parsePixelResult(result) {
+    if (result) {
+        const x = readNumericMember(result, 'x')
+        const y = readNumericMember(result, 'y')
+        const z = readNumericMember(result, 'z')
+        const amplitude = readNumericMember(result, 'amplitude')
+        console.log(result)
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+            return { x, y, z, amplitude };
+        }
+    }
+    return null;
 }
 
 /**
@@ -297,12 +504,9 @@ function startPixelPolling() {
         try {
             const result = await wasmViewer.get_pixel_value();
 
-            // Handle both Array and TypedArray (Float32Array, etc.)
-            if (result && (Array.isArray(result) || ArrayBuffer.isView(result)) && result.length >= 3) {
-                const x = result[0];
-                const y = result[1];
-                const z = result[2];
-                renderPixelReadout(x, y, z);
+            const parsed = parsePixelResult(result);
+            if (parsed) {
+                renderPixelReadout(parsed.x, parsed.y, parsed.z, parsed.amplitude);
             } else {
                 console.log('Invalid result format:', result);
             }
@@ -315,31 +519,6 @@ function startPixelPolling() {
     }
 
     pollOnce();
-}
-
-/**
- * FPS counter
- */
-function setupFpsCounter() {
-    let frameCount = 0;
-    let lastTime = performance.now();
-
-    function updateFps() {
-        frameCount++;
-        const now = performance.now();
-        const delta = now - lastTime;
-
-        if (delta >= 1000) {
-            const fps = Math.round((frameCount * 1000) / delta);
-            statusFps.textContent = `${fps}`;
-            frameCount = 0;
-            lastTime = now;
-        }
-
-        requestAnimationFrame(updateFps);
-    }
-
-    requestAnimationFrame(updateFps);
 }
 
 /**
@@ -370,9 +549,6 @@ async function main() {
 
     // Set up controls
     setupControls();
-
-    // Start FPS counter
-    setupFpsCounter();
 
     // Hide loading overlay
     updateLoadingText('Starting renderer...');
