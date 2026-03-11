@@ -7,58 +7,38 @@ mod amplitude_range;
 mod capture;
 mod percentile_range;
 
-pub struct SurfaceAmplitudeImage {
-    pub surface: Image<f32, 1>,
-    pub amplitude: Image<f32, 1>,
-}
+pub struct SurfaceData(pub Image<f32, 1>);
 
-impl SurfaceAmplitudeImage {
+impl SurfaceData {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
         use std::fs::File;
 
         use anyhow::anyhow;
-        use log::info;
         use tiff::decoder::{Decoder, DecodingResult, Limits};
 
-        let img_file = File::open(path)?;
-        let mut decoder = Decoder::new(img_file)?.with_limits(Limits::unlimited());
+        let file = File::open(path)?;
+        let mut decoder = Decoder::new(file)?.with_limits(Limits::unlimited());
         let dimensions = decoder.dimensions()?;
-        let surface = match decoder.read_image()? {
+        let data = match decoder.read_image()? {
             DecodingResult::F32(data) => Ok(Image::<f32, 1>::new_vec(
                 data,
                 NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
                 NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
             )),
-            _ => Err(anyhow::anyhow!("Unsupported surface image format")),
+            _ => Err(anyhow::anyhow!("Unsupported surface data format")),
         }?;
-        decoder.next_image()?;
-        let dimensions = decoder.dimensions()?;
-        let amplitude = match decoder.read_image()? {
-            DecodingResult::F32(data) => Ok(Image::<f32, 1>::new_vec(
-                data,
-                NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
-                NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
-            )),
-            _ => Err(anyhow::anyhow!("Unsupported amplitude image format")),
-        }?;
-        info!(
-            "Loaded surface & amplitude image with size {}x{} from {}",
-            surface.width(),
-            surface.height(),
-            path,
-        );
-        Ok(Self { surface, amplitude })
+        Ok(Self(data))
     }
 }
 
 #[derive(Clone, PartialEq)]
-pub(crate) struct ImageSize {
+pub(crate) struct DataSize {
     pub width: NonZeroU32,
     pub height: NonZeroU32,
 }
 
-impl From<(NonZeroU32, NonZeroU32)> for ImageSize {
+impl From<(NonZeroU32, NonZeroU32)> for DataSize {
     fn from(value: (NonZeroU32, NonZeroU32)) -> Self {
         Self {
             width: value.0,
@@ -67,7 +47,7 @@ impl From<(NonZeroU32, NonZeroU32)> for ImageSize {
     }
 }
 
-impl ImageSize {
+impl DataSize {
     pub(crate) fn create_buffer(device: &wgpu::Device) -> wgpu::Buffer {
         device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("image_dims_buffer"),

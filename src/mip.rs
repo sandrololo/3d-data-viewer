@@ -3,7 +3,7 @@ use std::u32;
 
 use wgpu::util::DeviceExt;
 
-use crate::image::ImageSize;
+use crate::image::DataSize;
 use crate::index_buffer::{IndexBuffer, IndexBufferBuilder};
 use crate::vertex_buffer::VertexBuffer;
 
@@ -11,7 +11,7 @@ struct MipData {
     mip_levels: Vec<u32>,
     index_buffer: IndexBuffer,
     vertex_buffer: VertexBuffer,
-    image_size: ImageSize,
+    image_size: DataSize,
 }
 
 pub(crate) struct Mip {
@@ -28,7 +28,7 @@ impl Mip {
             contents: bytemuck::cast_slice(&[2u32]),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         });
-        let image_dims_buffer = ImageSize::create_buffer(&device);
+        let image_dims_buffer = DataSize::create_buffer(&device);
         Self {
             mip_buffer,
             image_dims_buffer,
@@ -42,7 +42,7 @@ impl Mip {
         self.current_level = 2;
     }
 
-    pub(crate) fn set_image(&mut self, image_size: &ImageSize, device: &wgpu::Device) {
+    pub(crate) fn set_image(&mut self, image_size: &DataSize, device: &wgpu::Device) {
         let mip_levels = (0..10u32)
             .filter(|level| {
                 let num_indices = IndexBufferBuilder::triangle_strip_length(image_size, *level);
@@ -94,7 +94,7 @@ impl Mip {
                 0,
                 bytemuck::cast_slice(&[self.current_level]),
             );
-            ImageSize {
+            DataSize {
                 width: NonZeroU32::new(w).expect("Width can't be zero"),
                 height: NonZeroU32::new(h).expect("Height can't be zero"),
             }

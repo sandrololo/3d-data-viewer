@@ -2,13 +2,13 @@ use futures::{FutureExt, future::Shared};
 use image::{ExtendedColorType, ImageEncoder, codecs::png::CompressionType};
 use std::sync::{Arc, Mutex};
 
-use crate::image::ImageSize;
+use crate::image::DataSize;
 
 pub type CaptureResult = Result<Vec<u8>, Arc<anyhow::Error>>;
 
 pub struct Capture {
     readback_buffer: Arc<wgpu::Buffer>,
-    window_size: ImageSize,
+    window_size: DataSize,
     surface_format: wgpu::TextureFormat,
     /// Cached shared future - if a read is in progress, subsequent calls get the same future
     pending_read: Arc<
@@ -19,7 +19,7 @@ pub struct Capture {
 impl Capture {
     pub fn new(
         device: &wgpu::Device,
-        window_size: ImageSize,
+        window_size: DataSize,
         surface_format: wgpu::TextureFormat,
     ) -> Self {
         Self {
@@ -30,14 +30,14 @@ impl Capture {
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, window_size: ImageSize) {
+    pub fn resize(&mut self, device: &wgpu::Device, window_size: DataSize) {
         if self.window_size != window_size {
             self.window_size = window_size.clone();
             self.readback_buffer = Arc::new(Self::create_readback_buffer(device, &window_size))
         }
     }
 
-    fn create_readback_buffer(device: &wgpu::Device, window_size: &ImageSize) -> wgpu::Buffer {
+    fn create_readback_buffer(device: &wgpu::Device, window_size: &DataSize) -> wgpu::Buffer {
         let unpadded_bytes_per_row = window_size.width.get() * 4;
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u32;
         let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;

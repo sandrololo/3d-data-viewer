@@ -2,24 +2,24 @@ use std::{collections::HashMap, num::NonZeroU32};
 
 use wgpu::util::DeviceExt;
 
-use crate::image::ImageSize;
+use crate::image::DataSize;
 
 pub(crate) struct IndexBufferBuilder {
     mip_level_indices: HashMap<u32, Vec<u32>>,
 }
 
 impl IndexBufferBuilder {
-    pub(crate) fn triangle_strip_length(image_size: &ImageSize, mip_level: u32) -> u64 {
+    pub(crate) fn triangle_strip_length(image_size: &DataSize, mip_level: u32) -> u64 {
         let width = image_size.width.get() / 2u32.pow(mip_level as u32);
         let height = image_size.height.get() / 2u32.pow(mip_level as u32);
         (width * height * 2) as u64
     }
 
-    pub(crate) fn new_triangle_strip(image_size: &ImageSize, mip_levels: &Vec<u32>) -> Self {
+    pub(crate) fn new_triangle_strip(image_size: &DataSize, mip_levels: &Vec<u32>) -> Self {
         let mut mip_level_indices: HashMap<u32, Vec<u32>> = HashMap::new();
         log::info!("Creating index buffer for mip levels: {:?}", mip_levels);
         for mip_level in mip_levels {
-            let triangle_strip = triangle_strip(&ImageSize {
+            let triangle_strip = triangle_strip(&DataSize {
                 width: NonZeroU32::new(image_size.width.get() / 2u32.pow(*mip_level as u32))
                     .expect("Can't be zero"),
                 height: NonZeroU32::new(image_size.height.get() / 2u32.pow(*mip_level as u32))
@@ -66,7 +66,7 @@ impl IndexBuffer {
     }
 }
 
-fn triangle_strip(image_size: &ImageSize) -> Vec<u32> {
+fn triangle_strip(image_size: &DataSize) -> Vec<u32> {
     let mut indices: Vec<u32> =
         Vec::with_capacity((image_size.width.get() * image_size.height.get() * 2) as usize);
     indices.push(0);
@@ -99,11 +99,11 @@ fn triangle_strip(image_size: &ImageSize) -> Vec<u32> {
 
 #[cfg(test)]
 mod test {
-    use crate::{image::ImageSize, index_buffer::triangle_strip};
+    use crate::{image::DataSize, index_buffer::triangle_strip};
 
     #[test]
     fn test_triangle_strip_minimal() {
-        let image_size = ImageSize {
+        let image_size = DataSize {
             width: std::num::NonZeroU32::new(3).unwrap(),
             height: std::num::NonZeroU32::new(2).unwrap(),
         };
@@ -114,7 +114,7 @@ mod test {
 
     #[test]
     fn test_triangle_strip_3_rows() {
-        let image_size = ImageSize {
+        let image_size = DataSize {
             width: std::num::NonZeroU32::new(3).unwrap(),
             height: std::num::NonZeroU32::new(3).unwrap(),
         };
@@ -125,7 +125,7 @@ mod test {
 
     #[test]
     fn test_triangle_strip_4_rows() {
-        let image_size = ImageSize {
+        let image_size = DataSize {
             width: std::num::NonZeroU32::new(3).unwrap(),
             height: std::num::NonZeroU32::new(4).unwrap(),
         };
@@ -136,7 +136,7 @@ mod test {
 
     #[test]
     fn test_triangle_strip_double_horizontal() {
-        let image_size = ImageSize {
+        let image_size = DataSize {
             width: std::num::NonZeroU32::new(5).unwrap(),
             height: std::num::NonZeroU32::new(2).unwrap(),
         };

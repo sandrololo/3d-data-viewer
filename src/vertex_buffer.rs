@@ -1,13 +1,13 @@
 use wgpu::util::DeviceExt;
 
-use crate::image::ImageSize;
+use crate::image::DataSize;
 
 pub(crate) struct VertexBuffer {
     pub buffer: wgpu::Buffer,
 }
 
 impl VertexBuffer {
-    pub(crate) fn new(image_size: &ImageSize, device: &wgpu::Device) -> Self {
+    pub(crate) fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
         let vertices: Vec<u32> = (0..image_size.width.get() * image_size.height.get()).collect();
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),

@@ -5,7 +5,7 @@ use std::{num::NonZeroU32, sync::Arc};
 
 use crate::{
     State,
-    image::{CaptureResult, ImageSize},
+    image::{CaptureResult, DataSize},
     pixel_picker::{PixelResult, PixelValue},
     texture::{Overlay, Texture},
 };
@@ -73,7 +73,7 @@ impl UserEventHandler for State {
         self.pixel_picker.resize(&self.device, new_size);
         self.image_capture.resize(
             &self.device,
-            ImageSize {
+            DataSize {
                 width: NonZeroU32::new(new_size.width).expect("Windows size should not be 0"),
                 height: NonZeroU32::new(new_size.height).expect("Windows size should not be 0"),
             },

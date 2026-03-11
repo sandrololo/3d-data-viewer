@@ -1,4 +1,4 @@
-use crate::image::ImageSize;
+use crate::image::DataSize;
 use imbuf::Image;
 use std::sync::Arc;
 
@@ -10,7 +10,7 @@ pub struct AmplitudeTexture {
 }
 
 impl AmplitudeTexture {
-    pub fn new(image_size: &ImageSize, device: &wgpu::Device) -> Self {
+    pub fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
             height: image_size.height.get(),

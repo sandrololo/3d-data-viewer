@@ -1,4 +1,4 @@
-use crate::image::ImageSize;
+use crate::image::DataSize;
 use std::{
     ops::{Deref, Range},
     sync::Arc,
@@ -68,7 +68,7 @@ pub struct OverlayTexture {
 }
 
 impl OverlayTexture {
-    pub fn new(image_size: &ImageSize, device: &wgpu::Device) -> Self {
+    pub fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
             height: image_size.height.get(),

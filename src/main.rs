@@ -45,7 +45,7 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{AmplitudeRangeBuffer, Capture, ImageSize, PercentileRangeBuffer},
+    image::{AmplitudeRangeBuffer, Capture, DataSize, PercentileRangeBuffer},
     keyboard::Keyboard,
     mip::Mip,
     pixel_picker::PixelPicker,
@@ -114,7 +114,7 @@ impl State {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("image_info_bind_group_layout"),
                 entries: &[
-                    ImageSize::get_bind_group_layout_entry(),
+                    DataSize::get_bind_group_layout_entry(),
                     PercentileRangeBuffer::get_bind_group_layout_entry(),
                     AmplitudeRangeBuffer::get_bind_group_layout_entry(),
                     Mip::get_bind_group_layout_entry(),
@@ -126,7 +126,7 @@ impl State {
         let pixel_picker = PixelPicker::new(&device, window.inner_size());
         let image_capture = Capture::new(
             &device,
-            ImageSize {
+            DataSize {
                 width: NonZeroU32::new(window.inner_size().width)
                     .expect("Windows size should not be 0"),
                 height: NonZeroU32::new(window.inner_size().height)
@@ -143,7 +143,7 @@ impl State {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
-                ImageSize::get_bind_group_entry(&mip.image_dims_buffer),
+                DataSize::get_bind_group_entry(&mip.image_dims_buffer),
                 percentile_range_buffer.get_bind_group_entry(),
                 amplitude_range_buffer.get_bind_group_entry(),
                 mip.get_bind_group_entry(),
@@ -692,17 +692,17 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> anyhow::Result<()> {
-    use crate::image::SurfaceAmplitudeImage;
+    use crate::image::SurfaceData;
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_secs()
         .init();
 
-    let image = SurfaceAmplitudeImage::from_file("example-img.tiff").unwrap();
+    let data = SurfaceData::from_file("example-img.tiff").unwrap();
     let event_loop = EventLoop::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
     proxy
-        .send_event(UserEvent::SetSurface(image.surface))
+        .send_event(UserEvent::SetSurface(data.0))
         .map_err(|e| anyhow!("Error: {}", e))
         .unwrap();
 
