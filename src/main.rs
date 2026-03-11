@@ -61,6 +61,7 @@ struct State {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
+    surface_usages: wgpu::TextureUsages,
     mouse: Mouse,
     keyboard: Keyboard,
     transformation: Transformation,
@@ -102,6 +103,7 @@ impl State {
         let surface = instance.create_surface(window.clone()).unwrap();
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
+        let surface_usages = cap.usages;
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -240,6 +242,7 @@ impl State {
             queue,
             surface,
             surface_format,
+            surface_usages,
             mouse: Mouse::new(),
             keyboard: Keyboard::new(),
             transformation,
@@ -269,8 +272,12 @@ impl State {
     }
 
     fn configure_surface(&mut self) {
+        let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
+        if self.surface_usages.contains(wgpu::TextureUsages::COPY_SRC) {
+            usage |= wgpu::TextureUsages::COPY_SRC;
+        }
         let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            usage,
             format: self.surface_format,
             // Request compatibility with the sRGB-format texture view we‘re going to create later.
             view_formats: vec![self.surface_format.add_srgb_suffix()],
@@ -369,8 +376,10 @@ impl State {
         // End the renderpass.
         drop(renderpass);
 
-        self.image_capture
-            .copy_texture(&mut encoder, &surface_texture);
+        if self.surface_usages.contains(wgpu::TextureUsages::COPY_SRC) {
+            self.image_capture
+                .copy_texture(&mut encoder, &surface_texture);
+        }
         self.pixel_picker.copy_pixel_at_mouse(&mut encoder);
         self.transformation.update_gpu(&self.queue);
         self.projection.update_gpu(&self.queue);
