@@ -3,7 +3,7 @@ use std::u32;
 
 use wgpu::util::DeviceExt;
 
-use crate::image::DataSize;
+use crate::gpu_data::DataSize;
 use crate::index_buffer::{IndexBuffer, IndexBufferBuilder};
 use crate::vertex_buffer::VertexBuffer;
 

@@ -2,7 +2,7 @@ use futures::{FutureExt, future::Shared};
 use image::{ExtendedColorType, ImageEncoder, codecs::png::CompressionType};
 use std::sync::{Arc, Mutex};
 
-use crate::image::DataSize;
+use crate::gpu_data::DataSize;
 
 pub type CaptureResult = Result<Vec<u8>, Arc<anyhow::Error>>;
 

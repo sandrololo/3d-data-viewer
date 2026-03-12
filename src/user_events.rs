@@ -5,8 +5,7 @@ use std::{num::NonZeroU32, sync::Arc};
 
 use crate::{
     State,
-    image::{CaptureResult, DataSize},
-    pixel_picker::{PixelResult, PixelValue},
+    gpu_data::{CaptureResult, DataSize, pixel_picker::{PixelResult, PixelValue}},
     scene::{Overlay, Scene},
 };
 

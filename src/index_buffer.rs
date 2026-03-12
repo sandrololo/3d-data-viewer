@@ -2,7 +2,7 @@ use std::{collections::HashMap, num::NonZeroU32};
 
 use wgpu::util::DeviceExt;
 
-use crate::image::DataSize;
+use crate::gpu_data::DataSize;
 
 pub(crate) struct IndexBufferBuilder {
     mip_level_indices: HashMap<u32, Vec<u32>>,
@@ -99,7 +99,7 @@ fn triangle_strip(image_size: &DataSize) -> Vec<u32> {
 
 #[cfg(test)]
 mod test {
-    use crate::{image::DataSize, index_buffer::triangle_strip};
+    use crate::{gpu_data::DataSize, index_buffer::triangle_strip};
 
     #[test]
     fn test_triangle_strip_minimal() {

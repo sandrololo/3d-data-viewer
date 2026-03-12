@@ -1,4 +1,4 @@
-use crate::image::DataSize;
+use crate::gpu_data::DataSize;
 use std::{
     ops::{Deref, Range},
     sync::Arc,

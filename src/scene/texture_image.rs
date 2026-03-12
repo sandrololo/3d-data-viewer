@@ -1,4 +1,4 @@
-use crate::image::DataSize;
+use crate::gpu_data::DataSize;
 use imbuf::Image;
 use std::sync::Arc;
 

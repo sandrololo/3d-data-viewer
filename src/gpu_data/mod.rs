@@ -1,11 +1,11 @@
-pub(crate) use crate::image::capture::{Capture, CaptureResult};
-pub(crate) use crate::image::{surface_percentile_range::*, texture_image_range::*};
+pub(crate) use crate::gpu_data::capture::{Capture, CaptureResult};
 use imbuf::Image;
 use std::num::NonZeroU32;
 
 mod capture;
-mod surface_percentile_range;
-mod texture_image_range;
+pub(crate) mod pixel_picker;
+pub(crate) mod surface_percentile_range;
+pub(crate) mod texture_image_range;
 
 pub struct SurfaceData(pub Image<f32, 1>);
 

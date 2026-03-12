@@ -28,31 +28,31 @@ mod wasm_commands {
     }
 }
 
-mod image;
+mod gpu_data;
 mod index_buffer;
 mod keyboard;
 mod mip;
 mod mouse;
-mod pixel_picker;
-mod projection;
 mod scene;
-mod transformation;
 mod user_events;
 mod vertex_buffer;
+mod view;
 #[cfg(target_arch = "wasm32")]
 mod wasm_viewer;
 use mouse::Mouse;
-use projection::Projection;
 
 use crate::{
-    image::{Capture, DataSize, SurfacePercentileRangeBuffer, TextureImageRangeBuffer},
+    gpu_data::{
+        Capture, DataSize, pixel_picker::PixelPicker,
+        surface_percentile_range::SurfacePercentileRangeBuffer,
+        texture_image_range::TextureImageRangeBuffer,
+    },
     keyboard::Keyboard,
     mip::Mip,
-    pixel_picker::PixelPicker,
     scene::Scene,
-    transformation::Transformation,
     user_events::{UserEvent, UserEventHandler},
     vertex_buffer::VertexBuffer,
+    view::{projection::Projection, transformation::Transformation},
 };
 
 struct State {
@@ -691,7 +691,7 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> anyhow::Result<()> {
-    use crate::image::SurfaceData;
+    use crate::gpu_data::SurfaceData;
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_secs()

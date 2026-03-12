@@ -5,7 +5,7 @@ use wasm_bindgen::{JsValue, prelude::*, throw_str};
 use winit::event_loop::EventLoop;
 
 use crate::{
-    ImageViewer3D, pixel_picker::PixelValue, scene::Overlay, user_events::UserEvent,
+    ImageViewer3D, gpu_data::pixel_picker::PixelValue, scene::Overlay, user_events::UserEvent,
 };
 
 mod wasm_commands {

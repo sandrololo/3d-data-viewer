@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::image::DataSize;
+use crate::gpu_data::DataSize;
 
 pub(crate) struct VertexBuffer {
     pub buffer: wgpu::Buffer,
