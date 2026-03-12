@@ -1,9 +1,9 @@
-pub(crate) struct PercentileRangeBuffer {
+pub(crate) struct SurfacePercentileRangeBuffer {
     buffer: wgpu::Buffer,
     percentile: f32,
 }
 
-impl PercentileRangeBuffer {
+impl SurfacePercentileRangeBuffer {
     pub fn new(device: &wgpu::Device) -> Self {
         Self {
             buffer: Self::create_buffer(device),

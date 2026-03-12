@@ -35,7 +35,7 @@ mod mip;
 mod mouse;
 mod pixel_picker;
 mod projection;
-mod texture;
+mod texture_data;
 mod transformation;
 mod user_events;
 mod vertex_buffer;
@@ -45,11 +45,11 @@ use mouse::Mouse;
 use projection::Projection;
 
 use crate::{
-    image::{AmplitudeRangeBuffer, Capture, DataSize, PercentileRangeBuffer},
+    image::{Capture, DataSize, SurfacePercentileRangeBuffer, TextureImageRangeBuffer},
     keyboard::Keyboard,
     mip::Mip,
     pixel_picker::PixelPicker,
-    texture::Texture,
+    texture_data::TextureData,
     transformation::Transformation,
     user_events::{UserEvent, UserEventHandler},
     vertex_buffer::VertexBuffer,
@@ -66,14 +66,14 @@ struct State {
     keyboard: Keyboard,
     transformation: Transformation,
     projection: Projection,
-    render_pipeline_amplitude: wgpu::RenderPipeline,
+    render_pipeline_texture: wgpu::RenderPipeline,
     render_pipeline_height: wgpu::RenderPipeline,
     use_height_shader: bool,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     mip: Mip,
-    texture: Option<Texture>,
-    percentile_range_buffer: PercentileRangeBuffer,
-    amplitude_range_buffer: AmplitudeRangeBuffer,
+    texture_data: Option<TextureData>,
+    percentile_range_buffer: SurfacePercentileRangeBuffer,
+    texture_range_buffer: TextureImageRangeBuffer,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     pixel_picker: PixelPicker,
@@ -115,13 +115,13 @@ impl State {
                 label: Some("image_info_bind_group_layout"),
                 entries: &[
                     DataSize::get_bind_group_layout_entry(),
-                    PercentileRangeBuffer::get_bind_group_layout_entry(),
-                    AmplitudeRangeBuffer::get_bind_group_layout_entry(),
+                    SurfacePercentileRangeBuffer::get_bind_group_layout_entry(),
+                    TextureImageRangeBuffer::get_bind_group_layout_entry(),
                     Mip::get_bind_group_layout_entry(),
                 ],
             });
 
-        let texture_bind_group_layout = Texture::create_bind_group_layout(&device);
+        let texture_bind_group_layout = TextureData::create_bind_group_layout(&device);
 
         let pixel_picker = PixelPicker::new(&device, window.inner_size());
         let image_capture = Capture::new(
@@ -137,15 +137,15 @@ impl State {
 
         let mip = Mip::new(&device);
 
-        let percentile_range_buffer = PercentileRangeBuffer::new(&device);
-        let amplitude_range_buffer = AmplitudeRangeBuffer::new(&device);
+        let percentile_range_buffer = SurfacePercentileRangeBuffer::new(&device);
+        let texture_range_buffer = TextureImageRangeBuffer::new(&device);
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
                 DataSize::get_bind_group_entry(&mip.image_dims_buffer),
                 percentile_range_buffer.get_bind_group_entry(),
-                amplitude_range_buffer.get_bind_group_entry(),
+                texture_range_buffer.get_bind_group_entry(),
                 mip.get_bind_group_entry(),
             ],
         });
@@ -174,8 +174,8 @@ impl State {
             Some(surface_format.add_srgb_suffix().into()),
             Some(PixelPicker::PICKING_FORMAT.into()),
         ];
-        let amplitude_pipeline_descriptor = &wgpu::RenderPipelineDescriptor {
-            label: Some("amplitude_pipeline"),
+        let texture_fs_pipeline_descriptor = &wgpu::RenderPipelineDescriptor {
+            label: Some("texture_pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -185,7 +185,7 @@ impl State {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_amplitude"),
+                entry_point: Some("fs_texture"),
                 compilation_options: Default::default(),
                 targets: &texture_formats,
             }),
@@ -206,18 +206,17 @@ impl State {
             cache: None,
         };
 
-        let render_pipeline_amplitude =
-            device.create_render_pipeline(amplitude_pipeline_descriptor);
+        let render_pipeline_texture = device.create_render_pipeline(texture_fs_pipeline_descriptor);
 
-        let mut height_pipeline_descriptor = amplitude_pipeline_descriptor.clone();
-        height_pipeline_descriptor.label = Some("height_pipeline");
-        height_pipeline_descriptor.fragment = Some(wgpu::FragmentState {
+        let mut height_fs_pipeline_descriptor = texture_fs_pipeline_descriptor.clone();
+        height_fs_pipeline_descriptor.label = Some("height_pipeline");
+        height_fs_pipeline_descriptor.fragment = Some(wgpu::FragmentState {
             module: &shader,
             entry_point: Some("fs_height"),
             compilation_options: Default::default(),
             targets: &texture_formats,
         });
-        let render_pipeline_height = device.create_render_pipeline(&height_pipeline_descriptor);
+        let render_pipeline_height = device.create_render_pipeline(&height_fs_pipeline_descriptor);
 
         // Create depth texture view
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -247,14 +246,14 @@ impl State {
             keyboard: Keyboard::new(),
             transformation,
             projection,
-            render_pipeline_amplitude,
+            render_pipeline_texture,
             render_pipeline_height,
             use_height_shader: true,
             texture_bind_group_layout,
             mip,
-            texture: None,
+            texture_data: None,
             percentile_range_buffer,
-            amplitude_range_buffer,
+            texture_range_buffer,
             image_info_bind_group,
             depth_view,
             pixel_picker,
@@ -361,10 +360,10 @@ impl State {
         let pipeline = if self.use_height_shader {
             &self.render_pipeline_height
         } else {
-            &self.render_pipeline_amplitude
+            &self.render_pipeline_texture
         };
         renderpass.set_pipeline(pipeline);
-        if let Some(texture) = &self.texture {
+        if let Some(texture) = &self.texture_data {
             renderpass.set_bind_group(0, &texture.bind_group, &[]);
         }
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
@@ -390,20 +389,20 @@ impl State {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if let Some(texture) = &self.texture {
-                if let Some(amplitude) = &texture.amplitude.image {
+            if let Some(texture_data) = &self.texture_data {
+                if let Some(texture_image) = &texture_data.texture.image {
                     match pollster::block_on(self.pixel_picker.get(
                         self.device.clone(),
-                        texture.surface.image.clone(),
-                        amplitude.clone(),
+                        texture_data.surface.image.clone(),
+                        texture_image.clone(),
                     )) {
                         Ok(pixel_value) => {
                             log::info!(
-                                "Pixel at [{}/{}]={:.3}, amplitude={}",
+                                "Pixel at [{}/{}]={:.3}, texture={}",
                                 pixel_value.x,
                                 pixel_value.y,
                                 pixel_value.z,
-                                pixel_value.amplitude
+                                pixel_value.texture
                             );
                         }
                         Err(e) => {
@@ -411,7 +410,7 @@ impl State {
                         }
                     }
                 } else {
-                    log::error!("Amplitude image not initialized");
+                    log::error!("Texture image not initialized");
                 }
             } else {
                 log::error!("Texture not initialized");
@@ -598,9 +597,9 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
                     app_state.capture_image(sender);
                 }
             }
-            UserEvent::SetAmplitudeShader => {
+            UserEvent::SetTextureShader => {
                 if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_amplitude_shader();
+                    app_state.set_texture_shader();
                 }
             }
             UserEvent::SetHeightShader => {
@@ -630,9 +629,9 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
                     log::warn!("State is None, cannot set surface");
                 }
             }
-            UserEvent::SetAmplitude(data) => {
+            UserEvent::SetTexture(data) => {
                 if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_amplitude(data);
+                    app_state.set_texture(data);
                 }
             }
             UserEvent::ZoomIn => {
@@ -650,9 +649,9 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
                     app_state.set_percentile(percentile);
                 }
             }
-            UserEvent::SetAmplitudeRange(start, end) => {
+            UserEvent::SetTextureRange(start, end) => {
                 if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_amplitude_range(start, end);
+                    app_state.set_texture_range(start, end);
                 }
             }
             UserEvent::SetState(mut state) => {

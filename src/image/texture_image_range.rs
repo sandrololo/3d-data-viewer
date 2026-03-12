@@ -1,12 +1,12 @@
 use wgpu::util::DeviceExt;
 
-pub(crate) struct AmplitudeRangeBuffer {
+pub(crate) struct TextureImageRangeBuffer {
     buffer: wgpu::Buffer,
     start: u16,
     end: u16,
 }
 
-impl AmplitudeRangeBuffer {
+impl TextureImageRangeBuffer {
     pub fn new(device: &wgpu::Device) -> Self {
         Self {
             buffer: Self::create_buffer(device, 0, 2000),
@@ -24,7 +24,7 @@ impl AmplitudeRangeBuffer {
 
     pub fn update(&mut self, queue: &wgpu::Queue, start: u16, end: u16) {
         assert!(start < end, "Start must be less than end");
-        log::info!("Updating amplitude range: {} - {}", start, end);
+        log::info!("Updating texture range: {} - {}", start, end);
         self.start = start;
         self.end = end;
         queue.write_buffer(
@@ -36,7 +36,7 @@ impl AmplitudeRangeBuffer {
 
     fn create_buffer(device: &wgpu::Device, start: u16, end: u16) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("amplitude_range_buffer"),
+            label: Some("texture_range_buffer"),
             contents: bytemuck::cast_slice(&[start as u32, end as u32]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         })

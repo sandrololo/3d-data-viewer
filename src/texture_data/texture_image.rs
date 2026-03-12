@@ -2,14 +2,14 @@ use crate::image::DataSize;
 use imbuf::Image;
 use std::sync::Arc;
 
-pub struct AmplitudeTexture {
+pub struct TextureImage {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub image: Option<Arc<Image<u16, 1>>>,
     size: wgpu::Extent3d,
 }
 
-impl AmplitudeTexture {
+impl TextureImage {
     pub fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
@@ -23,7 +23,7 @@ impl AmplitudeTexture {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R16Uint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: Some("amplitude_texture"),
+            label: Some("texture"),
             view_formats: &[],
         });
 

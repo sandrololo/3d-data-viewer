@@ -4,7 +4,9 @@ use tiff::decoder::{Decoder, DecodingResult, Limits};
 use wasm_bindgen::{JsValue, prelude::*, throw_str};
 use winit::event_loop::EventLoop;
 
-use crate::{ImageViewer3D, pixel_picker::PixelValue, texture::Overlay, user_events::UserEvent};
+use crate::{
+    ImageViewer3D, pixel_picker::PixelValue, texture_data::Overlay, user_events::UserEvent,
+};
 
 mod wasm_commands {
     use std::cell::RefCell;
@@ -95,7 +97,7 @@ impl WasmViewer {
         }
     }
 
-    pub async fn set_amplitude(&self, data: Vec<u8>) -> Result<(), JsValue> {
+    pub async fn set_texture(&self, data: Vec<u8>) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             let mut decoder = Decoder::new(std::io::Cursor::new(&data))
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
@@ -119,7 +121,7 @@ impl WasmViewer {
                 NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
             );
             proxy
-                .send_event(UserEvent::SetAmplitude(image))
+                .send_event(UserEvent::SetTexture(image))
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
@@ -172,10 +174,10 @@ impl WasmViewer {
         }
     }
 
-    pub fn set_amplitude_shader(&self) -> Result<(), JsValue> {
+    pub fn set_texture_shader(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::SetAmplitudeShader)
+                .send_event(UserEvent::SetTextureShader)
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -249,10 +251,10 @@ impl WasmViewer {
         }
     }
 
-    pub fn set_amplitude_range(&self, start: u16, end: u16) -> Result<(), JsValue> {
+    pub fn set_texture_range(&self, start: u16, end: u16) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::SetAmplitudeRange(start, end))
+                .send_event(UserEvent::SetTextureRange(start, end))
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {

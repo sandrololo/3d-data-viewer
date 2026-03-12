@@ -1,39 +1,39 @@
 use imbuf::Image;
 use std::sync::Arc;
 
-pub use crate::texture::{amplitude::*, overlay::*, surface::*};
+pub use crate::texture_data::{overlay::*, surface::*, texture_image::*};
 
-mod amplitude;
 mod overlay;
 mod surface;
+mod texture_image;
 
-pub(crate) struct Texture {
+pub(crate) struct TextureData {
     pub overlay: OverlayTexture,
     pub surface: SurfaceTexture,
-    pub amplitude: AmplitudeTexture,
+    pub texture: TextureImage,
     pub bind_group: wgpu::BindGroup,
 }
 
-impl Texture {
+impl TextureData {
     pub(crate) fn new(
         device: &wgpu::Device,
         surface: Image<f32, 1>,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let overlay_texture = OverlayTexture::new(&surface.dimensions().into(), &device);
-        let amplitude_texture = AmplitudeTexture::new(&surface.dimensions().into(), &device);
-        let surface_texture = SurfaceTexture::new(Arc::new(surface), &device);
+        let texture = TextureImage::new(&surface.dimensions().into(), &device);
+        let surface_data = SurfaceTexture::new(Arc::new(surface), &device);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture_bind_group"),
             layout: layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&surface_texture.view),
+                    resource: wgpu::BindingResource::TextureView(&surface_data.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&amplitude_texture.view),
+                    resource: wgpu::BindingResource::TextureView(&texture.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -43,8 +43,8 @@ impl Texture {
         });
         Self {
             overlay: overlay_texture,
-            surface: surface_texture,
-            amplitude: amplitude_texture,
+            surface: surface_data,
+            texture,
             bind_group: group,
         }
     }

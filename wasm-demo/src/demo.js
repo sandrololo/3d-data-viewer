@@ -282,7 +282,7 @@ function setupControls() {
             isHeightMode = false;
             btnAmplitude.classList.add('active');
             btnHeight.classList.remove('active');
-            wasmViewer.set_amplitude_shader();
+            wasmViewer.set_texture_shader();
         }
     };
 
@@ -482,7 +482,7 @@ function parsePixelResult(result) {
         const x = readNumericMember(result, 'x')
         const y = readNumericMember(result, 'y')
         const z = readNumericMember(result, 'z')
-        const amplitude = readNumericMember(result, 'amplitude')
+        const amplitude = readNumericMember(result, 'texture')
         console.log(result)
         if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
             return { x, y, z, amplitude };
@@ -569,11 +569,10 @@ async function main() {
             const surfaceData = await loadSurfaceData();
             const amplitudeData = await loadAmplitudeData();
             if (wasmViewer && typeof wasmViewer.set_surface === 'function') {
-                wasmViewer.set_surface(surfaceData);
-                wasmViewer.set_amplitude(amplitudeData);
-                wasmViewer.set_amplitude_range(0, 100);
+                await wasmViewer.set_surface(surfaceData);
+                await wasmViewer.set_texture(amplitudeData);
+                wasmViewer.set_texture_range(0, 100);
                 console.log('✅ Surface data set in WASM viewer');
-                hideLoading();
             } else {
                 console.warn('set_surface method not available on wasmViewer');
             }
@@ -581,6 +580,7 @@ async function main() {
             console.error('Failed to load surface data:', error);
             // Continue without surface data rather than failing completely
         }
+        hideLoading();
         console.log('✅ 3D Data Viewer ready!');
         console.log('wasmModule available:', !!wasmModule);
         console.log('wasmViewer available:', !!wasmViewer);

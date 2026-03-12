@@ -2,9 +2,9 @@ struct VertexInput {
     @location(0) index: u32,
 }
 @group(0) @binding(0)
-var surface_texture: texture_2d<f32>;
+var surface_data: texture_2d<f32>;
 @group(0) @binding(1)
-var amplitude_texture: texture_2d<u32>;
+var texture_image: texture_2d<u32>;
 @group(0) @binding(2)
 var overlay_texture: texture_2d<f32>;
 
@@ -22,12 +22,12 @@ struct ZValueRange{
 @group(1) @binding(1)
 var<uniform> z_range: ZValueRange;
 
-struct AmplitudeRange{
+struct TextureImageRange{
     start: u32,
     end: u32,
 }
 @group(1) @binding(2)
-var<uniform> amplitude_range: AmplitudeRange;
+var<uniform> texture_image_range: TextureImageRange;
 
 @group(1) @binding(3)
 var<uniform> mip_level: u32;
@@ -74,14 +74,14 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     // Map grid coordinates to NDC consistently across the full width/height
     let x = 2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0;
     let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
-    let z_value = textureLoad(surface_texture, vec2<u32>(col, row) * resize, 0);
+    let z_value = textureLoad(surface_data, vec2<u32>(col, row) * resize, 0);
     let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
 
     let light = normalize(vec3(-1.0, 1.0, 1.0));
-    let z_up = textureLoad(surface_texture, vec2<u32>(col, max(row, 1u) - 1u) * resize, 0).x;
-    let z_down = textureLoad(surface_texture, vec2<u32>(col, min(row + 1u, image_dims.height - 1u)) * resize, 0).x;
-    let z_left = textureLoad(surface_texture, vec2<u32>(max(col, 1u) - 1u, row) * resize, 0).x;
-    let z_right = textureLoad(surface_texture, vec2<u32>(min(col + 1u, image_dims.width - 1u), row) * resize, 0).x;
+    let z_up = textureLoad(surface_data, vec2<u32>(col, max(row, 1u) - 1u) * resize, 0).x;
+    let z_down = textureLoad(surface_data, vec2<u32>(col, min(row + 1u, image_dims.height - 1u)) * resize, 0).x;
+    let z_left = textureLoad(surface_data, vec2<u32>(max(col, 1u) - 1u, row) * resize, 0).x;
+    let z_right = textureLoad(surface_data, vec2<u32>(min(col + 1u, image_dims.width - 1u), row) * resize, 0).x;
 
     let tangent_x = normalize(vec3(2.0, 0.0, (z_right - z_left) * (z_range.max - z_range.min)));
     let tangent_y = normalize(vec3(0.0, 2.0, (z_down - z_up) * (z_range.max - z_range.min)));
@@ -118,11 +118,11 @@ fn vs_main(data: VertexInput) -> VertexOutput {
 }
 
 @fragment
-fn fs_amplitude(in: VertexOutput) -> FragmentOutput {
-    let sampled = textureLoad(amplitude_texture, in.pixel * in.resize, 0);
-    let range = f32(amplitude_range.end - amplitude_range.start);
-    let red = 1.0 - f32(sampled.r - amplitude_range.start) / range;
-    let green = f32(sampled.r - amplitude_range.start) / range;
+fn fs_texture(in: VertexOutput) -> FragmentOutput {
+    let sampled = textureLoad(texture_image, in.pixel * in.resize, 0);
+    let range = f32(texture_image_range.end - texture_image_range.start);
+    let red = 1.0 - f32(sampled.r - texture_image_range.start) / range;
+    let green = f32(sampled.r - texture_image_range.start) / range;
     var out: FragmentOutput;
     out.color = vec4<f32>(red, green, 0.0, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
