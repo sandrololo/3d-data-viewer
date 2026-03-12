@@ -1,20 +1,20 @@
 use imbuf::Image;
 use std::sync::Arc;
 
-pub use crate::texture_data::{overlay::*, surface::*, texture_image::*};
+pub use crate::scene::{overlay::*, surface::*, texture_image::*};
 
 mod overlay;
 mod surface;
 mod texture_image;
 
-pub(crate) struct TextureData {
+pub(crate) struct Scene {
     pub overlay: OverlayTexture,
     pub surface: SurfaceTexture,
     pub texture: TextureImage,
     pub bind_group: wgpu::BindGroup,
 }
 
-impl TextureData {
+impl Scene {
     pub(crate) fn new(
         device: &wgpu::Device,
         surface: Image<f32, 1>,

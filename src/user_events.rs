@@ -7,7 +7,7 @@ use crate::{
     State,
     image::{CaptureResult, DataSize},
     pixel_picker::{PixelResult, PixelValue},
-    texture_data::{Overlay, TextureData},
+    scene::{Overlay, Scene},
 };
 
 #[non_exhaustive]
@@ -84,7 +84,7 @@ impl UserEventHandler for State {
         self.projection.reset();
         self.transformation.reset();
         self.mouse.reset_zoom();
-        self.texture_data = None;
+        self.scene = None;
         self.mip.reset();
     }
 
@@ -95,16 +95,16 @@ impl UserEventHandler for State {
 
         self.mip.set_image(&data.dimensions().into(), &self.device);
 
-        let texture_data = TextureData::new(&self.device, data, &self.texture_bind_group_layout);
-        texture_data.surface.write_to_queue(&self.queue);
-        self.texture_data = Some(texture_data);
+        let scene = Scene::new(&self.device, data, &self.texture_bind_group_layout);
+        scene.surface.write_to_queue(&self.queue);
+        self.scene = Some(scene);
     }
 
     fn set_texture(&mut self, data: Image<u16, 1>) {
         log::info!("Setting new texture image");
-        if let Some(texture_data) = &mut self.texture_data {
-            texture_data.texture.set_image(data);
-            texture_data.texture.write_to_queue(&self.queue);
+        if let Some(scene) = &mut self.scene {
+            scene.texture.set_image(data);
+            scene.texture.write_to_queue(&self.queue);
         } else {
             log::warn!("Can't set texture image, surface texture not initialized");
         }
@@ -116,11 +116,11 @@ impl UserEventHandler for State {
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
         >,
     ) {
-        if let Some(texture_data) = &self.texture_data {
-            if let Some(texture) = &texture_data.texture.image {
+        if let Some(scene) = &self.scene {
+            if let Some(texture) = &scene.texture.image {
                 self.pixel_picker.write_to_channel(
                     self.device.clone(),
-                    texture_data.surface.image.clone(),
+                    scene.surface.image.clone(),
                     texture.clone(),
                     sender,
                 );
@@ -160,17 +160,17 @@ impl UserEventHandler for State {
 
     fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
         log::info!("Setting overlays");
-        if let Some(texture_data) = &mut self.texture_data {
-            texture_data.overlay.set_overlays(overlays);
-            texture_data.overlay.write_to_queue(&self.queue);
+        if let Some(scene) = &mut self.scene {
+            scene.overlay.set_overlays(overlays);
+            scene.overlay.write_to_queue(&self.queue);
         }
     }
 
     fn clear_overlays(&mut self) {
         log::info!("Clearing overlays");
-        if let Some(texture_data) = &mut self.texture_data {
-            texture_data.overlay.set_overlays(Arc::new(Vec::new()));
-            texture_data.overlay.write_to_queue(&self.queue);
+        if let Some(scene) = &mut self.scene {
+            scene.overlay.set_overlays(Arc::new(Vec::new()));
+            scene.overlay.write_to_queue(&self.queue);
         }
     }
 
@@ -194,9 +194,9 @@ impl UserEventHandler for State {
 
     fn set_percentile(&mut self, percentile: f32) {
         let surface = self
-            .texture_data
+            .scene
             .as_ref()
-            .and_then(|texture_data| Some(texture_data.surface.image.buffer()));
+            .and_then(|scene| Some(scene.surface.image.buffer()));
         self.percentile_range_buffer
             .update_percentile(&self.queue, percentile, surface);
     }
@@ -211,7 +211,7 @@ impl UserEventHandler for State {
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>,
         >,
     ) {
-        if self.texture_data.is_some() {
+        if self.scene.is_some() {
             self.image_capture
                 .write_to_channel(self.device.clone(), sender)
         } else {

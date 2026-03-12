@@ -35,7 +35,7 @@ mod mip;
 mod mouse;
 mod pixel_picker;
 mod projection;
-mod texture_data;
+mod scene;
 mod transformation;
 mod user_events;
 mod vertex_buffer;
@@ -49,7 +49,7 @@ use crate::{
     keyboard::Keyboard,
     mip::Mip,
     pixel_picker::PixelPicker,
-    texture_data::TextureData,
+    scene::Scene,
     transformation::Transformation,
     user_events::{UserEvent, UserEventHandler},
     vertex_buffer::VertexBuffer,
@@ -71,7 +71,7 @@ struct State {
     use_height_shader: bool,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     mip: Mip,
-    texture_data: Option<TextureData>,
+    scene: Option<Scene>,
     percentile_range_buffer: SurfacePercentileRangeBuffer,
     texture_range_buffer: TextureImageRangeBuffer,
     image_info_bind_group: wgpu::BindGroup,
@@ -121,7 +121,7 @@ impl State {
                 ],
             });
 
-        let texture_bind_group_layout = TextureData::create_bind_group_layout(&device);
+        let texture_bind_group_layout = Scene::create_bind_group_layout(&device);
 
         let pixel_picker = PixelPicker::new(&device, window.inner_size());
         let image_capture = Capture::new(
@@ -251,7 +251,7 @@ impl State {
             use_height_shader: true,
             texture_bind_group_layout,
             mip,
-            texture_data: None,
+            scene: None,
             percentile_range_buffer,
             texture_range_buffer,
             image_info_bind_group,
@@ -363,8 +363,8 @@ impl State {
             &self.render_pipeline_texture
         };
         renderpass.set_pipeline(pipeline);
-        if let Some(texture) = &self.texture_data {
-            renderpass.set_bind_group(0, &texture.bind_group, &[]);
+        if let Some(scene) = &self.scene {
+            renderpass.set_bind_group(0, &scene.bind_group, &[]);
         }
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
         renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
@@ -389,11 +389,11 @@ impl State {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if let Some(texture_data) = &self.texture_data {
-                if let Some(texture_image) = &texture_data.texture.image {
+            if let Some(scene) = &self.scene {
+                if let Some(texture_image) = &scene.texture.image {
                     match pollster::block_on(self.pixel_picker.get(
                         self.device.clone(),
-                        texture_data.surface.image.clone(),
+                        scene.surface.image.clone(),
                         texture_image.clone(),
                     )) {
                         Ok(pixel_value) => {
