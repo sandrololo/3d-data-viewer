@@ -364,7 +364,7 @@ impl State {
         };
         renderpass.set_pipeline(pipeline);
         if let Some(scene) = &self.scene {
-            renderpass.set_bind_group(0, &scene.bind_group, &[]);
+            renderpass.set_bind_group(0, scene.get_bind_group(), &[]);
         }
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
         renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
@@ -390,11 +390,11 @@ impl State {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Some(scene) = &self.scene {
-                if let Some(texture_image) = &scene.texture.image {
+                if let Some(texture_image) = scene.get_texture_image() {
                     match pollster::block_on(self.pixel_picker.get(
                         self.device.clone(),
-                        scene.surface.image.clone(),
-                        texture_image.clone(),
+                        scene.get_surface_image(),
+                        texture_image,
                     )) {
                         Ok(pixel_value) => {
                             log::info!(

@@ -5,7 +5,10 @@ use std::{num::NonZeroU32, sync::Arc};
 
 use crate::{
     State,
-    gpu_data::{CaptureResult, DataSize, pixel_picker::{PixelResult, PixelValue}},
+    gpu_data::{
+        CaptureResult, DataSize,
+        pixel_picker::{PixelResult, PixelValue},
+    },
     scene::{Overlay, Scene},
 };
 
@@ -94,16 +97,18 @@ impl UserEventHandler for State {
 
         self.mip.set_image(&data.dimensions().into(), &self.device);
 
-        let scene = Scene::new(&self.device, data, &self.texture_bind_group_layout);
-        scene.surface.write_to_queue(&self.queue);
-        self.scene = Some(scene);
+        self.scene = Some(Scene::new_surface(
+            data,
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+        ));
     }
 
     fn set_texture(&mut self, data: Image<u16, 1>) {
         log::info!("Setting new texture image");
         if let Some(scene) = &mut self.scene {
-            scene.texture.set_image(data);
-            scene.texture.write_to_queue(&self.queue);
+            scene.set_texture(data, &self.queue);
         } else {
             log::warn!("Can't set texture image, surface texture not initialized");
         }
@@ -116,11 +121,11 @@ impl UserEventHandler for State {
         >,
     ) {
         if let Some(scene) = &self.scene {
-            if let Some(texture) = &scene.texture.image {
+            if let Some(texture_image) = scene.get_texture_image() {
                 self.pixel_picker.write_to_channel(
                     self.device.clone(),
-                    scene.surface.image.clone(),
-                    texture.clone(),
+                    scene.get_surface_image(),
+                    texture_image,
                     sender,
                 );
             } else {
@@ -160,16 +165,14 @@ impl UserEventHandler for State {
     fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
         log::info!("Setting overlays");
         if let Some(scene) = &mut self.scene {
-            scene.overlay.set_overlays(overlays);
-            scene.overlay.write_to_queue(&self.queue);
+            scene.set_overlays(overlays, &self.queue);
         }
     }
 
     fn clear_overlays(&mut self) {
         log::info!("Clearing overlays");
         if let Some(scene) = &mut self.scene {
-            scene.overlay.set_overlays(Arc::new(Vec::new()));
-            scene.overlay.write_to_queue(&self.queue);
+            scene.clear_overlays(&self.queue);
         }
     }
 
@@ -195,9 +198,12 @@ impl UserEventHandler for State {
         let surface = self
             .scene
             .as_ref()
-            .and_then(|scene| Some(scene.surface.image.buffer()));
-        self.percentile_range_buffer
-            .update_percentile(&self.queue, percentile, surface);
+            .map(|scene| scene.get_surface_image().buffer().to_vec());
+        self.percentile_range_buffer.update_percentile(
+            &self.queue,
+            percentile,
+            surface.as_ref().map(|v| v.as_slice()),
+        );
     }
 
     fn set_texture_range(&mut self, start: u16, end: u16) {
