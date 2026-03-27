@@ -28,20 +28,23 @@ mod wasm_commands {
     }
 }
 
+mod events;
 mod gpu_data;
 mod index_buffer;
 mod keyboard;
 mod mip;
 mod mouse;
 mod scene;
-mod user_events;
 mod vertex_buffer;
 mod view;
 #[cfg(target_arch = "wasm32")]
 mod wasm_viewer;
 use mouse::Mouse;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::events::UserEvent;
 use crate::{
+    events::{Event, SystemEvent},
     gpu_data::{
         Capture, DataSize, pixel_picker::PixelPicker,
         surface_percentile_range::SurfacePercentileRangeBuffer,
@@ -50,7 +53,6 @@ use crate::{
     keyboard::Keyboard,
     mip::Mip,
     scene::Scene,
-    user_events::{UserEvent, UserEventHandler},
     vertex_buffer::VertexBuffer,
     view::{projection::Projection, transformation::Transformation},
 };
@@ -270,6 +272,19 @@ impl State {
         &self.window
     }
 
+    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        self.configure_surface();
+        // Resize the picking texture to match the new window size
+        self.pixel_picker.resize(&self.device, new_size);
+        self.image_capture.resize(
+            &self.device,
+            DataSize {
+                width: NonZeroU32::new(new_size.width).expect("Windows size should not be 0"),
+                height: NonZeroU32::new(new_size.height).expect("Windows size should not be 0"),
+            },
+        );
+    }
+
     fn configure_surface(&mut self) {
         let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT;
         if self.surface_usages.contains(wgpu::TextureUsages::COPY_SRC) {
@@ -422,14 +437,14 @@ impl State {
 struct ImageViewer3D {
     state: Option<State>,
     #[cfg(target_arch = "wasm32")]
-    proxy: Option<winit::event_loop::EventLoopProxy<UserEvent>>,
+    proxy: Option<winit::event_loop::EventLoopProxy<Event>>,
     #[cfg(target_arch = "wasm32")]
     canvas_id: String,
 }
 
 impl ImageViewer3D {
     pub fn new(
-        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<UserEvent>,
+        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<Event>,
         #[cfg(target_arch = "wasm32")] canvas_id: String,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
@@ -444,7 +459,7 @@ impl ImageViewer3D {
     }
 }
 
-impl ApplicationHandler<UserEvent> for ImageViewer3D {
+impl ApplicationHandler<Event> for ImageViewer3D {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
@@ -478,7 +493,7 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
                 wasm_bindgen_futures::spawn_local(async move {
                     assert!(
                         proxy
-                            .send_event(UserEvent::SetState(State::new(window).await))
+                            .send_event(SystemEvent::SetState(State::new(window).await).into())
                             .is_ok()
                     )
                 });
@@ -580,81 +595,9 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
     }
 
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: UserEvent) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: Event) {
         match event {
-            UserEvent::ResetView => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.reset_view();
-                }
-            }
-            UserEvent::GetPixel(sender) => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.get_pixel_value(sender);
-                }
-            }
-            UserEvent::CaptureImage(sender) => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.capture_image(sender);
-                }
-            }
-            UserEvent::SetTextureShader => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_texture_shader();
-                }
-            }
-            UserEvent::SetHeightShader => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_height_shader();
-                }
-            }
-            UserEvent::SetOverlays(overlays) => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_overlays(overlays.clone());
-                }
-            }
-            UserEvent::ClearOverlays => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.clear_overlays();
-                }
-            }
-            UserEvent::ResetOrientation => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.reset_orientation();
-                }
-            }
-            UserEvent::SetSurface(data) => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_surface(data);
-                } else {
-                    log::warn!("State is None, cannot set surface");
-                }
-            }
-            UserEvent::SetTexture(data) => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_texture(data);
-                }
-            }
-            UserEvent::ZoomIn => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.zoom_in();
-                }
-            }
-            UserEvent::ZoomOut => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.zoom_out();
-                }
-            }
-            UserEvent::SetPercentile(percentile) => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_percentile(percentile);
-                }
-            }
-            UserEvent::SetTextureRange(start, end) => {
-                if let Some(app_state) = self.state.as_mut() {
-                    app_state.set_texture_range(start, end);
-                }
-            }
-            UserEvent::SetState(mut state) => {
+            Event::System(SystemEvent::SetState(mut state)) => {
                 #[cfg(target_arch = "wasm32")]
                 {
                     // Resize first while we still own the event
@@ -679,8 +622,10 @@ impl ApplicationHandler<UserEvent> for ImageViewer3D {
                     }
                 }
             }
-            _ => {
-                log::warn!("Unhandled user event");
+            Event::User(user_event) => {
+                if let Some(app_state) = self.state.as_mut() {
+                    user_event.apply(app_state);
+                }
             }
         }
         if let Some(app_state) = self.state.as_mut() {
@@ -701,7 +646,7 @@ pub fn run() -> anyhow::Result<()> {
     let event_loop = EventLoop::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
     proxy
-        .send_event(UserEvent::SetSurface(data.0))
+        .send_event(UserEvent::SetSurface(data.0).into())
         .map_err(|e| anyhow!("Error: {}", e))
         .unwrap();
 

@@ -5,7 +5,10 @@ use wasm_bindgen::{JsValue, prelude::*, throw_str};
 use winit::event_loop::EventLoop;
 
 use crate::{
-    ImageViewer3D, gpu_data::pixel_picker::PixelValue, scene::Overlay, user_events::UserEvent,
+    ImageViewer3D,
+    events::{Event, UserEvent},
+    gpu_data::pixel_picker::PixelValue,
+    scene::Overlay,
 };
 
 mod wasm_commands {
@@ -21,7 +24,7 @@ mod wasm_commands {
 
 #[wasm_bindgen]
 pub struct WasmViewer {
-    proxy: Option<winit::event_loop::EventLoopProxy<UserEvent>>,
+    proxy: Option<winit::event_loop::EventLoopProxy<Event>>,
     canvas_id: String,
 }
 
@@ -57,7 +60,7 @@ impl WasmViewer {
     pub async fn reset_view(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::ResetView)
+                .send_event(UserEvent::ResetView.into())
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
@@ -89,7 +92,7 @@ impl WasmViewer {
                 NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
             );
             proxy
-                .send_event(UserEvent::SetSurface(image))
+                .send_event(UserEvent::SetSurface(image).into())
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
@@ -121,7 +124,7 @@ impl WasmViewer {
                 NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
             );
             proxy
-                .send_event(UserEvent::SetTexture(image))
+                .send_event(UserEvent::SetTexture(image).into())
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
@@ -133,7 +136,7 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             let (sender, receiver) = futures::channel::oneshot::channel();
             proxy
-                .send_event(UserEvent::GetPixel(sender))
+                .send_event(UserEvent::GetPixel(sender).into())
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
             let pixels = receiver
                 .await
@@ -150,7 +153,7 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             let (sender, receiver) = futures::channel::oneshot::channel();
             proxy
-                .send_event(UserEvent::CaptureImage(sender))
+                .send_event(UserEvent::CaptureImage(sender).into())
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
             let image = receiver
                 .await
@@ -166,7 +169,7 @@ impl WasmViewer {
     pub fn set_height_shader(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::SetHeightShader)
+                .send_event(UserEvent::SetHeightShader.into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -177,7 +180,7 @@ impl WasmViewer {
     pub fn set_texture_shader(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::SetTextureShader)
+                .send_event(UserEvent::SetTextureShader.into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -188,7 +191,7 @@ impl WasmViewer {
     pub fn set_overlays(&self, overlays: Vec<Overlay>) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::SetOverlays(Arc::new(overlays)))
+                .send_event(UserEvent::SetOverlays(Arc::new(overlays)).into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -199,7 +202,7 @@ impl WasmViewer {
     pub fn clear_overlays(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::ClearOverlays)
+                .send_event(UserEvent::ClearOverlays.into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -210,7 +213,7 @@ impl WasmViewer {
     pub fn zoom_in(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::ZoomIn)
+                .send_event(UserEvent::ZoomIn.into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -221,7 +224,7 @@ impl WasmViewer {
     pub fn zoom_out(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::ZoomOut)
+                .send_event(UserEvent::ZoomOut.into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -232,7 +235,7 @@ impl WasmViewer {
     pub fn reset_orientation(&self) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::ResetOrientation)
+                .send_event(UserEvent::ResetOrientation.into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -243,7 +246,7 @@ impl WasmViewer {
     pub fn set_percentile(&self, percentile: f32) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::SetPercentile(percentile))
+                .send_event(UserEvent::SetPercentile(percentile).into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
@@ -254,7 +257,7 @@ impl WasmViewer {
     pub fn set_texture_range(&self, start: u16, end: u16) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy
-                .send_event(UserEvent::SetTextureRange(start, end))
+                .send_event(UserEvent::SetTextureRange(start, end).into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
