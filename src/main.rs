@@ -1,6 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 use anyhow::anyhow;
-use std::{borrow::Cow, num::NonZeroU32, sync::Arc, vec};
+use std::{borrow::Cow, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use winit::{
@@ -44,7 +44,7 @@ use crate::events::UserEvent;
 use crate::{
     events::{Event, SystemEvent},
     gpu_data::{
-        Capture, DataSize, pixel_picker::PixelPicker,
+        DataSize, pixel_picker::PixelPicker,
         surface_percentile_range::SurfacePercentileRangeBuffer,
         texture_image_range::TextureImageRangeBuffer,
     },
@@ -70,7 +70,6 @@ struct State {
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
     interaction: Interaction,
-    image_capture: Capture,
 }
 
 impl State {
@@ -115,18 +114,7 @@ impl State {
 
         let texture_bind_group_layout = Scene::create_bind_group_layout(&device);
 
-        let image_capture = Capture::new(
-            &device,
-            DataSize {
-                width: NonZeroU32::new(window.inner_size().width)
-                    .expect("Windows size should not be 0"),
-                height: NonZeroU32::new(window.inner_size().height)
-                    .expect("Windows size should not be 0"),
-            },
-            surface_format,
-        );
-
-        let mut interaction = Interaction::new(&device, window.inner_size());
+        let mut interaction = Interaction::new(&device, window.inner_size(), surface_format);
 
         let percentile_range_buffer = SurfacePercentileRangeBuffer::new(&device);
         let texture_range_buffer = TextureImageRangeBuffer::new(&device);
@@ -237,7 +225,6 @@ impl State {
             image_info_bind_group,
             depth_view,
             interaction,
-            image_capture,
         };
 
         // Configure surface for the first time
@@ -248,18 +235,6 @@ impl State {
 
     fn get_window(&self) -> &Window {
         &self.window
-    }
-
-    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.configure_surface();
-        // Resize the picking texture to match the new window size
-        self.image_capture.resize(
-            &self.device,
-            DataSize {
-                width: NonZeroU32::new(new_size.width).expect("Windows size should not be 0"),
-                height: NonZeroU32::new(new_size.height).expect("Windows size should not be 0"),
-            },
-        );
     }
 
     fn configure_surface(&mut self) {
@@ -365,12 +340,11 @@ impl State {
         // End the renderpass.
         drop(renderpass);
 
-        self.image_capture
-            .copy_texture(&mut encoder, &surface_texture);
         self.interaction
             .pixel_picker
             .copy_pixel_at_mouse(&mut encoder);
-        self.interaction.update_gpu(&self.queue);
+        self.interaction
+            .update_gpu(&self.queue, &mut encoder, &surface_texture);
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
@@ -495,8 +469,8 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                 WindowEvent::RedrawRequested => {
                     app_state.render();
                 }
-                WindowEvent::Resized(size) => {
-                    app_state.resize(size);
+                WindowEvent::Resized(_) => {
+                    app_state.configure_surface();
                 }
                 _ => (),
             }
@@ -511,7 +485,7 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                 #[cfg(target_arch = "wasm32")]
                 {
                     // Resize first while we still own the event
-                    state.resize(state.window.inner_size());
+                    state.configure_surface();
                     // Update projection aspect ratio to match viewport
                     state.interaction.projection.update_aspect_ratio(
                         state.window.inner_size().width as f32

@@ -1,10 +1,12 @@
+use std::num::NonZeroU32;
+
 use glam::{Vec2, Vec3};
 use log::error;
-use wgpu::{Device, Queue};
+use wgpu::{Device, Queue, SurfaceTexture, TextureFormat};
 use winit::{dpi::PhysicalSize, event::WindowEvent};
 
 use crate::{
-    gpu_data::pixel_picker::PixelPicker,
+    gpu_data::{Capture, DataSize, pixel_picker::PixelPicker},
     keyboard::Keyboard,
     mip::Mip,
     mouse::Mouse,
@@ -18,10 +20,23 @@ pub(crate) struct Interaction {
     pub transformation: Transformation,
     pub projection: Projection,
     pub pixel_picker: PixelPicker,
+    pub image_capture: Capture,
 }
 
 impl Interaction {
-    pub(crate) fn new(device: &Device, window_size: PhysicalSize<u32>) -> Self {
+    pub(crate) fn new(
+        device: &Device,
+        window_size: PhysicalSize<u32>,
+        surface_format: TextureFormat,
+    ) -> Self {
+        let image_capture = Capture::new(
+            &device,
+            DataSize {
+                width: NonZeroU32::new(window_size.width).expect("Windows size should not be 0"),
+                height: NonZeroU32::new(window_size.height).expect("Windows size should not be 0"),
+            },
+            surface_format,
+        );
         Self {
             mouse: Mouse::new(),
             keyboard: Keyboard::new(),
@@ -29,6 +44,7 @@ impl Interaction {
             transformation: Transformation::default(),
             projection: Projection::default(),
             pixel_picker: PixelPicker::new(&device, window_size),
+            image_capture,
         }
     }
 
@@ -43,6 +59,13 @@ impl Interaction {
                 self.pixel_picker.resize(device, size);
                 self.projection
                     .update_aspect_ratio(size.width as f32 / size.height as f32);
+                self.image_capture.resize(
+                    device,
+                    DataSize {
+                        width: NonZeroU32::new(size.width).expect("Windows size should not be 0"),
+                        height: NonZeroU32::new(size.height).expect("Windows size should not be 0"),
+                    },
+                );
             }
             WindowEvent::CursorMoved {
                 device_id: _,
@@ -128,7 +151,13 @@ impl Interaction {
         self.mip.set_zoom(self.mouse.get_zoom());
     }
 
-    pub(crate) fn update_gpu(&self, queue: &Queue) {
+    pub(crate) fn update_gpu(
+        &self,
+        queue: &Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        surface_texture: &SurfaceTexture,
+    ) {
+        self.image_capture.copy_texture(encoder, &surface_texture);
         self.transformation.update_gpu(queue);
         self.projection.update_gpu(queue);
     }

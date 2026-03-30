@@ -82,6 +82,7 @@ impl UserEvent {
             UserEvent::CaptureImage(sender) => {
                 if state.scene.is_some() {
                     state
+                        .interaction
                         .image_capture
                         .write_to_channel(state.device.clone(), sender)
                 } else {
