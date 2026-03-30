@@ -71,9 +71,12 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let resize = u32(exp2(f32(mip_level)));
     let col = data.index % image_dims.width;
     let row = data.index / image_dims.width;
-    // Map grid coordinates to NDC consistently across the full width/height
-    let x = 2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0;
+
+    let img_aspect_ratio = f32(image_dims.width) / f32(image_dims.height);
+    // Map grid coordinates to NDC, preserving image aspect ratio and keeping the mesh centred
+    let x = img_aspect_ratio * (2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0);
     let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
+
     let z_value = textureLoad(surface_data, vec2<u32>(col, row) * resize, 0);
     let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
 
