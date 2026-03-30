@@ -43,16 +43,13 @@ impl UserEvent {
     pub(crate) fn apply(self, state: &mut State) {
         match self {
             UserEvent::ResetView => {
-                state.projection.reset();
-                state.transformation.reset();
-                state.mouse.reset_zoom();
+                state.interaction.reset();
                 state.scene = None;
-                state.mip.reset();
             }
             UserEvent::GetPixel(sender) => {
                 if let Some(scene) = &state.scene {
                     if let Some(texture_image) = scene.get_texture_image() {
-                        state.pixel_picker.write_to_channel(
+                        state.interaction.pixel_picker.write_to_channel(
                             state.device.clone(),
                             scene.get_surface_image(),
                             texture_image,
@@ -121,9 +118,7 @@ impl UserEvent {
                 }
             }
             UserEvent::ResetOrientation => {
-                state.projection.reset();
-                state.transformation.reset();
-                state.mouse.reset_zoom();
+                state.interaction.reset_orientation();
             }
             UserEvent::SetSurface(data) => {
                 log::info!("Setting new surface image");
@@ -132,6 +127,7 @@ impl UserEvent {
                     .update_data(&state.queue, data.buffer());
 
                 state
+                    .interaction
                     .mip
                     .set_image(&data.dimensions().into(), &state.device);
 
@@ -151,14 +147,10 @@ impl UserEvent {
                 }
             }
             UserEvent::ZoomIn => {
-                state.mouse.zoom_in();
-                state.projection.zoom(state.mouse.get_zoom());
-                state.mip.set_zoom(state.mouse.get_zoom());
+                state.interaction.zoom_in();
             }
             UserEvent::ZoomOut => {
-                state.mouse.zoom_out();
-                state.projection.zoom(state.mouse.get_zoom());
-                state.mip.set_zoom(state.mouse.get_zoom());
+                state.interaction.zoom_out();
             }
             UserEvent::SetPercentile(percentile) => {
                 let surface = state

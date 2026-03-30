@@ -1,7 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
 use anyhow::anyhow;
-use glam::{Vec2, Vec3};
-use log::error;
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc, vec};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -31,6 +29,7 @@ mod wasm_commands {
 mod events;
 mod gpu_data;
 mod index_buffer;
+mod interaction;
 mod keyboard;
 mod mip;
 mod mouse;
@@ -39,7 +38,6 @@ mod vertex_buffer;
 mod view;
 #[cfg(target_arch = "wasm32")]
 mod wasm_viewer;
-use mouse::Mouse;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::events::UserEvent;
@@ -50,11 +48,10 @@ use crate::{
         surface_percentile_range::SurfacePercentileRangeBuffer,
         texture_image_range::TextureImageRangeBuffer,
     },
-    keyboard::Keyboard,
+    interaction::Interaction,
     mip::Mip,
     scene::Scene,
     vertex_buffer::VertexBuffer,
-    view::{projection::Projection, transformation::Transformation},
 };
 
 struct State {
@@ -64,21 +61,16 @@ struct State {
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
     surface_usages: wgpu::TextureUsages,
-    mouse: Mouse,
-    keyboard: Keyboard,
-    transformation: Transformation,
-    projection: Projection,
     render_pipeline_texture: wgpu::RenderPipeline,
     render_pipeline_height: wgpu::RenderPipeline,
     use_height_shader: bool,
     texture_bind_group_layout: wgpu::BindGroupLayout,
-    mip: Mip,
     scene: Option<Scene>,
     percentile_range_buffer: SurfacePercentileRangeBuffer,
     texture_range_buffer: TextureImageRangeBuffer,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
-    pixel_picker: PixelPicker,
+    interaction: Interaction,
     image_capture: Capture,
 }
 
@@ -125,7 +117,6 @@ impl State {
 
         let texture_bind_group_layout = Scene::create_bind_group_layout(&device);
 
-        let pixel_picker = PixelPicker::new(&device, window.inner_size());
         let image_capture = Capture::new(
             &device,
             DataSize {
@@ -137,7 +128,7 @@ impl State {
             surface_format,
         );
 
-        let mip = Mip::new(&device);
+        let mut interaction = Interaction::new(&device, window.inner_size());
 
         let percentile_range_buffer = SurfacePercentileRangeBuffer::new(&device);
         let texture_range_buffer = TextureImageRangeBuffer::new(&device);
@@ -145,17 +136,12 @@ impl State {
             label: Some("image_info_bind_group"),
             layout: &image_info_bind_group_layout,
             entries: &[
-                DataSize::get_bind_group_entry(&mip.image_dims_buffer),
+                DataSize::get_bind_group_entry(&interaction.mip.image_dims_buffer),
                 percentile_range_buffer.get_bind_group_entry(),
                 texture_range_buffer.get_bind_group_entry(),
-                mip.get_bind_group_entry(),
+                interaction.mip.get_bind_group_entry(),
             ],
         });
-
-        let mut transformation = Transformation::default();
-        let transformation_bind_group_layout = transformation.create_bind_group(&device);
-        let mut projection = Projection::default();
-        let projection_bind_group_layout = projection.create_bind_group(&device);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -163,8 +149,8 @@ impl State {
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
                     &image_info_bind_group_layout,
-                    &transformation_bind_group_layout,
-                    &projection_bind_group_layout,
+                    &interaction.transformation.create_bind_group(&device),
+                    &interaction.projection.create_bind_group(&device),
                 ],
                 push_constant_ranges: &[],
             });
@@ -244,21 +230,16 @@ impl State {
             surface,
             surface_format,
             surface_usages,
-            mouse: Mouse::new(),
-            keyboard: Keyboard::new(),
-            transformation,
-            projection,
             render_pipeline_texture,
             render_pipeline_height,
             use_height_shader: true,
             texture_bind_group_layout,
-            mip,
             scene: None,
             percentile_range_buffer,
             texture_range_buffer,
             image_info_bind_group,
             depth_view,
-            pixel_picker,
+            interaction,
             image_capture,
         };
 
@@ -275,7 +256,6 @@ impl State {
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.configure_surface();
         // Resize the picking texture to match the new window size
-        self.pixel_picker.resize(&self.device, new_size);
         self.image_capture.resize(
             &self.device,
             DataSize {
@@ -352,7 +332,7 @@ impl State {
                     },
                 }),
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &self.pixel_picker.picking_texture_view,
+                    view: &self.interaction.pixel_picker.picking_texture_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -382,10 +362,12 @@ impl State {
             renderpass.set_bind_group(0, scene.get_bind_group(), &[]);
         }
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
-        renderpass.set_bind_group(2, &self.transformation.bind_group, &[]);
-        renderpass.set_bind_group(3, &self.projection.bind_group, &[]);
+        renderpass.set_bind_group(2, &self.interaction.transformation.bind_group, &[]);
+        renderpass.set_bind_group(3, &self.interaction.projection.bind_group, &[]);
 
-        self.mip.update_gpu(&mut renderpass, &self.queue);
+        self.interaction
+            .mip
+            .update_gpu(&mut renderpass, &self.queue);
 
         // End the renderpass.
         drop(renderpass);
@@ -394,9 +376,10 @@ impl State {
             self.image_capture
                 .copy_texture(&mut encoder, &surface_texture);
         }
-        self.pixel_picker.copy_pixel_at_mouse(&mut encoder);
-        self.transformation.update_gpu(&self.queue);
-        self.projection.update_gpu(&self.queue);
+        self.interaction
+            .pixel_picker
+            .copy_pixel_at_mouse(&mut encoder);
+        self.interaction.update_gpu(&self.queue);
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
@@ -406,7 +389,7 @@ impl State {
         {
             if let Some(scene) = &self.scene {
                 if let Some(texture_image) = scene.get_texture_image() {
-                    match pollster::block_on(self.pixel_picker.get(
+                    match pollster::block_on(self.interaction.pixel_picker.get(
                         self.device.clone(),
                         scene.get_surface_image(),
                         texture_image,
@@ -508,6 +491,11 @@ impl ApplicationHandler<Event> for ImageViewer3D {
         }
 
         if let Some(app_state) = self.state.as_mut() {
+            app_state.interaction.handle_event(
+                event.clone(),
+                app_state.window.inner_size(),
+                &app_state.device,
+            );
             match event {
                 WindowEvent::CloseRequested => {
                     println!("The close button was pressed; stopping");
@@ -518,79 +506,10 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                 }
                 WindowEvent::Resized(size) => {
                     app_state.resize(size);
-                    app_state.projection.update_aspect_ratio(
-                        app_state.window.inner_size().width as f32
-                            / app_state.window.inner_size().height as f32,
-                    );
-                }
-                WindowEvent::CursorMoved {
-                    device_id: _,
-                    position,
-                } => {
-                    app_state.mouse.register_move_event(position);
-                    app_state.pixel_picker.update_mouse_position(position);
-                    if app_state.mouse.is_left_button_pressed() {
-                        match app_state
-                            .mouse
-                            .get_device_coordinates(app_state.window.inner_size())
-                        {
-                            Ok(new_position) => {
-                                if app_state.mouse.is_pointer_inside(Vec2::from(new_position)) {
-                                    if app_state.keyboard.is_control_pressed() {
-                                        app_state.projection.change_position(new_position);
-                                    } else {
-                                        app_state
-                                            .transformation
-                                            .rotate(Vec3::from((new_position, 1.0)));
-                                    }
-                                }
-                            }
-                            Err(e) => error!("Failed to calculate pointer position: {}", e),
-                        }
-                    }
-                    app_state.get_window().request_redraw();
-                }
-                WindowEvent::MouseInput {
-                    device_id: _,
-                    state,
-                    button,
-                } => {
-                    app_state.mouse.register_button_event(button, state);
-                    if app_state.mouse.is_left_button_pressed() {
-                        match app_state
-                            .mouse
-                            .get_device_coordinates(app_state.window.inner_size())
-                        {
-                            Ok(pos) => {
-                                if app_state.keyboard.is_control_pressed() {
-                                    app_state.projection.start_move(pos);
-                                } else {
-                                    app_state.transformation.start_move(Vec3::from((pos, 1.0)))
-                                };
-                            }
-                            Err(e) => error!("Failed to calculate pointer position: {}", e),
-                        }
-                    }
-                }
-                WindowEvent::MouseWheel {
-                    device_id: _,
-                    delta,
-                    phase: _,
-                } => {
-                    app_state.mouse.register_scroll_event(delta);
-                    app_state.projection.zoom(app_state.mouse.get_zoom());
-                    app_state.mip.set_zoom(app_state.mouse.get_zoom());
-                    app_state.get_window().request_redraw();
-                }
-                WindowEvent::KeyboardInput {
-                    device_id: _,
-                    event,
-                    is_synthetic: _,
-                } => {
-                    app_state.keyboard.register_event(event.clone());
                 }
                 _ => (),
             }
+            app_state.get_window().request_redraw();
         }
     }
 
@@ -603,7 +522,7 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                     // Resize first while we still own the event
                     state.resize(state.window.inner_size());
                     // Update projection aspect ratio to match viewport
-                    state.projection.update_aspect_ratio(
+                    state.interaction.projection.update_aspect_ratio(
                         state.window.inner_size().width as f32
                             / state.window.inner_size().height as f32,
                     );
