@@ -13,9 +13,17 @@ use crate::{
     view::{projection::Projection, transformation::Transformation},
 };
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DragMode {
+    None,
+    Pan,
+    Rotate,
+}
+
 pub(crate) struct Interaction {
     mouse: Mouse,
     keyboard: Keyboard,
+    drag_mode: DragMode,
     pub mip: Mip,
     pub transformation: Transformation,
     pub projection: Projection,
@@ -42,6 +50,7 @@ impl Interaction {
         Self {
             mouse: Mouse::new(),
             keyboard: Keyboard::new(),
+            drag_mode: DragMode::None,
             mip: Mip::new(&device),
             transformation: Transformation::default(),
             projection,
@@ -79,7 +88,22 @@ impl Interaction {
                     match self.mouse.get_device_coordinates(window_size) {
                         Ok(new_position) => {
                             if self.mouse.is_pointer_inside(Vec2::from(new_position)) {
-                                if self.keyboard.is_control_pressed() {
+                                let target_mode = if self.keyboard.is_control_pressed() {
+                                    DragMode::Pan
+                                } else {
+                                    DragMode::Rotate
+                                };
+
+                                if self.drag_mode != target_mode {
+                                    self.drag_mode = target_mode;
+                                    match self.drag_mode {
+                                        DragMode::Pan => self.projection.start_move(new_position),
+                                        DragMode::Rotate => self
+                                            .transformation
+                                            .start_move(Vec3::from((new_position, 1.0))),
+                                        DragMode::None => (),
+                                    }
+                                } else if self.drag_mode == DragMode::Pan {
                                     self.projection.change_position(
                                         new_position,
                                         window_size.width,
@@ -103,14 +127,18 @@ impl Interaction {
                 if self.mouse.is_left_button_pressed() {
                     match self.mouse.get_device_coordinates(window_size) {
                         Ok(pos) => {
-                            if self.keyboard.is_control_pressed() {
+                            self.drag_mode = if self.keyboard.is_control_pressed() {
                                 self.projection.start_move(pos);
+                                DragMode::Pan
                             } else {
-                                self.transformation.start_move(Vec3::from((pos, 1.0)))
+                                self.transformation.start_move(Vec3::from((pos, 1.0)));
+                                DragMode::Rotate
                             };
                         }
                         Err(e) => error!("Failed to calculate pointer position: {}", e),
                     }
+                } else {
+                    self.drag_mode = DragMode::None;
                 }
             }
             WindowEvent::MouseWheel {
@@ -129,6 +157,9 @@ impl Interaction {
             } => {
                 self.keyboard.register_event(event.clone());
             }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.keyboard.update_modifiers(modifiers);
+            }
             _ => (),
         }
     }
@@ -141,6 +172,7 @@ impl Interaction {
     pub(crate) fn reset_orientation(&mut self) {
         self.projection.reset();
         self.transformation.reset();
+        self.drag_mode = DragMode::None;
         self.mouse.reset_zoom();
         self.mip.set_zoom(self.mouse.get_zoom());
     }

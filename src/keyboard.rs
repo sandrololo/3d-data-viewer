@@ -21,6 +21,14 @@ impl Keyboard {
         self.control_button == ElementState::Pressed
     }
 
+    pub fn update_modifiers(&mut self, modifiers: winit::event::Modifiers) {
+        self.control_button = if modifiers.state().control_key() {
+            ElementState::Pressed
+        } else {
+            ElementState::Released
+        };
+    }
+
     pub fn register_event(&mut self, event: winit::event::KeyEvent) {
         match event.logical_key {
             winit::keyboard::Key::Named(winit::keyboard::NamedKey::Control) => {
