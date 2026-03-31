@@ -4,7 +4,7 @@ use winit::{
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
-pub struct Mouse {
+pub(crate) struct Mouse {
     pub current_position: PhysicalPosition<f64>,
     left_button: ElementState,
     current_zoom: f32,
@@ -21,7 +21,7 @@ impl Default for Mouse {
 }
 
 impl Mouse {
-    pub fn register_button_event(&mut self, button: MouseButton, state: ElementState) {
+    pub(crate) fn register_button_event(&mut self, button: MouseButton, state: ElementState) {
         match button {
             MouseButton::Left => {
                 if state == ElementState::Pressed {
@@ -34,11 +34,11 @@ impl Mouse {
         }
     }
 
-    pub fn register_move_event(&mut self, new_position: PhysicalPosition<f64>) {
+    pub(crate) fn register_move_event(&mut self, new_position: PhysicalPosition<f64>) {
         self.current_position = new_position;
     }
 
-    pub fn register_scroll_event(&mut self, delta: MouseScrollDelta) {
+    pub(crate) fn register_scroll_event(&mut self, delta: MouseScrollDelta) {
         match delta {
             MouseScrollDelta::LineDelta(_delta_x, delta_y) => {
                 self.current_zoom *= -0.1 * delta_y + 1.0;
@@ -50,7 +50,10 @@ impl Mouse {
         }
     }
 
-    pub fn get_device_coordinates(&self, window_size: PhysicalSize<u32>) -> anyhow::Result<Vec2> {
+    pub(crate) fn get_device_coordinates(
+        &self,
+        window_size: PhysicalSize<u32>,
+    ) -> anyhow::Result<Vec2> {
         let w = f64::try_from(window_size.width - 1)?;
         let h = f64::try_from(window_size.height - 1)?;
         let x = (2.0 * self.current_position.x / w - 1.0) as f32;
@@ -58,31 +61,31 @@ impl Mouse {
         Ok(Vec2::new(x, y))
     }
 
-    pub fn is_left_button_pressed(&self) -> bool {
+    pub(crate) fn is_left_button_pressed(&self) -> bool {
         self.left_button == ElementState::Pressed
     }
 
-    pub fn set_zoom(&mut self, zoom: f32) {
+    pub(crate) fn set_zoom(&mut self, zoom: f32) {
         self.current_zoom = zoom;
     }
 
-    pub fn get_zoom(&self) -> f32 {
+    pub(crate) fn get_zoom(&self) -> f32 {
         self.current_zoom
     }
 
-    pub fn reset_zoom(&mut self) {
+    pub(crate) fn reset_zoom(&mut self) {
         self.current_zoom = 1.0;
     }
 
-    pub fn zoom_in(&mut self) {
+    pub(crate) fn zoom_in(&mut self) {
         self.current_zoom *= 1.1;
     }
 
-    pub fn zoom_out(&mut self) {
+    pub(crate) fn zoom_out(&mut self) {
         self.current_zoom *= 0.9;
     }
 
-    pub fn is_pointer_inside(&self, pos: Vec2) -> bool {
+    pub(crate) fn is_pointer_inside(&self, pos: Vec2) -> bool {
         pos.x >= -1.0 && pos.x <= 1.0 && pos.y >= -1.0 && pos.y <= 1.0
     }
 }

@@ -2,7 +2,7 @@ use crate::gpu_data::DataSize;
 use imbuf::Image;
 use std::sync::Arc;
 
-pub struct TextureImage {
+pub(crate) struct TextureImage {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub image: Option<Arc<Image<u16, 1>>>,
@@ -10,7 +10,7 @@ pub struct TextureImage {
 }
 
 impl TextureImage {
-    pub fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
+    pub(crate) fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
             height: image_size.height.get(),
@@ -37,11 +37,11 @@ impl TextureImage {
         }
     }
 
-    pub fn set_image(&mut self, image: Image<u16, 1>) {
+    pub(crate) fn set_image(&mut self, image: Image<u16, 1>) {
         self.image = Some(Arc::new(image));
     }
 
-    pub fn write_to_queue(&self, queue: &wgpu::Queue) {
+    pub(crate) fn write_to_queue(&self, queue: &wgpu::Queue) {
         if let Some(image) = &self.image.as_ref() {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {

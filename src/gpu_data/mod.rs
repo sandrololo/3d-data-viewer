@@ -7,7 +7,7 @@ pub(crate) mod pixel_picker;
 pub(crate) mod surface_percentile_range;
 pub(crate) mod texture_image_range;
 
-pub struct SurfaceData(pub Image<f32, 1>);
+pub(crate) struct SurfaceData(pub Image<f32, 1>);
 
 impl SurfaceData {
     #[cfg(not(target_arch = "wasm32"))]
@@ -65,14 +65,14 @@ impl DataSize {
         );
     }
 
-    pub fn get_bind_group_entry(buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
+    pub(crate) fn get_bind_group_entry(buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding: 0,
             resource: buffer.as_entire_binding(),
         }
     }
 
-    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
+    pub(crate) fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,

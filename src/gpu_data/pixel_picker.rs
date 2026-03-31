@@ -18,7 +18,7 @@ pub struct PixelValue {
 /// Result type for pixel reads - must be Clone for Shared futures
 pub type PixelResult = Result<PixelValue, Arc<anyhow::Error>>;
 
-pub struct PixelPicker {
+pub(crate) struct PixelPicker {
     /// Texture that stores picking data (pixel_x, pixel_y) for each fragment
     picking_texture: wgpu::Texture,
     pub picking_texture_view: wgpu::TextureView,
@@ -33,9 +33,9 @@ pub struct PixelPicker {
 }
 
 impl PixelPicker {
-    pub const PICKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
+    pub(crate) const PICKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
 
-    pub fn new(device: &wgpu::Device, window_size: PhysicalSize<u32>) -> Self {
+    pub(crate) fn new(device: &wgpu::Device, window_size: PhysicalSize<u32>) -> Self {
         let (picking_texture, picking_texture_view) =
             Self::create_picking_texture(device, window_size);
         let readback_buffer = Arc::new(Self::create_readback_buffer(device));
@@ -50,7 +50,7 @@ impl PixelPicker {
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, window_size: PhysicalSize<u32>) {
+    pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: PhysicalSize<u32>) {
         if self.window_size != window_size {
             let (picking_texture, picking_texture_view) =
                 Self::create_picking_texture(device, window_size);
@@ -60,12 +60,12 @@ impl PixelPicker {
         }
     }
 
-    pub fn update_mouse_position(&mut self, position: PhysicalPosition<f64>) {
+    pub(crate) fn update_mouse_position(&mut self, position: PhysicalPosition<f64>) {
         self.mouse_position = position;
     }
 
     /// Copy the pixel at the current mouse position from the picking texture to the readback buffer.
-    pub fn copy_pixel_at_mouse(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn copy_pixel_at_mouse(&self, encoder: &mut wgpu::CommandEncoder) {
         if self.pending_read.lock().unwrap().is_some() {
             return;
         }
@@ -96,7 +96,7 @@ impl PixelPicker {
     }
 
     #[allow(dead_code)]
-    pub fn write_to_channel(
+    pub(crate) fn write_to_channel(
         &self,
         device: Arc<wgpu::Device>,
         surface: Arc<Image<f32, 1>>,
@@ -108,7 +108,7 @@ impl PixelPicker {
         sender.send(self.get(device, surface, texture)).unwrap();
     }
 
-    pub fn get(
+    pub(crate) fn get(
         &self,
         device: Arc<wgpu::Device>,
         surface: Arc<Image<f32, 1>>,

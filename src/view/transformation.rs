@@ -18,7 +18,7 @@ impl EulerRotationDeg {
         Self { pitch, yaw, roll }
     }
 }
-pub struct Transformation {
+pub(crate) struct Transformation {
     current: Mat4,
     initial: Mat4,
     initial_position: Vec3,
@@ -33,7 +33,7 @@ impl Default for Transformation {
 }
 
 impl Transformation {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let default = Mat4::IDENTITY;
         Self {
             initial: default,
@@ -44,14 +44,14 @@ impl Transformation {
         }
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         let default = Mat4::IDENTITY;
         self.initial = default;
         self.current = default;
         self.initial_position = Vec3::new(0.0, 0.0, 1.0);
     }
 
-    pub fn update_gpu(&self, queue: &wgpu::Queue) {
+    pub(crate) fn update_gpu(&self, queue: &wgpu::Queue) {
         queue.write_buffer(
             self.buffer
                 .as_ref()
@@ -61,12 +61,12 @@ impl Transformation {
         );
     }
 
-    pub fn start_move(&mut self, position: Vec3) {
+    pub(crate) fn start_move(&mut self, position: Vec3) {
         self.initial_position = position;
         self.initial = self.current;
     }
 
-    pub fn rotate(&mut self, new_position: Vec3) {
+    pub(crate) fn rotate(&mut self, new_position: Vec3) {
         if self.initial_position != new_position {
             let rot_axis = self.initial_position.cross(new_position);
             let axis_len = rot_axis.length();
@@ -75,7 +75,7 @@ impl Transformation {
         }
     }
 
-    pub fn rotate_euler(&mut self, r: EulerRotationDeg) {
+    pub(crate) fn rotate_euler(&mut self, r: EulerRotationDeg) {
         let pitch = r.pitch * std::f32::consts::PI / 180.0;
         let yaw = r.yaw * std::f32::consts::PI / 180.0;
         let roll = r.roll * std::f32::consts::PI / 180.0;

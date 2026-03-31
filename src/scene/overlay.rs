@@ -60,7 +60,7 @@ impl Overlay {
     }
 }
 
-pub struct OverlayTexture {
+pub(crate) struct OverlayTexture {
     texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub overlays: Arc<Vec<Overlay>>,
@@ -68,7 +68,7 @@ pub struct OverlayTexture {
 }
 
 impl OverlayTexture {
-    pub fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
+    pub(crate) fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
             height: image_size.height.get(),
@@ -84,11 +84,11 @@ impl OverlayTexture {
         }
     }
 
-    pub fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
+    pub(crate) fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
         self.overlays = overlays;
     }
 
-    pub fn write_to_queue(&self, queue: &wgpu::Queue) {
+    pub(crate) fn write_to_queue(&self, queue: &wgpu::Queue) {
         let overlay_data = self.create_overlay_data();
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {

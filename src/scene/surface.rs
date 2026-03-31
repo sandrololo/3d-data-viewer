@@ -1,7 +1,7 @@
 use imbuf::Image;
 use std::sync::Arc;
 
-pub struct SurfaceTexture {
+pub(crate) struct SurfaceTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub image: Arc<Image<f32, 1>>,
@@ -9,7 +9,7 @@ pub struct SurfaceTexture {
 }
 
 impl SurfaceTexture {
-    pub fn new(image: Arc<Image<f32, 1>>, device: &wgpu::Device) -> Self {
+    pub(crate) fn new(image: Arc<Image<f32, 1>>, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image.width().get(),
             height: image.height().get(),
@@ -36,7 +36,7 @@ impl SurfaceTexture {
         }
     }
 
-    pub fn write_to_queue(&self, queue: &wgpu::Queue) {
+    pub(crate) fn write_to_queue(&self, queue: &wgpu::Queue) {
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &self.data,

@@ -4,21 +4,21 @@ pub(crate) struct SurfacePercentileRangeBuffer {
 }
 
 impl SurfacePercentileRangeBuffer {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub(crate) fn new(device: &wgpu::Device) -> Self {
         Self {
             buffer: Self::create_buffer(device),
             percentile: 0.98,
         }
     }
 
-    pub fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
+    pub(crate) fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding: 1,
             resource: self.buffer.as_entire_binding(),
         }
     }
 
-    pub fn update_percentile(
+    pub(crate) fn update_percentile(
         &mut self,
         queue: &wgpu::Queue,
         percentile: f32,
@@ -33,7 +33,7 @@ impl SurfacePercentileRangeBuffer {
         }
     }
 
-    pub fn update_data(&self, queue: &wgpu::Queue, data: &[f32]) {
+    pub(crate) fn update_data(&self, queue: &wgpu::Queue, data: &[f32]) {
         let mut vec = data.to_vec();
         let (_, lower, _) = vec.select_nth_unstable_by(
             (data.len() as f32 * (1. - self.percentile)) as usize,
@@ -56,7 +56,7 @@ impl SurfacePercentileRangeBuffer {
         })
     }
 
-    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
+    pub(crate) fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding: 1,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,

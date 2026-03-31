@@ -7,7 +7,7 @@ pub(crate) struct TextureImageRangeBuffer {
 }
 
 impl TextureImageRangeBuffer {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub(crate) fn new(device: &wgpu::Device) -> Self {
         Self {
             buffer: Self::create_buffer(device, 0, 2000),
             start: 0,
@@ -15,14 +15,14 @@ impl TextureImageRangeBuffer {
         }
     }
 
-    pub fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
+    pub(crate) fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding: 2,
             resource: self.buffer.as_entire_binding(),
         }
     }
 
-    pub fn update(&mut self, queue: &wgpu::Queue, start: u16, end: u16) {
+    pub(crate) fn update(&mut self, queue: &wgpu::Queue, start: u16, end: u16) {
         assert!(start < end, "Start must be less than end");
         log::info!("Updating texture range: {} - {}", start, end);
         self.start = start;
@@ -42,7 +42,7 @@ impl TextureImageRangeBuffer {
         })
     }
 
-    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
+    pub(crate) fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding: 2,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,

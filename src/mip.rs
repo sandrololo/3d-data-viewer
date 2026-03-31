@@ -102,14 +102,14 @@ impl Mip {
         }
     }
 
-    pub fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
+    pub(crate) fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
         wgpu::BindGroupEntry {
             binding: 3,
             resource: self.mip_buffer.as_entire_binding(),
         }
     }
 
-    pub fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
+    pub(crate) fn get_bind_group_layout_entry() -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding: 3,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,

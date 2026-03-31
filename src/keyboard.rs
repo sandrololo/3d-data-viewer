@@ -1,6 +1,6 @@
 use winit::event::ElementState;
 
-pub struct Keyboard {
+pub(crate) struct Keyboard {
     control_button: ElementState,
 }
 
@@ -13,11 +13,11 @@ impl Default for Keyboard {
 }
 
 impl Keyboard {
-    pub fn is_control_pressed(&self) -> bool {
+    pub(crate) fn is_control_pressed(&self) -> bool {
         self.control_button == ElementState::Pressed
     }
 
-    pub fn update_modifiers(&mut self, modifiers: winit::event::Modifiers) {
+    pub(crate) fn update_modifiers(&mut self, modifiers: winit::event::Modifiers) {
         self.control_button = if modifiers.state().control_key() {
             ElementState::Pressed
         } else {
@@ -25,7 +25,7 @@ impl Keyboard {
         };
     }
 
-    pub fn register_event(&mut self, event: winit::event::KeyEvent) {
+    pub(crate) fn register_event(&mut self, event: winit::event::KeyEvent) {
         match event.logical_key {
             winit::keyboard::Key::Named(winit::keyboard::NamedKey::Control) => {
                 if event.state == ElementState::Pressed {

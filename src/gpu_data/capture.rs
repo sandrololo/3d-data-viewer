@@ -6,7 +6,7 @@ use crate::gpu_data::DataSize;
 
 pub type CaptureResult = Result<Vec<u8>, Arc<anyhow::Error>>;
 
-pub struct Capture {
+pub(crate) struct Capture {
     readback_buffer: Arc<wgpu::Buffer>,
     window_size: DataSize,
     surface_format: wgpu::TextureFormat,
@@ -17,7 +17,7 @@ pub struct Capture {
 }
 
 impl Capture {
-    pub fn new(
+    pub(crate) fn new(
         device: &wgpu::Device,
         window_size: DataSize,
         surface_format: wgpu::TextureFormat,
@@ -30,7 +30,7 @@ impl Capture {
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, window_size: DataSize) {
+    pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: DataSize) {
         if self.window_size != window_size {
             self.window_size = window_size.clone();
             self.readback_buffer = Arc::new(Self::create_readback_buffer(device, &window_size))
@@ -52,7 +52,7 @@ impl Capture {
     }
 
     #[allow(dead_code)]
-    pub fn write_to_channel(
+    pub(crate) fn write_to_channel(
         &self,
         device: Arc<wgpu::Device>,
         sender: futures::channel::oneshot::Sender<
@@ -62,7 +62,7 @@ impl Capture {
         sender.send(self.get(device)).unwrap();
     }
 
-    pub fn copy_texture(
+    pub(crate) fn copy_texture(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         surface_texture: &wgpu::SurfaceTexture,
@@ -98,7 +98,7 @@ impl Capture {
         );
     }
 
-    pub fn get(
+    pub(crate) fn get(
         &self,
         device: Arc<wgpu::Device>,
     ) -> Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>> {

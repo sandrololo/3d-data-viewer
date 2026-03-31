@@ -2,7 +2,7 @@ use imbuf::Image;
 use std::sync::Arc;
 use wgpu::{BindGroup, Queue};
 
-pub use crate::scene::{overlay::*, surface::*, texture_image::*};
+pub(crate) use crate::scene::{overlay::*, surface::*, texture_image::*};
 
 mod overlay;
 mod surface;

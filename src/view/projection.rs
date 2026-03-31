@@ -23,7 +23,7 @@ impl Translation {
     }
 }
 
-pub struct Projection {
+pub(crate) struct Projection {
     initial_position: Vec2,
     initial_delta: Vec2,
     current_delta: Vec2,
@@ -48,7 +48,7 @@ impl Default for Projection {
 }
 
 impl Projection {
-    pub fn update_gpu(&self, queue: &wgpu::Queue) {
+    pub(crate) fn update_gpu(&self, queue: &wgpu::Queue) {
         queue.write_buffer(
             self.buffer
                 .as_ref()
@@ -58,18 +58,18 @@ impl Projection {
         );
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.initial_position = Vec2::ZERO;
         self.initial_delta = Vec2::ZERO;
         self.current_delta = Vec2::ZERO;
         self.zoom = 1.0;
     }
 
-    pub fn move_by(&mut self, t: Translation) {
+    pub(crate) fn move_by(&mut self, t: Translation) {
         self.current_delta = t.into();
     }
 
-    pub fn start_move(&mut self, position: Vec2) {
+    pub(crate) fn start_move(&mut self, position: Vec2) {
         self.initial_position = position;
         self.initial_delta = self.current_delta;
     }
@@ -87,7 +87,12 @@ impl Projection {
         Vec2::new(dx * pad_xy, dy * pad_xy)
     }
 
-    pub fn change_position(&mut self, position: Vec2, screen_width: u32, screen_height: u32) {
+    pub(crate) fn change_position(
+        &mut self,
+        position: Vec2,
+        screen_width: u32,
+        screen_height: u32,
+    ) {
         let screen_w = screen_width.saturating_sub(1).max(1) as f32;
         let screen_h = screen_height.saturating_sub(1).max(1) as f32;
         let ndc_delta = position - self.initial_position;
@@ -100,15 +105,15 @@ impl Projection {
         self.current_delta = world_delta + self.initial_delta;
     }
 
-    pub fn zoom(&mut self, zoom_factor: f32) {
+    pub(crate) fn zoom(&mut self, zoom_factor: f32) {
         self.zoom = zoom_factor;
     }
 
-    pub fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
+    pub(crate) fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.aspect_ratio = aspect_ratio;
     }
 
-    pub fn get_current(&self) -> Mat4 {
+    pub(crate) fn get_current(&self) -> Mat4 {
         let x_min = -self.zoom - self.current_delta.x;
         let x_max = self.zoom - self.current_delta.x;
         let y_min = -self.zoom - self.current_delta.y;
