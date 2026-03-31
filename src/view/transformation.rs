@@ -1,6 +1,23 @@
 use glam::{Mat4, Vec3, Vec4};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::util::DeviceExt;
 
+#[derive(Clone, Copy)]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub(crate) struct EulerRotationDeg {
+    pub(crate) pitch: f32,
+    pub(crate) yaw: f32,
+    pub(crate) roll: f32,
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[allow(dead_code)]
+impl EulerRotationDeg {
+    pub fn new(pitch: f32, yaw: f32, roll: f32) -> Self {
+        Self { pitch, yaw, roll }
+    }
+}
 pub struct Transformation {
     current: Mat4,
     initial: Mat4,
@@ -56,6 +73,32 @@ impl Transformation {
             let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
             self.current = rot * self.initial;
         }
+    }
+
+    pub fn rotate_euler(&mut self, r: EulerRotationDeg) {
+        let pitch = r.pitch * std::f32::consts::PI / 180.0;
+        let yaw = r.yaw * std::f32::consts::PI / 180.0;
+        let roll = r.roll * std::f32::consts::PI / 180.0;
+        let rot_x = Mat4 {
+            x_axis: Vec4::new(1.0, 0.0, 0.0, 0.0),
+            y_axis: Vec4::new(0.0, pitch.cos(), -pitch.sin(), 0.0),
+            z_axis: Vec4::new(0.0, pitch.sin(), pitch.cos(), 0.0),
+            w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
+        };
+        let rot_y = Mat4 {
+            x_axis: Vec4::new(yaw.cos(), 0.0, yaw.sin(), 0.0),
+            y_axis: Vec4::new(0.0, 1.0, 0.0, 0.0),
+            z_axis: Vec4::new(-yaw.sin(), 0.0, yaw.cos(), 0.0),
+            w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
+        };
+        let rot_z = Mat4 {
+            x_axis: Vec4::new(roll.cos(), -roll.sin(), 0.0, 0.0),
+            y_axis: Vec4::new(roll.sin(), roll.cos(), 0.0, 0.0),
+            z_axis: Vec4::new(0.0, 0.0, 1.0, 0.0),
+            w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
+        };
+        let rotation = rot_x * rot_y * rot_z;
+        self.current = rotation * self.initial;
     }
 
     pub(crate) fn create_bind_group(&mut self, device: &wgpu::Device) -> wgpu::BindGroupLayout {

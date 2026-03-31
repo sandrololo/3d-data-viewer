@@ -1,5 +1,27 @@
 use glam::{Mat4, Vec2, Vec4};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::util::DeviceExt;
+
+#[derive(Clone, Copy)]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub struct Translation {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl From<Translation> for Vec2 {
+    fn from(value: Translation) -> Self {
+        Vec2::new(value.x, value.y)
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+impl Translation {
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
 
 pub struct Projection {
     initial_position: Vec2,
@@ -45,6 +67,10 @@ impl Projection {
         self.initial_delta = Vec2::ZERO;
         self.current_delta = Vec2::ZERO;
         self.zoom = 1.0;
+    }
+
+    pub fn move_by(&mut self, t: Translation) {
+        self.current_delta = t.into();
     }
 
     pub fn start_move(&mut self, position: Vec2) {

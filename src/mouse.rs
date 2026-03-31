@@ -66,6 +66,10 @@ impl Mouse {
         self.left_button == ElementState::Pressed
     }
 
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.current_zoom = zoom;
+    }
+
     pub fn get_zoom(&self) -> f32 {
         self.current_zoom
     }

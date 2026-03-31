@@ -9,6 +9,7 @@ use crate::{
         CaptureResult,
         pixel_picker::{PixelResult, PixelValue},
     },
+    interaction::Orientation,
     scene::{Overlay, Scene},
 };
 
@@ -18,6 +19,7 @@ pub(crate) enum UserEvent {
     ResetView,
     SetSurface(Image<f32, 1>),
     SetTexture(Image<u16, 1>),
+    SetOrientation(Orientation),
     ResetOrientation,
     SetTextureShader,
     SetHeightShader,
@@ -117,6 +119,9 @@ impl UserEvent {
                 if let Some(scene) = &mut state.scene {
                     scene.clear_overlays(&state.queue);
                 }
+            }
+            UserEvent::SetOrientation(orientation) => {
+                state.interaction.set_orientation(orientation);
             }
             UserEvent::ResetOrientation => {
                 state.interaction.reset_orientation();

@@ -2,6 +2,8 @@ use std::num::NonZeroU32;
 
 use glam::{Vec2, Vec3};
 use log::error;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{Device, Queue, SurfaceTexture, TextureFormat};
 use winit::{dpi::PhysicalSize, event::WindowEvent};
 
@@ -10,8 +12,30 @@ use crate::{
     keyboard::Keyboard,
     mip::Mip,
     mouse::Mouse,
-    view::{projection::Projection, transformation::Transformation},
+    view::{
+        projection::{Projection, Translation},
+        transformation::{EulerRotationDeg, Transformation},
+    },
 };
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub struct Orientation {
+    pub zoom: f32,
+    pub translation: Translation,
+    pub rotation: EulerRotationDeg,
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[allow(dead_code)]
+impl Orientation {
+    pub fn new(zoom: f32, translation: Translation, rotation: EulerRotationDeg) -> Self {
+        Self {
+            zoom,
+            translation,
+            rotation,
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DragMode {
@@ -167,6 +191,15 @@ impl Interaction {
     pub(crate) fn reset(&mut self) {
         self.reset_orientation();
         self.mip.reset();
+    }
+
+    pub(crate) fn set_orientation(&mut self, orientation: Orientation) {
+        self.drag_mode = DragMode::None;
+        self.mouse.set_zoom(orientation.zoom);
+        self.projection.zoom(orientation.zoom);
+        self.mip.set_zoom(orientation.zoom);
+        self.projection.move_by(orientation.translation);
+        self.transformation.rotate_euler(orientation.rotation);
     }
 
     pub(crate) fn reset_orientation(&mut self) {

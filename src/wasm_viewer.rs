@@ -8,6 +8,7 @@ use crate::{
     ImageViewer3D,
     events::{Event, UserEvent},
     gpu_data::pixel_picker::PixelValue,
+    interaction::Orientation,
     scene::Overlay,
 };
 
@@ -225,6 +226,17 @@ impl WasmViewer {
         if let Some(proxy) = &self.proxy {
             proxy
                 .send_event(UserEvent::ZoomOut.into())
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            Err(JsValue::from_str("Event loop proxy not initialized"))
+        }
+    }
+
+    pub fn set_orientation(&self, orientation: Orientation) -> Result<(), JsValue> {
+        if let Some(proxy) = &self.proxy {
+            proxy
+                .send_event(UserEvent::SetOrientation(orientation).into())
                 .map_err(|e| e.to_string())?;
             Ok(())
         } else {
