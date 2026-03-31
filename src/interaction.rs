@@ -37,12 +37,14 @@ impl Interaction {
             },
             surface_format,
         );
+        let mut projection = Projection::default();
+        projection.update_aspect_ratio(window_size.width as f32 / window_size.height as f32);
         Self {
             mouse: Mouse::new(),
             keyboard: Keyboard::new(),
             mip: Mip::new(&device),
             transformation: Transformation::default(),
-            projection: Projection::default(),
+            projection,
             pixel_picker: PixelPicker::new(&device, window_size),
             image_capture,
         }
@@ -78,7 +80,11 @@ impl Interaction {
                         Ok(new_position) => {
                             if self.mouse.is_pointer_inside(Vec2::from(new_position)) {
                                 if self.keyboard.is_control_pressed() {
-                                    self.projection.change_position(new_position);
+                                    self.projection.change_position(
+                                        new_position,
+                                        window_size.width,
+                                        window_size.height,
+                                    );
                                 } else {
                                     self.transformation.rotate(Vec3::from((new_position, 1.0)));
                                 }

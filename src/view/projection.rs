@@ -52,8 +52,30 @@ impl Projection {
         self.initial_delta = self.current_delta;
     }
 
-    pub fn change_position(&mut self, position: Vec2) {
-        self.current_delta = position - self.initial_position + self.initial_delta;
+    fn visible_span(&self) -> Vec2 {
+        let mut dx = 2.0 * self.zoom;
+        let mut dy = 2.0 * self.zoom;
+        if dx <= self.aspect_ratio * dy {
+            dx = dy * self.aspect_ratio;
+        } else {
+            dy = dx / self.aspect_ratio;
+        }
+        // Pad the XY view to match the diagonal range used by the 3D scene.
+        let pad_xy = 3.0_f32.sqrt();
+        Vec2::new(dx * pad_xy, dy * pad_xy)
+    }
+
+    pub fn change_position(&mut self, position: Vec2, screen_width: u32, screen_height: u32) {
+        let screen_w = screen_width.saturating_sub(1).max(1) as f32;
+        let screen_h = screen_height.saturating_sub(1).max(1) as f32;
+        let ndc_delta = position - self.initial_position;
+        let screen_delta_px = Vec2::new(ndc_delta.x * 0.5 * screen_w, ndc_delta.y * 0.5 * screen_h);
+        let view_span = self.visible_span();
+        let world_delta = Vec2::new(
+            screen_delta_px.x * view_span.x / screen_w,
+            screen_delta_px.y * view_span.y / screen_h,
+        );
+        self.current_delta = world_delta + self.initial_delta;
     }
 
     pub fn zoom(&mut self, zoom_factor: f32) {
@@ -73,17 +95,10 @@ impl Projection {
         let z_min = -pad3d;
         let z_max = pad3d;
 
-        let mut dx = x_max - x_min;
-        let mut dy = y_max - y_min;
+        let view_span = self.visible_span();
+        let dx = view_span.x;
+        let dy = view_span.y;
         let dz = z_max - z_min;
-        if dx <= self.aspect_ratio * dy {
-            dx = dy * self.aspect_ratio;
-        } else {
-            dy = dx / self.aspect_ratio;
-        }
-        let pad_xy = 3.0_f32.sqrt();
-        dx *= pad_xy;
-        dy *= pad_xy;
         Mat4 {
             x_axis: Vec4::new(2.0 / dx, 0.0, 0.0, 0.0),
             y_axis: Vec4::new(0.0, 2.0 / dy, 0.0, 0.0),
