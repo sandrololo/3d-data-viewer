@@ -98,7 +98,8 @@ impl Transformation {
             w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
         };
         let rotation = rot_x * rot_y * rot_z;
-        self.current = rotation * self.initial;
+        self.current = rotation;
+        self.initial = rotation;
     }
 
     pub(crate) fn create_bind_group(&mut self, device: &wgpu::Device) -> wgpu::BindGroupLayout {
