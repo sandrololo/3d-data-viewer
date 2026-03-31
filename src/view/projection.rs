@@ -35,12 +35,6 @@ pub struct Projection {
 
 impl Default for Projection {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Projection {
-    pub fn new() -> Self {
         Self {
             initial_position: Vec2::ZERO,
             initial_delta: Vec2::ZERO,
@@ -51,7 +45,9 @@ impl Projection {
             buffer: None,
         }
     }
+}
 
+impl Projection {
     pub fn update_gpu(&self, queue: &wgpu::Queue) {
         queue.write_buffer(
             self.buffer

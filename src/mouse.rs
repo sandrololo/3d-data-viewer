@@ -12,19 +12,15 @@ pub struct Mouse {
 
 impl Default for Mouse {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Mouse {
-    pub fn new() -> Self {
         Self {
             current_position: PhysicalPosition::new(0.0, 0.0),
             left_button: ElementState::Released,
             current_zoom: 1.0,
         }
     }
+}
 
+impl Mouse {
     pub fn register_button_event(&mut self, button: MouseButton, state: ElementState) {
         match button {
             MouseButton::Left => {

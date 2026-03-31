@@ -72,8 +72,8 @@ impl Interaction {
         let mut projection = Projection::default();
         projection.update_aspect_ratio(window_size.width as f32 / window_size.height as f32);
         Self {
-            mouse: Mouse::new(),
-            keyboard: Keyboard::new(),
+            mouse: Mouse::default(),
+            keyboard: Keyboard::default(),
             drag_mode: DragMode::None,
             mip: Mip::new(&device),
             transformation: Transformation::default(),

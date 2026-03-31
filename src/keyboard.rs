@@ -6,17 +6,13 @@ pub struct Keyboard {
 
 impl Default for Keyboard {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Keyboard {
-    pub fn new() -> Self {
         Self {
             control_button: ElementState::Released,
         }
     }
+}
 
+impl Keyboard {
     pub fn is_control_pressed(&self) -> bool {
         self.control_button == ElementState::Pressed
     }
