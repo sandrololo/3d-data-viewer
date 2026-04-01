@@ -268,30 +268,37 @@ impl State {
         self.depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 
-    fn render(&mut self) {
-        // Create texture view
-        let surface_texture = self
-            .surface
+    fn acquire_surface_texture_phase(&self) -> wgpu::SurfaceTexture {
+        self.surface
             .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
-        let texture_view = surface_texture
+            .expect("failed to acquire next swapchain texture")
+    }
+
+    fn create_surface_view_phase(
+        &self,
+        surface_texture: &wgpu::SurfaceTexture,
+    ) -> wgpu::TextureView {
+        surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
                 // Without add_srgb_suffix() the image we will be working with
                 // might not be "gamma correct".
                 format: Some(self.surface_format.add_srgb_suffix()),
                 ..Default::default()
-            });
+            })
+    }
 
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-
-        // Create the renderpass which will clear the screen.
+    fn encode_scene_phase(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface_view: &wgpu::TextureView,
+    ) {
         // Two color attachments: main color + picking texture
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_view,
+                    view: surface_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -320,6 +327,7 @@ impl State {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+
         let pipeline = if self.use_height_shader {
             &self.render_pipeline_height
         } else {
@@ -336,49 +344,69 @@ impl State {
         self.interaction
             .mip
             .update_gpu(&mut renderpass, &self.queue);
+    }
 
-        // End the renderpass.
-        drop(renderpass);
+    fn encode_post_process_phase(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface_texture: &wgpu::SurfaceTexture,
+    ) {
+        self.interaction.pixel_picker.copy_pixel_at_mouse(encoder);
+        self.interaction
+            .update_gpu(&self.queue, encoder, surface_texture);
+    }
 
-        self.interaction
-            .pixel_picker
-            .copy_pixel_at_mouse(&mut encoder);
-        self.interaction
-            .update_gpu(&self.queue, &mut encoder, &surface_texture);
-        // Submit the command in the queue to execute
+    fn submit_and_present_phase(
+        &self,
+        encoder: wgpu::CommandEncoder,
+        surface_texture: wgpu::SurfaceTexture,
+    ) {
         self.queue.submit([encoder.finish()]);
         self.window.pre_present_notify();
         surface_texture.present();
+    }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            if let Some(scene) = &self.scene {
-                if let Some(texture_image) = scene.get_texture_image() {
-                    match pollster::block_on(self.interaction.pixel_picker.get(
-                        self.device.clone(),
-                        scene.get_surface_image(),
-                        texture_image,
-                    )) {
-                        Ok(pixel_value) => {
-                            log::info!(
-                                "Pixel at [{}/{}]={:.3}, texture={}",
-                                pixel_value.x,
-                                pixel_value.y,
-                                pixel_value.z,
-                                pixel_value.texture
-                            );
-                        }
-                        Err(e) => {
-                            log::error!("Pixel read failed: {}", e);
-                        }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn log_hover_pixel_phase(&self) {
+        if let Some(scene) = &self.scene {
+            if let Some(texture_image) = scene.get_texture_image() {
+                match pollster::block_on(self.interaction.pixel_picker.get(
+                    self.device.clone(),
+                    scene.get_surface_image(),
+                    texture_image,
+                )) {
+                    Ok(pixel_value) => {
+                        log::info!(
+                            "Pixel at [{}/{}]={:.3}, texture={}",
+                            pixel_value.x,
+                            pixel_value.y,
+                            pixel_value.z,
+                            pixel_value.texture
+                        );
                     }
-                } else {
-                    log::error!("Texture image not initialized");
+                    Err(e) => {
+                        log::error!("Pixel read failed: {}", e);
+                    }
                 }
             } else {
-                log::error!("Texture not initialized");
+                log::error!("Texture image not initialized");
             }
+        } else {
+            log::error!("Texture not initialized");
         }
+    }
+
+    fn render(&mut self) {
+        let surface_texture = self.acquire_surface_texture_phase();
+        let surface_view = self.create_surface_view_phase(&surface_texture);
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+
+        self.encode_scene_phase(&mut encoder, &surface_view);
+        self.encode_post_process_phase(&mut encoder, &surface_texture);
+        self.submit_and_present_phase(encoder, surface_texture);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        self.log_hover_pixel_phase();
     }
 }
 
