@@ -4,12 +4,12 @@ use std::num::NonZeroU32;
 
 mod capture;
 pub(crate) mod pixel_picker;
-pub(crate) mod surface_percentile_range;
 pub(crate) mod texture_image_range;
+pub(crate) mod topology_percentile_range;
 
-pub(crate) struct SurfaceData(pub Image<f32, 1>);
+pub(crate) struct TopologyData(pub Image<f32, 1>);
 
-impl SurfaceData {
+impl TopologyData {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
         use std::fs::File;
@@ -26,7 +26,7 @@ impl SurfaceData {
                 NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
                 NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
             )),
-            _ => Err(anyhow::anyhow!("Unsupported surface data format")),
+            _ => Err(anyhow::anyhow!("Unsupported topology data format")),
         }?;
         Ok(Self(data))
     }

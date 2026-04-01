@@ -99,19 +99,19 @@ impl PixelPicker {
     pub(crate) fn write_to_channel(
         &self,
         device: Arc<wgpu::Device>,
-        surface: Arc<Image<f32, 1>>,
+        topology: Arc<Image<f32, 1>>,
         texture: Arc<Image<u16, 1>>,
         sender: futures::channel::oneshot::Sender<
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
         >,
     ) {
-        sender.send(self.get(device, surface, texture)).unwrap();
+        sender.send(self.get(device, topology, texture)).unwrap();
     }
 
     pub(crate) fn get(
         &self,
         device: Arc<wgpu::Device>,
-        surface: Arc<Image<f32, 1>>,
+        topology: Arc<Image<f32, 1>>,
         texture: Arc<Image<u16, 1>>,
     ) -> Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>> {
         let mut pending = self.pending_read.lock().unwrap();
@@ -149,12 +149,13 @@ impl PixelPicker {
 
                 // Clear the pending read so next call starts fresh
                 *pending_read.lock().unwrap() = None;
-                let z = surface.buffer()[(pixel.0 + surface.width().get() * pixel.1) as usize];
+                let z = topology.buffer()[(pixel.0 + topology.width().get() * pixel.1) as usize];
                 Ok(PixelValue {
                     x: pixel.0,
                     y: pixel.1,
                     z,
-                    texture: texture.buffer()[(pixel.0 + surface.width().get() * pixel.1) as usize],
+                    texture: texture.buffer()
+                        [(pixel.0 + topology.width().get() * pixel.1) as usize],
                 })
             });
 

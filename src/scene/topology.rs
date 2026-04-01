@@ -1,14 +1,14 @@
 use imbuf::Image;
 use std::sync::Arc;
 
-pub(crate) struct SurfaceTexture {
+pub(crate) struct TopologyTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub image: Arc<Image<f32, 1>>,
     size: wgpu::Extent3d,
 }
 
-impl SurfaceTexture {
+impl TopologyTexture {
     pub(crate) fn new(image: Arc<Image<f32, 1>>, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image.width().get(),
@@ -22,7 +22,7 @@ impl SurfaceTexture {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R32Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: Some("surface_texture"),
+            label: Some("topology_texture"),
             view_formats: &[],
         });
 

@@ -44,9 +44,8 @@ use crate::events::UserEvent;
 use crate::{
     events::{Event, SystemEvent},
     gpu_data::{
-        DataSize, pixel_picker::PixelPicker,
-        surface_percentile_range::SurfacePercentileRangeBuffer,
-        texture_image_range::TextureImageRangeBuffer,
+        DataSize, pixel_picker::PixelPicker, texture_image_range::TextureImageRangeBuffer,
+        topology_percentile_range::TopologyPercentileRangeBuffer,
     },
     interaction::Interaction,
     mip::Mip,
@@ -65,7 +64,7 @@ struct State {
     use_height_shader: bool,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     scene: Option<Scene>,
-    percentile_range_buffer: SurfacePercentileRangeBuffer,
+    percentile_range_buffer: TopologyPercentileRangeBuffer,
     texture_range_buffer: TextureImageRangeBuffer,
     image_info_bind_group: wgpu::BindGroup,
     depth_view: wgpu::TextureView,
@@ -106,7 +105,7 @@ impl State {
                 label: Some("image_info_bind_group_layout"),
                 entries: &[
                     DataSize::get_bind_group_layout_entry(),
-                    SurfacePercentileRangeBuffer::get_bind_group_layout_entry(),
+                    TopologyPercentileRangeBuffer::get_bind_group_layout_entry(),
                     TextureImageRangeBuffer::get_bind_group_layout_entry(),
                     Mip::get_bind_group_layout_entry(),
                 ],
@@ -116,7 +115,7 @@ impl State {
 
         let mut interaction = Interaction::new(&device, window.inner_size(), surface_format);
 
-        let percentile_range_buffer = SurfacePercentileRangeBuffer::new(&device);
+        let percentile_range_buffer = TopologyPercentileRangeBuffer::new(&device);
         let texture_range_buffer = TextureImageRangeBuffer::new(&device);
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image_info_bind_group"),
@@ -372,7 +371,7 @@ impl State {
             if let Some(texture_image) = scene.get_texture_image() {
                 match pollster::block_on(self.interaction.pixel_picker.get(
                     self.device.clone(),
-                    scene.get_surface_image(),
+                    scene.get_topology_image(),
                     texture_image,
                 )) {
                     Ok(pixel_value) => {
@@ -548,17 +547,17 @@ impl ApplicationHandler<Event> for ImageViewer3D {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> anyhow::Result<()> {
-    use crate::gpu_data::SurfaceData;
+    use crate::gpu_data::TopologyData;
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_secs()
         .init();
 
-    let data = SurfaceData::from_file("example-img.tiff").unwrap();
+    let data = TopologyData::from_file("example-img.tiff").unwrap();
     let event_loop = EventLoop::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
     proxy
-        .send_event(UserEvent::SetSurface(data.0).into())
+        .send_event(UserEvent::SetTopology(data.0).into())
         .map_err(|e| anyhow!("Error: {}", e))
         .unwrap();
 

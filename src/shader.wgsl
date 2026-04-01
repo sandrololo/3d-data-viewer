@@ -2,7 +2,7 @@ struct VertexInput {
     @location(0) index: u32,
 }
 @group(0) @binding(0)
-var surface_data: texture_2d<f32>;
+var topology_data: texture_2d<f32>;
 @group(0) @binding(1)
 var texture_image: texture_2d<u32>;
 @group(0) @binding(2)
@@ -77,14 +77,14 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let x = img_aspect_ratio * (2.0 * f32(col) / f32(image_dims.width - 1u) - 1.0);
     let y = 1.0 - 2.0 * f32(row) / f32(image_dims.height - 1u);
 
-    let z_value = textureLoad(surface_data, vec2<u32>(col, row) * resize, 0);
+    let z_value = textureLoad(topology_data, vec2<u32>(col, row) * resize, 0);
     let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
 
     let light = normalize(vec3(-1.0, 1.0, 1.0));
-    let z_up = textureLoad(surface_data, vec2<u32>(col, max(row, 1u) - 1u) * resize, 0).x;
-    let z_down = textureLoad(surface_data, vec2<u32>(col, min(row + 1u, image_dims.height - 1u)) * resize, 0).x;
-    let z_left = textureLoad(surface_data, vec2<u32>(max(col, 1u) - 1u, row) * resize, 0).x;
-    let z_right = textureLoad(surface_data, vec2<u32>(min(col + 1u, image_dims.width - 1u), row) * resize, 0).x;
+    let z_up = textureLoad(topology_data, vec2<u32>(col, max(row, 1u) - 1u) * resize, 0).x;
+    let z_down = textureLoad(topology_data, vec2<u32>(col, min(row + 1u, image_dims.height - 1u)) * resize, 0).x;
+    let z_left = textureLoad(topology_data, vec2<u32>(max(col, 1u) - 1u, row) * resize, 0).x;
+    let z_right = textureLoad(topology_data, vec2<u32>(min(col + 1u, image_dims.width - 1u), row) * resize, 0).x;
 
     let tangent_x = normalize(vec3(2.0, 0.0, (z_right - z_left) * (z_range.max - z_range.min)));
     let tangent_y = normalize(vec3(0.0, 2.0, (z_down - z_up) * (z_range.max - z_range.min)));

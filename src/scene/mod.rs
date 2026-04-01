@@ -2,36 +2,36 @@ use imbuf::Image;
 use std::sync::Arc;
 use wgpu::{BindGroup, Queue};
 
-pub(crate) use crate::scene::{overlay::*, surface::*, texture_image::*};
+pub(crate) use crate::scene::{overlay::*, texture_image::*, topology::*};
 
 mod overlay;
-mod surface;
 mod texture_image;
+mod topology;
 
 pub(crate) struct Scene {
     overlay: OverlayTexture,
-    surface: SurfaceTexture,
+    topology: TopologyTexture,
     texture: TextureImage,
     bind_group: wgpu::BindGroup,
 }
 
 impl Scene {
-    pub(crate) fn new_surface(
-        surface: Image<f32, 1>,
+    pub(crate) fn new_topology(
+        topology: Image<f32, 1>,
         device: &wgpu::Device,
         queue: &Queue,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let overlay_texture = OverlayTexture::new(&surface.dimensions().into(), &device);
-        let texture = TextureImage::new(&surface.dimensions().into(), &device);
-        let surface_data = SurfaceTexture::new(Arc::new(surface), &device);
+        let overlay_texture = OverlayTexture::new(&topology.dimensions().into(), &device);
+        let texture = TextureImage::new(&topology.dimensions().into(), &device);
+        let topology_data = TopologyTexture::new(Arc::new(topology), &device);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture_bind_group"),
             layout: layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&surface_data.view),
+                    resource: wgpu::BindingResource::TextureView(&topology_data.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -43,17 +43,17 @@ impl Scene {
                 },
             ],
         });
-        surface_data.write_to_queue(queue);
+        topology_data.write_to_queue(queue);
         Self {
             overlay: overlay_texture,
-            surface: surface_data,
+            topology: topology_data,
             texture,
             bind_group: group,
         }
     }
 
-    pub(crate) fn get_surface_image(&self) -> Arc<Image<f32, 1>> {
-        self.surface.image.clone()
+    pub(crate) fn get_topology_image(&self) -> Arc<Image<f32, 1>> {
+        self.topology.image.clone()
     }
 
     pub(crate) fn set_texture(&mut self, data: Image<u16, 1>, queue: &Queue) {

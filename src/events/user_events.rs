@@ -17,7 +17,7 @@ use crate::{
 #[allow(dead_code)]
 pub(crate) enum UserEvent {
     ResetView,
-    SetSurface(Image<f32, 1>),
+    SetTopology(Image<f32, 1>),
     SetTexture(Image<u16, 1>),
     SetOrientation(Orientation),
     ResetOrientation,
@@ -53,7 +53,7 @@ impl UserEvent {
                     if let Some(texture_image) = scene.get_texture_image() {
                         state.interaction.pixel_picker.write_to_channel(
                             state.device.clone(),
-                            scene.get_surface_image(),
+                            scene.get_topology_image(),
                             texture_image,
                             sender,
                         );
@@ -126,8 +126,8 @@ impl UserEvent {
             UserEvent::ResetOrientation => {
                 state.interaction.reset_orientation();
             }
-            UserEvent::SetSurface(data) => {
-                log::info!("Setting new surface image");
+            UserEvent::SetTopology(data) => {
+                log::info!("Setting new topology image");
                 state
                     .percentile_range_buffer
                     .update_data(&state.queue, data.buffer());
@@ -137,7 +137,7 @@ impl UserEvent {
                     .mip
                     .set_image(&data.dimensions().into(), &state.device);
 
-                state.scene = Some(Scene::new_surface(
+                state.scene = Some(Scene::new_topology(
                     data,
                     &state.device,
                     &state.queue,
@@ -149,7 +149,7 @@ impl UserEvent {
                 if let Some(scene) = &mut state.scene {
                     scene.set_texture(data, &state.queue);
                 } else {
-                    log::warn!("Can't set texture image, surface texture not initialized");
+                    log::warn!("Can't set texture image, topology not initialized");
                 }
             }
             UserEvent::ZoomIn => {
@@ -159,14 +159,14 @@ impl UserEvent {
                 state.interaction.zoom_out();
             }
             UserEvent::SetPercentile(percentile) => {
-                let surface = state
+                let topology = state
                     .scene
                     .as_ref()
-                    .map(|scene| scene.get_surface_image().buffer().to_vec());
+                    .map(|scene| scene.get_topology_image().buffer().to_vec());
                 state.percentile_range_buffer.update_percentile(
                     &state.queue,
                     percentile,
-                    surface.as_ref().map(|v| v.as_slice()),
+                    topology.as_ref().map(|v| v.as_slice()),
                 );
             }
             UserEvent::SetTextureRange(start, end) => {

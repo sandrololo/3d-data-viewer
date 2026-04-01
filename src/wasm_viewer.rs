@@ -69,7 +69,7 @@ impl WasmViewer {
         }
     }
 
-    pub async fn set_surface(&self, data: Vec<u8>) -> Result<(), JsValue> {
+    pub async fn set_topology(&self, data: Vec<u8>) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             let mut decoder = Decoder::new(std::io::Cursor::new(&data))
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
@@ -93,7 +93,7 @@ impl WasmViewer {
                 NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
             );
             proxy
-                .send_event(UserEvent::SetSurface(image).into())
+                .send_event(UserEvent::SetTopology(image).into())
                 .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
             Ok(())
         } else {
