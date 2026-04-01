@@ -102,11 +102,11 @@ impl UserEvent {
             }
             UserEvent::SetTextureShader => {
                 log::info!("Setting texture shader");
-                state.use_height_shader = false;
+                state.interaction.set_texture_shader();
             }
             UserEvent::SetHeightShader => {
                 log::info!("Setting height shader");
-                state.use_height_shader = true;
+                state.interaction.set_height_shader();
             }
             UserEvent::SetOverlays(overlays) => {
                 log::info!("Setting overlays");
@@ -129,6 +129,7 @@ impl UserEvent {
             UserEvent::SetTopology(data) => {
                 log::info!("Setting new topology image");
                 state
+                    .interaction
                     .percentile_range_buffer
                     .update_data(&state.queue, data.buffer());
 
@@ -163,14 +164,17 @@ impl UserEvent {
                     .scene
                     .as_ref()
                     .map(|scene| scene.get_topology_image().buffer().to_vec());
-                state.percentile_range_buffer.update_percentile(
+                state.interaction.percentile_range_buffer.update_percentile(
                     &state.queue,
                     percentile,
                     topology.as_ref().map(|v| v.as_slice()),
                 );
             }
             UserEvent::SetTextureRange(start, end) => {
-                state.texture_range_buffer.update(&state.queue, start, end);
+                state
+                    .interaction
+                    .texture_range_buffer
+                    .update(&state.queue, start, end);
             }
         }
     }

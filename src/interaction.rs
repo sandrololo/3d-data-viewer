@@ -8,7 +8,10 @@ use wgpu::{Device, Queue, SurfaceTexture, TextureFormat};
 use winit::{dpi::PhysicalSize, event::WindowEvent};
 
 use crate::{
-    gpu_data::{Capture, DataSize, pixel_picker::PixelPicker},
+    gpu_data::{
+        Capture, DataSize, pixel_picker::PixelPicker, texture_image_range::TextureImageRangeBuffer,
+        topology_percentile_range::TopologyPercentileRangeBuffer,
+    },
     keyboard::Keyboard,
     mip::Mip,
     mouse::Mouse,
@@ -53,6 +56,9 @@ pub(crate) struct Interaction {
     pub projection: Projection,
     pub pixel_picker: PixelPicker,
     pub image_capture: Capture,
+    use_height_shader: bool,
+    pub percentile_range_buffer: TopologyPercentileRangeBuffer,
+    pub texture_range_buffer: TextureImageRangeBuffer,
 }
 
 impl Interaction {
@@ -69,17 +75,24 @@ impl Interaction {
             },
             surface_format,
         );
-        let mut projection = Projection::default();
+        let transformation = Transformation::new(&device);
+        let mut projection = Projection::new(&device);
         projection.update_aspect_ratio(window_size.width as f32 / window_size.height as f32);
+
+        let percentile_range_buffer = TopologyPercentileRangeBuffer::new(&device);
+        let texture_range_buffer = TextureImageRangeBuffer::new(&device);
         Self {
             mouse: Mouse::default(),
             keyboard: Keyboard::default(),
             drag_mode: DragMode::None,
             mip: Mip::new(&device),
-            transformation: Transformation::default(),
+            transformation,
             projection,
             pixel_picker: PixelPicker::new(&device, window_size),
             image_capture,
+            use_height_shader: true,
+            percentile_range_buffer,
+            texture_range_buffer,
         }
     }
 
@@ -231,5 +244,17 @@ impl Interaction {
         self.image_capture.copy_texture(encoder, &surface_texture);
         self.transformation.update_gpu(queue);
         self.projection.update_gpu(queue);
+    }
+
+    pub(crate) fn use_height_shader(&self) -> bool {
+        self.use_height_shader
+    }
+
+    pub(crate) fn set_height_shader(&mut self) {
+        self.use_height_shader = true
+    }
+
+    pub(crate) fn set_texture_shader(&mut self) {
+        self.use_height_shader = false
     }
 }
