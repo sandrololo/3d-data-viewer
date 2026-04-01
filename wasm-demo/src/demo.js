@@ -568,13 +568,13 @@ async function main() {
         try {
             const surfaceData = await loadSurfaceData();
             const amplitudeData = await loadAmplitudeData();
-            if (wasmViewer && typeof wasmViewer.set_surface === 'function') {
-                await wasmViewer.set_surface(surfaceData);
+            if (wasmViewer && typeof wasmViewer.set_topology === 'function') {
+                await wasmViewer.set_topology(surfaceData);
                 await wasmViewer.set_texture(amplitudeData);
                 wasmViewer.set_texture_range(0, 100);
                 console.log('✅ Surface data set in WASM viewer');
             } else {
-                console.warn('set_surface method not available on wasmViewer');
+                console.warn('set_topology method not available on wasmViewer');
             }
         } catch (error) {
             console.error('Failed to load surface data:', error);
