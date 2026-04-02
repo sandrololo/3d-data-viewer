@@ -12,17 +12,6 @@ use crate::{
     scene::Overlay,
 };
 
-mod wasm_commands {
-    use std::cell::RefCell;
-    use std::sync::Arc;
-    use winit::window::Window;
-
-    thread_local! {
-        /// Reference to the window for requesting redraws
-        pub static WINDOW: RefCell<Option<Arc<Window>>> = RefCell::new(None);
-    }
-}
-
 #[wasm_bindgen]
 pub struct WasmViewer {
     proxy: Option<winit::event_loop::EventLoopProxy<Event>>,
