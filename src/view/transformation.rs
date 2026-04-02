@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{BindGroupLayout, util::DeviceExt};
@@ -77,8 +77,11 @@ impl Transformation {
     pub(crate) fn rotate(&mut self, new_position: Vec3) {
         if self.initial_position != new_position {
             let rot_axis = self.initial_position.cross(new_position);
-            let axis_len = rot_axis.length();
-            let rot = mat4_from_rotation_axis(rot_axis, axis_len * 100.0);
+            // Axis length represents the mouse distance moved and is multiplied by constant *100
+            let rot = Mat4::from_axis_angle(
+                -Vec3::normalize(rot_axis),
+                rot_axis.length() * 100.0 * std::f32::consts::PI / 180.0,
+            );
             self.current = rot * self.initial;
         }
     }
@@ -87,25 +90,7 @@ impl Transformation {
         let pitch = r.pitch * std::f32::consts::PI / 180.0;
         let yaw = r.yaw * std::f32::consts::PI / 180.0;
         let roll = r.roll * std::f32::consts::PI / 180.0;
-        let rot_x = Mat4 {
-            x_axis: Vec4::new(1.0, 0.0, 0.0, 0.0),
-            y_axis: Vec4::new(0.0, pitch.cos(), -pitch.sin(), 0.0),
-            z_axis: Vec4::new(0.0, pitch.sin(), pitch.cos(), 0.0),
-            w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
-        };
-        let rot_y = Mat4 {
-            x_axis: Vec4::new(yaw.cos(), 0.0, yaw.sin(), 0.0),
-            y_axis: Vec4::new(0.0, 1.0, 0.0, 0.0),
-            z_axis: Vec4::new(-yaw.sin(), 0.0, yaw.cos(), 0.0),
-            w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
-        };
-        let rot_z = Mat4 {
-            x_axis: Vec4::new(roll.cos(), -roll.sin(), 0.0, 0.0),
-            y_axis: Vec4::new(roll.sin(), roll.cos(), 0.0, 0.0),
-            z_axis: Vec4::new(0.0, 0.0, 1.0, 0.0),
-            w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
-        };
-        let rotation = rot_x * rot_y * rot_z;
+        let rotation = Mat4::from_euler(glam::EulerRot::XYZ, pitch, yaw, roll);
         self.current = rotation;
         self.initial = rotation;
     }
@@ -124,31 +109,5 @@ impl Transformation {
                 count: None,
             }],
         })
-    }
-}
-
-fn mat4_from_rotation_axis(axs: Vec3, phi: f32) -> Mat4 {
-    let a = Vec3::normalize(axs);
-    let t = phi * std::f32::consts::PI / 180.0;
-    let c = f32::cos(t);
-    let s = f32::sin(t);
-    let d = 1.0 - c;
-
-    let d00 = d * a[0] * a[0];
-    let d01 = d * a[0] * a[1];
-    let d02 = d * a[0] * a[2];
-    let d11 = d * a[1] * a[1];
-    let d12 = d * a[1] * a[2];
-    let d22 = d * a[2] * a[2];
-
-    let s0 = s * a[0];
-    let s1 = s * a[1];
-    let s2 = s * a[2];
-
-    Mat4 {
-        x_axis: Vec4::new(d00 + c, d01 - s2, d02 + s1, 0.0),
-        y_axis: Vec4::new(d01 + s2, d11 + c, d12 - s0, 0.0),
-        z_axis: Vec4::new(d02 - s1, d12 + s0, d22 + c, 0.0),
-        w_axis: Vec4::new(0.0, 0.0, 0.0, 1.0),
     }
 }
