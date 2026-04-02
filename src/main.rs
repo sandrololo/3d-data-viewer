@@ -86,7 +86,7 @@ impl State {
 
         let texture_bind_group_layout = Scene::create_bind_group_layout(&device);
 
-        let interaction = Interaction::new(&device, window.inner_size(), surface_format);
+        let interaction = Interaction::new(&device, &window.inner_size(), surface_format);
 
         let renderer = Renderer::new(
             &window,
@@ -185,7 +185,7 @@ impl ApplicationHandler<Event> for ImageViewer3D {
 
         if let Some(app_state) = self.state.as_mut() {
             app_state.interaction.handle_event(
-                event.clone(),
+                &event,
                 app_state.window.inner_size(),
                 &app_state.device,
             );

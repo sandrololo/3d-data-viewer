@@ -17,7 +17,7 @@ impl Keyboard {
         self.control_button == ElementState::Pressed
     }
 
-    pub(crate) fn update_modifiers(&mut self, modifiers: winit::event::Modifiers) {
+    pub(crate) fn update_modifiers(&mut self, modifiers: &winit::event::Modifiers) {
         self.control_button = if modifiers.state().control_key() {
             ElementState::Pressed
         } else {

@@ -21,10 +21,10 @@ impl Default for Mouse {
 }
 
 impl Mouse {
-    pub(crate) fn register_button_event(&mut self, button: MouseButton, state: ElementState) {
+    pub(crate) fn register_button_event(&mut self, button: &MouseButton, state: &ElementState) {
         match button {
             MouseButton::Left => {
-                if state == ElementState::Pressed {
+                if state == &ElementState::Pressed {
                     self.left_button = ElementState::Pressed;
                 } else {
                     self.left_button = ElementState::Released;
@@ -38,7 +38,7 @@ impl Mouse {
         self.current_position = new_position;
     }
 
-    pub(crate) fn register_scroll_event(&mut self, delta: MouseScrollDelta) {
+    pub(crate) fn register_scroll_event(&mut self, delta: &MouseScrollDelta) {
         match delta {
             MouseScrollDelta::LineDelta(_delta_x, delta_y) => {
                 self.current_zoom *= -0.1 * delta_y + 1.0;

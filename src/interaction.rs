@@ -65,7 +65,7 @@ pub(crate) struct Interaction {
 impl Interaction {
     pub(crate) fn new(
         device: &Device,
-        window_size: PhysicalSize<u32>,
+        window_size: &PhysicalSize<u32>,
         surface_format: TextureFormat,
     ) -> Self {
         let image_capture = Capture::new(
@@ -101,7 +101,7 @@ impl Interaction {
 
     pub(crate) fn handle_event(
         &mut self,
-        event: WindowEvent,
+        event: &WindowEvent,
         window_size: PhysicalSize<u32>,
         device: &Device,
     ) {
@@ -122,8 +122,8 @@ impl Interaction {
                 device_id: _,
                 position,
             } => {
-                self.mouse.register_move_event(position);
-                self.pixel_picker.update_mouse_position(position);
+                self.mouse.register_move_event(*position);
+                self.pixel_picker.update_mouse_position(*position);
                 if self.mouse.is_left_button_pressed() {
                     match self.mouse.get_device_coordinates(window_size) {
                         Ok(new_position) => {

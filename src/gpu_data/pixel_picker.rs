@@ -35,7 +35,7 @@ pub(crate) struct PixelPicker {
 impl PixelPicker {
     pub(crate) const PICKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
 
-    pub(crate) fn new(device: &wgpu::Device, window_size: PhysicalSize<u32>) -> Self {
+    pub(crate) fn new(device: &wgpu::Device, window_size: &PhysicalSize<u32>) -> Self {
         let (picking_texture, picking_texture_view) =
             Self::create_picking_texture(device, window_size);
         let readback_buffer = Arc::new(Self::create_readback_buffer(device));
@@ -45,18 +45,18 @@ impl PixelPicker {
             picking_texture_view,
             readback_buffer,
             mouse_position: PhysicalPosition::new(0.0, 0.0),
-            window_size,
+            window_size: *window_size,
             pending_read: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: PhysicalSize<u32>) {
-        if self.window_size != window_size {
+    pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: &PhysicalSize<u32>) {
+        if &self.window_size != window_size {
             let (picking_texture, picking_texture_view) =
                 Self::create_picking_texture(device, window_size);
             self.picking_texture = picking_texture;
             self.picking_texture_view = picking_texture_view;
-            self.window_size = window_size;
+            self.window_size = *window_size;
         }
     }
 
@@ -166,7 +166,7 @@ impl PixelPicker {
 
     fn create_picking_texture(
         device: &wgpu::Device,
-        window_size: PhysicalSize<u32>,
+        window_size: &PhysicalSize<u32>,
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("picking_texture"),
