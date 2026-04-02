@@ -101,12 +101,14 @@ impl Interaction {
 
     pub(crate) fn handle_event(
         &mut self,
+        request_redraw: &mut bool,
         event: &WindowEvent,
         window_size: PhysicalSize<u32>,
         device: &Device,
     ) {
         match event {
             WindowEvent::Resized(size) => {
+                *request_redraw = true;
                 self.pixel_picker.resize(device, size);
                 self.projection
                     .update_aspect_ratio(size.width as f32 / size.height as f32);
@@ -128,6 +130,7 @@ impl Interaction {
                     match self.mouse.get_device_coordinates(window_size) {
                         Ok(new_position) => {
                             if self.mouse.is_pointer_inside(Vec2::from(new_position)) {
+                                *request_redraw = true;
                                 let target_mode = if self.keyboard.is_control_pressed() {
                                     DragMode::Pan
                                 } else {
@@ -186,6 +189,7 @@ impl Interaction {
                 delta,
                 phase: _,
             } => {
+                *request_redraw = true;
                 self.mouse.register_scroll_event(delta);
                 self.projection.zoom(self.mouse.get_zoom());
                 self.mip.set_zoom(self.mouse.get_zoom());

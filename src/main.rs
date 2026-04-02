@@ -206,7 +206,9 @@ impl ApplicationHandler<Event> for ImageViewer3D {
         }
 
         if let Some(app_state) = self.state.as_mut() {
+            let mut request_redraw = false;
             app_state.interaction.handle_event(
+                &mut request_redraw,
                 &event,
                 app_state.window.inner_size(),
                 &app_state.device,
@@ -226,11 +228,14 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                     }
                 }
                 WindowEvent::Resized(size) => {
+                    request_redraw = true;
                     app_state.renderer.configure_surface(size);
                 }
                 _ => (),
             }
-            app_state.window.request_redraw();
+            if request_redraw {
+                app_state.window.request_redraw();
+            }
         }
     }
 
