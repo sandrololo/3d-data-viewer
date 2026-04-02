@@ -65,7 +65,7 @@ impl Mip {
 
     pub(crate) fn set_zoom(&mut self, zoom: f32) {
         if let Some(mip_data) = &self.mip_data {
-            let levels = mip_data.mip_levels.clone();
+            let levels = &mip_data.mip_levels;
             let index = ((zoom * 1.2 * levels.len() as f32) as usize)
                 .min(levels.len() - 1)
                 .max(0);
