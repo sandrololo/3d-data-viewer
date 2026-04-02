@@ -10,6 +10,7 @@ use crate::{
         pixel_picker::{PixelResult, PixelValue},
     },
     interaction::Orientation,
+    render::pipeline::FragmentShaderVariant,
     scene::{Overlay, Scene},
 };
 
@@ -102,11 +103,15 @@ impl UserEvent {
             }
             UserEvent::SetTextureShader => {
                 log::info!("Setting texture shader");
-                state.interaction.set_texture_shader();
+                state
+                    .interaction
+                    .set_fragment_shader_variant(FragmentShaderVariant::Texture);
             }
             UserEvent::SetHeightShader => {
                 log::info!("Setting height shader");
-                state.interaction.set_height_shader();
+                state
+                    .interaction
+                    .set_fragment_shader_variant(FragmentShaderVariant::Height);
             }
             UserEvent::SetOverlays(overlays) => {
                 log::info!("Setting overlays");

@@ -1,29 +1,29 @@
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use wgpu::{BindGroupLayout, Surface, TextureFormat};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
     gpu_data::{
-        DataSize, pixel_picker::PixelPicker, texture_image_range::TextureImageRangeBuffer,
+        DataSize, texture_image_range::TextureImageRangeBuffer,
         topology_percentile_range::TopologyPercentileRangeBuffer,
     },
     interaction::Interaction,
     mip::Mip,
+    render::{depth_buffer::DepthBuffer, pipeline::Pipeline},
     scene::Scene,
-    vertex_buffer::VertexBuffer,
 };
 
-const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+mod depth_buffer;
+pub(crate) mod pipeline;
 
 pub(crate) struct Renderer {
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
-    render_pipeline_texture: wgpu::RenderPipeline,
-    render_pipeline_height: wgpu::RenderPipeline,
-    depth_view: wgpu::TextureView,
+    pipeline: Pipeline,
+    depth_buffer: DepthBuffer,
     image_info_bind_group: wgpu::BindGroup,
 }
 
@@ -37,11 +37,6 @@ impl Renderer {
         surface_format: TextureFormat,
         interaction: &Interaction,
     ) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
-
         let image_info_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("image_info_bind_group_layout"),
@@ -63,91 +58,23 @@ impl Renderer {
             ],
         });
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("render_pipeline_layout"),
-                bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &image_info_bind_group_layout,
-                    &interaction.transformation.bind_group_layout,
-                    &interaction.projection.bind_group_layout,
-                ],
-                push_constant_ranges: &[],
-            });
+        let pipeline = Pipeline::new(
+            &device,
+            surface_format,
+            texture_bind_group_layout,
+            &image_info_bind_group_layout,
+            interaction,
+        );
+        let depth_buffer = DepthBuffer::new(window.inner_size(), &device);
 
-        // Two render targets: main color + picking texture
-        let texture_formats = [
-            Some(surface_format.add_srgb_suffix().into()),
-            Some(PixelPicker::PICKING_FORMAT.into()),
-        ];
-        let texture_fs_pipeline_descriptor = &wgpu::RenderPipelineDescriptor {
-            label: Some("texture_pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[VertexBuffer::desc()],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_texture"),
-                compilation_options: Default::default(),
-                targets: &texture_formats,
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
-                strip_index_format: Some(wgpu::IndexFormat::Uint32),
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        };
-        let render_pipeline_texture = device.create_render_pipeline(texture_fs_pipeline_descriptor);
-
-        let mut height_fs_pipeline_descriptor = texture_fs_pipeline_descriptor.clone();
-        height_fs_pipeline_descriptor.label = Some("height_pipeline");
-        height_fs_pipeline_descriptor.fragment = Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_height"),
-            compilation_options: Default::default(),
-            targets: &texture_formats,
-        });
-        let render_pipeline_height = device.create_render_pipeline(&height_fs_pipeline_descriptor);
-
-        // Create depth texture view
-        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("depth_texture"),
-            size: wgpu::Extent3d {
-                width: window.inner_size().width.max(1),
-                height: window.inner_size().height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut this = Self {
             surface,
             surface_format,
             device,
             queue,
-            render_pipeline_texture,
-            render_pipeline_height,
+            pipeline,
             image_info_bind_group,
-            depth_view,
+            depth_buffer,
         };
 
         // Configure surface for the first time
@@ -168,41 +95,26 @@ impl Renderer {
             present_mode: wgpu::PresentMode::AutoVsync,
         };
         self.surface.configure(&self.device, &surface_config);
-        // Recreate depth texture to match the new size
-        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("depth_texture"),
-            size: wgpu::Extent3d {
-                width: window_size.width.max(1),
-                height: window_size.height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        self.depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.depth_buffer = DepthBuffer::new(window_size, &self.device)
     }
 
     pub(crate) fn render(&self, window: Arc<Window>, interaction: &Interaction, scene: &Scene) {
-        let surface_texture = self.acquire_surface_texture_phase();
+        let surface_texture = self
+            .surface
+            .get_current_texture()
+            .expect("failed to acquire next swapchain texture");
         let surface_view = self.create_surface_view_phase(&surface_texture);
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
         self.encode_scene_phase(&mut encoder, &surface_view, interaction, scene);
         self.encode_post_process_phase(&mut encoder, &surface_texture, interaction);
-        self.submit_and_present_phase(window, encoder, surface_texture);
+
+        self.queue.submit([encoder.finish()]);
+        window.pre_present_notify();
+        surface_texture.present();
 
         #[cfg(not(target_arch = "wasm32"))]
         self.log_hover_pixel_phase(interaction, scene);
-    }
-
-    fn acquire_surface_texture_phase(&self) -> wgpu::SurfaceTexture {
-        self.surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture")
     }
 
     fn create_surface_view_phase(
@@ -249,24 +161,16 @@ impl Renderer {
                     },
                 }),
             ],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
+            depth_stencil_attachment: Some(
+                self.depth_buffer.renderpass_depth_stencil_attachement(),
+            ),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
 
-        let pipeline = if interaction.use_height_shader() {
-            &self.render_pipeline_height
-        } else {
-            &self.render_pipeline_texture
-        };
+        let pipeline = self.pipeline.get(interaction.get_fragment_shader_variant());
         renderpass.set_pipeline(pipeline);
+
         renderpass.set_bind_group(0, scene.get_bind_group(), &[]);
         renderpass.set_bind_group(1, &self.image_info_bind_group, &[]);
         renderpass.set_bind_group(2, &interaction.transformation.bind_group, &[]);
@@ -283,17 +187,6 @@ impl Renderer {
     ) {
         interaction.pixel_picker.copy_pixel_at_mouse(encoder);
         interaction.update_gpu(&self.queue, encoder, surface_texture);
-    }
-
-    fn submit_and_present_phase(
-        &self,
-        window: Arc<Window>,
-        encoder: wgpu::CommandEncoder,
-        surface_texture: wgpu::SurfaceTexture,
-    ) {
-        self.queue.submit([encoder.finish()]);
-        window.pre_present_notify();
-        surface_texture.present();
     }
 
     #[cfg(not(target_arch = "wasm32"))]

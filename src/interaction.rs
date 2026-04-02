@@ -15,6 +15,7 @@ use crate::{
     keyboard::Keyboard,
     mip::Mip,
     mouse::Mouse,
+    render::pipeline::FragmentShaderVariant,
     view::{
         projection::{Projection, Translation},
         transformation::{EulerRotationDeg, Transformation},
@@ -56,7 +57,7 @@ pub(crate) struct Interaction {
     pub projection: Projection,
     pub pixel_picker: PixelPicker,
     pub image_capture: Capture,
-    use_height_shader: bool,
+    fragment_shader_variant: FragmentShaderVariant,
     pub percentile_range_buffer: TopologyPercentileRangeBuffer,
     pub texture_range_buffer: TextureImageRangeBuffer,
 }
@@ -92,7 +93,7 @@ impl Interaction {
             projection,
             pixel_picker: PixelPicker::new(&device, window_size),
             image_capture,
-            use_height_shader: true,
+            fragment_shader_variant: FragmentShaderVariant::Height,
             percentile_range_buffer,
             texture_range_buffer,
         }
@@ -248,15 +249,11 @@ impl Interaction {
         self.projection.update_gpu(queue);
     }
 
-    pub(crate) fn use_height_shader(&self) -> bool {
-        self.use_height_shader
+    pub(crate) fn get_fragment_shader_variant(&self) -> &FragmentShaderVariant {
+        &self.fragment_shader_variant
     }
 
-    pub(crate) fn set_height_shader(&mut self) {
-        self.use_height_shader = true
-    }
-
-    pub(crate) fn set_texture_shader(&mut self) {
-        self.use_height_shader = false
+    pub(crate) fn set_fragment_shader_variant(&mut self, variant: FragmentShaderVariant) {
+        self.fragment_shader_variant = variant;
     }
 }
