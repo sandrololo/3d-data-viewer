@@ -5,10 +5,10 @@ use wgpu::{BindGroupLayout, util::DeviceExt};
 
 #[derive(Clone, Copy)]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub(crate) struct EulerRotationDeg {
-    pub(crate) pitch: f32,
-    pub(crate) yaw: f32,
-    pub(crate) roll: f32,
+pub struct EulerRotationDeg {
+    pub pitch: f32,
+    pub yaw: f32,
+    pub roll: f32,
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
