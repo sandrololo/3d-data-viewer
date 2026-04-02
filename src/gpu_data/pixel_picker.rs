@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use futures::FutureExt;
 use futures::future::Shared;
 use imbuf::Image;
@@ -136,8 +137,8 @@ impl PixelPicker {
 
                 rx.recv()
                     .await
-                    .map_err(|e| Arc::new(anyhow::anyhow!("Channel error: {:?}", e)))?
-                    .map_err(|e| Arc::new(anyhow::anyhow!("Buffer map error: {:?}", e)))?;
+                    .map_err(|e| anyhow!("Channel error: {:?}", e))?
+                    .map_err(|e| anyhow!("Buffer map error: {:?}", e))?;
 
                 let output_data = buffer.get_mapped_range(..);
                 let pixel = (
@@ -148,14 +149,20 @@ impl PixelPicker {
                 buffer.unmap();
 
                 // Clear the pending read so next call starts fresh
-                *pending_read.lock().unwrap() = None;
-                let z = topology.buffer()[(pixel.0 + topology.width().get() * pixel.1) as usize];
+                *pending_read
+                    .lock()
+                    .map_err(|e| anyhow!("Lock error: {:?}", e))? = None;
+                let buffer_index = (pixel.0 + topology.width().get() * pixel.1) as usize;
+                if buffer_index >= topology.buffer().len() || buffer_index >= texture.buffer().len()
+                {
+                    return Err(Arc::new(anyhow!("Pixel out of bounds: {:?}", pixel)));
+                }
+                let z = topology.buffer()[buffer_index];
                 Ok(PixelValue {
                     x: pixel.0,
                     y: pixel.1,
                     z,
-                    texture: texture.buffer()
-                        [(pixel.0 + topology.width().get() * pixel.1) as usize],
+                    texture: texture.buffer()[buffer_index],
                 })
             });
 
