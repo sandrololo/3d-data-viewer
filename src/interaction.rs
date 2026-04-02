@@ -70,8 +70,10 @@ impl Interaction {
         let image_capture = Capture::new(
             &device,
             DataSize {
-                width: NonZeroU32::new(window_size.width).expect("Windows size should not be 0"),
-                height: NonZeroU32::new(window_size.height).expect("Windows size should not be 0"),
+                width: NonZeroU32::new(window_size.width.max(1))
+                    .expect("Takes the maximum of value and 1"),
+                height: NonZeroU32::new(window_size.height.max(1))
+                    .expect("Takes the maximum of value and 1"),
             },
             surface_format,
         );
