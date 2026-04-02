@@ -1,11 +1,12 @@
-use std::{collections::HashMap, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use wgpu::util::DeviceExt;
 
 use crate::gpu_data::DataSize;
 
 pub(crate) struct IndexBufferBuilder {
-    mip_level_indices: HashMap<u32, Vec<u32>>,
+    // The index of the first Vec is the mip level
+    mip_level_indices: Vec<Vec<u32>>,
 }
 
 impl IndexBufferBuilder {
@@ -16,7 +17,7 @@ impl IndexBufferBuilder {
     }
 
     pub(crate) fn new_triangle_strip(image_size: &DataSize, mip_levels: &Vec<u32>) -> Self {
-        let mut mip_level_indices: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut mip_level_indices: Vec<Vec<u32>> = Vec::new();
         log::info!("Creating index buffer for mip levels: {:?}", mip_levels);
         for mip_level in mip_levels {
             let triangle_strip = triangle_strip(&DataSize {
@@ -31,32 +32,32 @@ impl IndexBufferBuilder {
                 triangle_strip.len()
             );
             log::info!("Number of triangles: {:?}", triangle_strip.len() - 2);
-            mip_level_indices.insert(*mip_level, triangle_strip);
+            mip_level_indices.push(triangle_strip);
         }
         Self { mip_level_indices }
     }
 
     pub(crate) fn create_buffer(&self, device: &wgpu::Device) -> IndexBuffer {
-        let mut mip_level_buffers: HashMap<u32, wgpu::Buffer> = HashMap::new();
-        for (mip_level, indices) in &self.mip_level_indices {
+        let mut mip_level_buffers: Vec<wgpu::Buffer> = Vec::new();
+        for indices in &self.mip_level_indices {
             let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
                 contents: bytemuck::cast_slice(indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
-            mip_level_buffers.insert(*mip_level, buffer);
+            mip_level_buffers.push(buffer);
         }
         IndexBuffer { mip_level_buffers }
     }
 }
 
 pub(crate) struct IndexBuffer {
-    mip_level_buffers: HashMap<u32, wgpu::Buffer>,
+    mip_level_buffers: Vec<wgpu::Buffer>,
 }
 
 impl IndexBuffer {
     pub(crate) fn set_mip_level_buffer(&self, mip_level: u32, renderpass: &mut wgpu::RenderPass) {
-        let buffer = self.mip_level_buffers.get(&mip_level).unwrap();
+        let buffer = &self.mip_level_buffers[mip_level as usize];
         renderpass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint32);
         renderpass.draw_indexed(
             0..buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
