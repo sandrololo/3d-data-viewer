@@ -197,9 +197,6 @@ impl Interaction {
             } => {
                 self.keyboard.register_event(event.clone());
             }
-            WindowEvent::ModifiersChanged(modifiers) => {
-                self.keyboard.update_modifiers(modifiers);
-            }
             _ => (),
         }
     }
