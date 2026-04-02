@@ -6,7 +6,7 @@ use wasm_bindgen::prelude::*;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
 
@@ -43,11 +43,23 @@ mod wasm_viewer;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::events::UserEvent;
 use crate::{
-    events::{Event, SystemEvent},
+    events::{ErrorEvent, Event, SystemEvent},
     interaction::Interaction,
     render::Renderer,
     scene::Scene,
 };
+
+#[derive(thiserror::Error, Debug)]
+enum InitializationError {
+    #[error("Failed to get GPU adapter ({0})")]
+    AdapterError(#[from] wgpu::RequestAdapterError),
+    #[error("Failed to create GPU device ({0})")]
+    DeviceError(#[from] wgpu::RequestDeviceError),
+    #[error("Failed to create surface ({0})")]
+    SurfaceError(#[from] wgpu::CreateSurfaceError),
+    #[error("Failed to create window ({0})")]
+    CreateWindowError(#[from] winit::error::OsError),
+}
 
 struct State {
     window: Arc<Window>,
@@ -60,12 +72,11 @@ struct State {
 }
 
 impl State {
-    async fn new(window: Arc<Window>) -> State {
+    async fn new(window: Arc<Window>) -> Result<State, InitializationError> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
-            .await
-            .unwrap();
+            .await?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 required_limits: wgpu::Limits {
@@ -75,12 +86,11 @@ impl State {
                 },
                 ..Default::default()
             })
-            .await
-            .unwrap();
+            .await?;
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = instance.create_surface(window.clone())?;
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
@@ -98,7 +108,7 @@ impl State {
             &interaction,
         );
 
-        State {
+        Ok(State {
             window,
             device,
             queue,
@@ -106,28 +116,25 @@ impl State {
             renderer,
             interaction,
             scene: None,
-        }
+        })
     }
 }
 
 struct ImageViewer3D {
     state: Option<State>,
-    #[cfg(target_arch = "wasm32")]
-    proxy: Option<winit::event_loop::EventLoopProxy<Event>>,
+    proxy: EventLoopProxy<Event>,
     #[cfg(target_arch = "wasm32")]
     canvas_id: String,
 }
 
 impl ImageViewer3D {
     pub fn new(
-        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<Event>,
+        event_loop: &EventLoop<Event>,
         #[cfg(target_arch = "wasm32")] canvas_id: String,
     ) -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let proxy = Some(event_loop.create_proxy());
+        let proxy = event_loop.create_proxy();
         Self {
             state: None,
-            #[cfg(target_arch = "wasm32")]
             proxy,
             #[cfg(target_arch = "wasm32")]
             canvas_id,
@@ -152,28 +159,43 @@ impl ApplicationHandler<Event> for ImageViewer3D {
             window_attributes = window_attributes.with_canvas(Some(html_canvas_element));
         }
 
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let window = Arc::new(match event_loop.create_window(window_attributes) {
+            Ok(window) => window,
+            Err(e) => {
+                let _ = self.proxy.send_event(
+                    ErrorEvent::Initialization(InitializationError::CreateWindowError(e)).into(),
+                );
+                return;
+            }
+        });
 
         #[cfg(not(target_arch = "wasm32"))]
         {
             // If we are not on web we can use pollster to
-            // await the
-            self.state = Some(pollster::block_on(State::new(window)));
+            // await the async initialization directly
+            match pollster::block_on(State::new(window)) {
+                Ok(state) => self.state = Some(state),
+                Err(e) => {
+                    let _ = self.proxy.send_event(ErrorEvent::Initialization(e).into());
+                }
+            }
         }
 
         #[cfg(target_arch = "wasm32")]
         {
             // Run the future asynchronously and use the
             // proxy to send the results to the event loop
-            if let Some(proxy) = self.proxy.take() {
-                wasm_bindgen_futures::spawn_local(async move {
-                    assert!(
-                        proxy
-                            .send_event(SystemEvent::SetState(State::new(window).await).into())
-                            .is_ok()
-                    )
-                });
-            }
+            let proxy = self.proxy.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                assert!(match State::new(window).await {
+                    Ok(state) => proxy
+                        .send_event(SystemEvent::SetState(state).into())
+                        .is_ok(),
+                    Err(e) => proxy
+                        .send_event(ErrorEvent::Initialization(e).into())
+                        .is_ok(),
+                })
+            });
         }
     }
 
@@ -213,8 +235,12 @@ impl ApplicationHandler<Event> for ImageViewer3D {
     }
 
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: Event) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, mut event: Event) {
         match event {
+            Event::Error(ErrorEvent::Initialization(e)) => {
+                log::error!("{}", e);
+                event_loop.exit();
+            }
             Event::System(SystemEvent::SetState(mut state)) => {
                 #[cfg(target_arch = "wasm32")]
                 {
@@ -265,10 +291,9 @@ pub fn run() -> anyhow::Result<()> {
     let proxy = event_loop.create_proxy();
     proxy
         .send_event(UserEvent::SetTopology(data.0).into())
-        .map_err(|e| anyhow!("Error: {}", e))
-        .unwrap();
+        .map_err(|e| anyhow!("Error: {}", e))?;
 
-    let mut app = ImageViewer3D::new();
+    let mut app = ImageViewer3D::new(&event_loop);
     event_loop.run_app(&mut app)?;
 
     Ok(())

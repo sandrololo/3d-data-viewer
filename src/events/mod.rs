@@ -1,6 +1,8 @@
+pub(crate) use crate::events::error_event::ErrorEvent;
 pub(crate) use system_events::SystemEvent;
 pub(crate) use user_events::UserEvent;
 
+mod error_event;
 mod system_events;
 mod user_events;
 
@@ -8,6 +10,7 @@ mod user_events;
 pub(crate) enum Event {
     User(UserEvent),
     System(SystemEvent),
+    Error(ErrorEvent),
 }
 
 impl From<UserEvent> for Event {
@@ -19,5 +22,11 @@ impl From<UserEvent> for Event {
 impl From<SystemEvent> for Event {
     fn from(value: SystemEvent) -> Self {
         Self::System(value)
+    }
+}
+
+impl From<ErrorEvent> for Event {
+    fn from(value: ErrorEvent) -> Self {
+        Self::Error(value)
     }
 }
