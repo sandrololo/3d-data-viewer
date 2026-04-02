@@ -1,7 +1,7 @@
 use imbuf::Image;
 use std::{num::NonZeroU32, sync::Arc};
 use tiff::decoder::{Decoder, DecodingResult, Limits};
-use wasm_bindgen::{JsValue, prelude::*, throw_str};
+use wasm_bindgen::{JsValue, prelude::*};
 use winit::event_loop::EventLoop;
 
 use crate::{
@@ -48,218 +48,124 @@ impl WasmViewer {
     }
 
     pub async fn reset_view(&self) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::ResetView.into())
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::ResetView)
     }
 
     pub async fn set_topology(&self, data: Vec<u8>) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            let mut decoder = Decoder::new(std::io::Cursor::new(&data))
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-                .with_limits(Limits::unlimited());
-            let dimensions = decoder
-                .dimensions()
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            let decoded_data = match decoder
-                .read_image()
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-            {
-                DecodingResult::F32(data) => Ok(data),
-                x => Err(JsValue::from_str(&format!(
-                    "Unsupported image format: {:?}",
-                    x
-                ))),
-            }?;
-            let image = Image::<f32, 1>::new_vec(
-                decoded_data,
-                NonZeroU32::new(dimensions.0).ok_or(JsValue::from_str("Invalid width"))?,
-                NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
-            );
-            proxy
-                .send_event(UserEvent::SetTopology(image).into())
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        let mut decoder = Decoder::new(std::io::Cursor::new(&data))
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
+            .with_limits(Limits::unlimited());
+        let dimensions = decoder
+            .dimensions()
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+        let decoded_data = match decoder
+            .read_image()
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
+        {
+            DecodingResult::F32(data) => Ok(data),
+            x => Err(JsValue::from_str(&format!(
+                "Unsupported image format: {:?}",
+                x
+            ))),
+        }?;
+        let image = Image::<f32, 1>::new_vec(
+            decoded_data,
+            NonZeroU32::new(dimensions.0).ok_or(JsValue::from_str("Invalid width"))?,
+            NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
+        );
+        self.send_event(UserEvent::SetTopology(image))
     }
 
     pub async fn set_texture(&self, data: Vec<u8>) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            let mut decoder = Decoder::new(std::io::Cursor::new(&data))
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-                .with_limits(Limits::unlimited());
-            let dimensions = decoder
-                .dimensions()
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            let decoded_data = match decoder
-                .read_image()
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-            {
-                DecodingResult::U16(data) => Ok(data),
-                x => Err(JsValue::from_str(&format!(
-                    "Unsupported image format: {:?}",
-                    x
-                ))),
-            }?;
-            let image = Image::<u16, 1>::new_vec(
-                decoded_data,
-                NonZeroU32::new(dimensions.0).ok_or(JsValue::from_str("Invalid width"))?,
-                NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
-            );
-            proxy
-                .send_event(UserEvent::SetTexture(image).into())
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        let mut decoder = Decoder::new(std::io::Cursor::new(&data))
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
+            .with_limits(Limits::unlimited());
+        let dimensions = decoder
+            .dimensions()
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+        let decoded_data = match decoder
+            .read_image()
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
+        {
+            DecodingResult::U16(data) => Ok(data),
+            x => Err(JsValue::from_str(&format!(
+                "Unsupported image format: {:?}",
+                x
+            ))),
+        }?;
+        let image = Image::<u16, 1>::new_vec(
+            decoded_data,
+            NonZeroU32::new(dimensions.0).ok_or(JsValue::from_str("Invalid width"))?,
+            NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
+        );
+        self.send_event(UserEvent::SetTexture(image))
     }
 
     pub async fn get_pixel_value(&self) -> Result<PixelValue, JsValue> {
-        if let Some(proxy) = &self.proxy {
-            let (sender, receiver) = futures::channel::oneshot::channel();
-            proxy
-                .send_event(UserEvent::GetPixel(sender).into())
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            let pixels = receiver
-                .await
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-                .await
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            Ok(pixels)
-        } else {
-            throw_str("Event loop proxy not initialized");
-        }
+        let (sender, receiver) = futures::channel::oneshot::channel();
+        self.send_event(UserEvent::GetPixel(sender))?;
+        let pixels = receiver
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+        Ok(pixels)
     }
 
     pub async fn capture_image(&self) -> Result<Vec<u8>, JsValue> {
-        if let Some(proxy) = &self.proxy {
-            let (sender, receiver) = futures::channel::oneshot::channel();
-            proxy
-                .send_event(UserEvent::CaptureImage(sender).into())
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            let image = receiver
-                .await
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-                .await
-                .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-            Ok(image)
-        } else {
-            throw_str("Event loop proxy not initialized");
-        }
+        let (sender, receiver) = futures::channel::oneshot::channel();
+        self.send_event(UserEvent::CaptureImage(sender))?;
+        let image = receiver
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
+            .await
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+        Ok(image)
     }
 
     pub fn set_height_shader(&self) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::SetHeightShader.into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::SetHeightShader)
     }
 
     pub fn set_texture_shader(&self) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::SetTextureShader.into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::SetTextureShader)
     }
 
     pub fn set_overlays(&self, overlays: Vec<Overlay>) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::SetOverlays(Arc::new(overlays)).into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::SetOverlays(Arc::new(overlays)))
     }
 
     pub fn clear_overlays(&self) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::ClearOverlays.into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::ClearOverlays)
     }
 
     pub fn zoom_in(&self) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::ZoomIn.into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::ZoomIn)
     }
 
     pub fn zoom_out(&self) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::ZoomOut.into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::ZoomOut)
     }
 
     pub fn set_orientation(&self, orientation: Orientation) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::SetOrientation(orientation).into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::SetOrientation(orientation))
     }
 
     pub fn reset_orientation(&self) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::ResetOrientation.into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::ResetOrientation)
     }
 
     pub fn set_percentile(&self, percentile: f32) -> Result<(), JsValue> {
-        if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::SetPercentile(percentile).into())
-                .map_err(|e| e.to_string())?;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("Event loop proxy not initialized"))
-        }
+        self.send_event(UserEvent::SetPercentile(percentile))
     }
 
     pub fn set_texture_range(&self, start: u16, end: u16) -> Result<(), JsValue> {
+        self.send_event(UserEvent::SetTextureRange(start, end))
+    }
+
+    fn send_event(&self, event: UserEvent) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
-            proxy
-                .send_event(UserEvent::SetTextureRange(start, end).into())
-                .map_err(|e| e.to_string())?;
+            proxy.send_event(event.into()).map_err(|e| e.to_string())?;
             Ok(())
         } else {
             Err(JsValue::from_str("Event loop proxy not initialized"))
