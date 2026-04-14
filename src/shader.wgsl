@@ -91,7 +91,7 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let normal = normalize(cross(tangent_y, tangent_x));
 
 
-    let z = 1.0 - (z_clamped - z_range.min) / (z_range.max - z_range.min);
+    let z = 0.5 - (z_clamped - z_range.min) / (z_range.max - z_range.min);
     let points = vec4<f32>(x, y, z, 1.0);
 
 
