@@ -176,11 +176,11 @@ fn turbo_colormap(x: f32) -> vec3<f32> {
     let kGreenVec2 = vec2(4.27729857, 2.82956604);
     let kBlueVec2 = vec2(-89.90310912, 27.34824973);
   
-    let v4 = vec4( 1.0, x, x * x, x * x * x);
+    let v4 = vec4(1.0, x, x * x, x * x * x);
     let v2 = v4.zw * v4.z;
     return vec3(
-        dot(v4, kRedVec4)   + dot(v2, kRedVec2),
+        dot(v4, kRedVec4) + dot(v2, kRedVec2),
         dot(v4, kGreenVec4) + dot(v2, kGreenVec2),
-        dot(v4, kBlueVec4)  + dot(v2, kBlueVec2)
+        dot(v4, kBlueVec4) + dot(v2, kBlueVec2)
     );
 }
