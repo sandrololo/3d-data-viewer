@@ -24,6 +24,7 @@ pub(crate) enum UserEvent {
     ResetOrientation,
     SetTextureShader,
     SetHeightShader,
+    SetTurboColormapShader,
     SetOverlays(Arc<Vec<Overlay>>),
     ClearOverlays,
     GetPixel(
@@ -112,6 +113,12 @@ impl UserEvent {
                 state
                     .interaction
                     .set_fragment_shader_variant(FragmentShaderVariant::Height);
+            }
+            UserEvent::SetTurboColormapShader => {
+                log::info!("Setting turbo colormap shader");
+                state
+                    .interaction
+                    .set_fragment_shader_variant(FragmentShaderVariant::TurboColormap);
             }
             UserEvent::SetOverlays(overlays) => {
                 log::info!("Setting overlays");

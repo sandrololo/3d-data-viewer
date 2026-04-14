@@ -10,11 +10,13 @@ use crate::{
 pub(crate) enum FragmentShaderVariant {
     Height,
     Texture,
+    TurboColormap,
 }
 
 pub(crate) struct Pipeline {
     texture: wgpu::RenderPipeline,
     height: wgpu::RenderPipeline,
+    turbo_colormap: wgpu::RenderPipeline,
 }
 
 impl Pipeline {
@@ -83,9 +85,20 @@ impl Pipeline {
             targets: &texture_formats,
         });
         let render_pipeline_height = device.create_render_pipeline(&height_fs_pipeline_descriptor);
+
+        let mut turbo_colormap_fs_pipeline_descriptor = texture_fs_pipeline_descriptor.clone();
+        turbo_colormap_fs_pipeline_descriptor.label = Some("turbo_colormap_pipeline");
+        turbo_colormap_fs_pipeline_descriptor.fragment = Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_turbo_colormap"),
+            compilation_options: Default::default(),
+            targets: &texture_formats,
+        });
+        let turbo_colormap = device.create_render_pipeline(&turbo_colormap_fs_pipeline_descriptor);
         Self {
             texture: render_pipeline_texture,
             height: render_pipeline_height,
+            turbo_colormap,
         }
     }
 
@@ -93,6 +106,7 @@ impl Pipeline {
         match variant {
             FragmentShaderVariant::Height => &self.height,
             FragmentShaderVariant::Texture => &self.texture,
+            FragmentShaderVariant::TurboColormap => &self.turbo_colormap,
         }
     }
 }

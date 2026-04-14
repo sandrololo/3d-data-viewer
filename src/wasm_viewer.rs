@@ -131,6 +131,10 @@ impl WasmViewer {
         self.send_event(UserEvent::SetTextureShader)
     }
 
+    pub fn set_turbo_colormap_shader(&self) -> Result<(), JsValue> {
+        self.send_event(UserEvent::SetTurboColormapShader)
+    }
+
     pub fn set_overlays(&self, overlays: Vec<Overlay>) -> Result<(), JsValue> {
         self.send_event(UserEvent::SetOverlays(Arc::new(overlays)))
     }

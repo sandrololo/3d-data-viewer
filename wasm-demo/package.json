@@ -5,8 +5,8 @@
     "homepage": "https://sandrololo.github.io/3d-data-viewer",
     "type": "module",
     "scripts": {
-        "serve": "node serve.js",
-        "start": "node serve.js 8080",
+        "serve": "node serve.cjs",
+        "start": "node serve.cjs 8080",
         "predeploy": "rm -rf build && mkdir -p build && cp -R index.html src build/",
         "deploy": "gh-pages -d build"
     },
