@@ -413,6 +413,18 @@
             color: var(--text-primary);
         }
 
+        .btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            pointer-events: auto;
+        }
+
+        .btn:disabled:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+            box-shadow: none;
+        }
+
         .btn-primary {
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
             border: none;
