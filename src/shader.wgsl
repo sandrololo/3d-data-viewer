@@ -165,7 +165,7 @@ fn fs_turbo_colormap(in: VertexOutput) -> FragmentOutput {
     return out;
 }
 
-// Turbo colormap implementation based https://gist.github.com/mikhailov-work/0d177465a8151eb6ede1768d51d476c7
+// Turbo colormap implementation from https://gist.github.com/mikhailov-work/0d177465a8151eb6ede1768d51d476c7
 fn turbo_colormap(x: f32) -> vec3<f32> {
     let t = clamp(x, 0.0, 1.0);
 
