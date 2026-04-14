@@ -80,7 +80,7 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     let z_value = textureLoad(topology_data, vec2<u32>(col, row) * resize, 0);
     let z_clamped = clamp(z_value.x, z_range.min, z_range.max);
 
-    let light = normalize(vec3(-1.0, 1.0, 1.0));
+    let light = normalize(vec3(1.0, -1.0, 0.0));
     let z_up = textureLoad(topology_data, vec2<u32>(col, max(row, 1u) - 1u) * resize, 0).x;
     let z_down = textureLoad(topology_data, vec2<u32>(col, min(row + 1u, image_dims.height - 1u)) * resize, 0).x;
     let z_left = textureLoad(topology_data, vec2<u32>(max(col, 1u) - 1u, row) * resize, 0).x;
