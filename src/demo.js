@@ -267,12 +267,22 @@ async function initWasm() {
  * Set up button event handlers
  */
 function setupControls() {
+    const updateOverlayButtons = (mode) => {
+        const disabled = mode !== 'height';
+        const title = disabled ? 'Only available in Height shader mode' : '';
+        btnSetOverlay.disabled = disabled;
+        btnClearOverlay.disabled = disabled;
+        btnSetOverlay.title = title;
+        btnClearOverlay.title = title;
+    };
+
     const setShader = (mode) => {
         if (!wasmViewer || mode === currentShader) {
             return;
         }
         currentShader = mode;
         shaderSelect.value = mode;
+        updateOverlayButtons(mode);
         switch (mode) {
             case 'height':
                 wasmViewer.set_height_shader();
