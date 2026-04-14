@@ -230,6 +230,12 @@ function makeMutClosure(arg0, arg1, dtor, f) {
     return real;
 }
 
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
+    }
+}
+
 function passArrayJsValueToWasm0(array, malloc) {
     const ptr = malloc(array.length * 4, 4) >>> 0;
     for (let i = 0; i < array.length; i++) {
@@ -238,12 +244,6 @@ function passArrayJsValueToWasm0(array, malloc) {
     }
     WASM_VECTOR_LEN = array.length;
     return ptr;
-}
-
-function _assertClass(instance, klass) {
-    if (!(instance instanceof klass)) {
-        throw new Error(`expected instance of ${klass.name}`);
-    }
 }
 
 function takeFromExternrefTable0(idx) {
@@ -258,24 +258,24 @@ function passArray8ToWasm0(arg, malloc) {
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
-function __wbg_adapter_8(arg0, arg1, arg2) {
-    wasm.closure691_externref_shim(arg0, arg1, arg2);
-}
-
-function __wbg_adapter_13(arg0, arg1) {
+function __wbg_adapter_8(arg0, arg1) {
     wasm.wasm_bindgen__convert__closures_____invoke__h9111653ea2b7a9f5(arg0, arg1);
 }
 
-function __wbg_adapter_32(arg0, arg1, arg2, arg3) {
-    wasm.closure698_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_11(arg0, arg1, arg2) {
+    wasm.closure688_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_35(arg0, arg1, arg2) {
-    wasm.closure758_externref_shim(arg0, arg1, arg2);
+function __wbg_adapter_26(arg0, arg1, arg2, arg3) {
+    wasm.closure695_externref_shim(arg0, arg1, arg2, arg3);
 }
 
-function __wbg_adapter_737(arg0, arg1, arg2, arg3) {
-    wasm.closure779_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_31(arg0, arg1, arg2) {
+    wasm.closure756_externref_shim(arg0, arg1, arg2);
+}
+
+function __wbg_adapter_758(arg0, arg1, arg2, arg3) {
+    wasm.closure777_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_GpuBlendFactor = ["zero", "one", "src", "one-minus-src", "src-alpha", "one-minus-src-alpha", "dst", "one-minus-dst", "dst-alpha", "one-minus-dst-alpha", "src-alpha-saturated", "constant", "one-minus-constant", "src1", "one-minus-src1", "src1-alpha", "one-minus-src1-alpha"];
@@ -325,6 +325,168 @@ const __wbindgen_enum_GpuVertexStepMode = ["vertex", "instance"];
 const __wbindgen_enum_ResizeObserverBoxOptions = ["border-box", "content-box", "device-pixel-content-box"];
 
 const __wbindgen_enum_VisibilityState = ["hidden", "visible"];
+
+const EulerRotationDegFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_eulerrotationdeg_free(ptr >>> 0, 1));
+
+export class EulerRotationDeg {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(EulerRotationDeg.prototype);
+        obj.__wbg_ptr = ptr;
+        EulerRotationDegFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        EulerRotationDegFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_eulerrotationdeg_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    get pitch() {
+        const ret = wasm.__wbg_get_eulerrotationdeg_pitch(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} arg0
+     */
+    set pitch(arg0) {
+        wasm.__wbg_set_eulerrotationdeg_pitch(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @returns {number}
+     */
+    get yaw() {
+        const ret = wasm.__wbg_get_eulerrotationdeg_yaw(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} arg0
+     */
+    set yaw(arg0) {
+        wasm.__wbg_set_eulerrotationdeg_yaw(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @returns {number}
+     */
+    get roll() {
+        const ret = wasm.__wbg_get_eulerrotationdeg_roll(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} arg0
+     */
+    set roll(arg0) {
+        wasm.__wbg_set_eulerrotationdeg_roll(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} pitch
+     * @param {number} yaw
+     * @param {number} roll
+     * @returns {EulerRotationDeg}
+     */
+    static new(pitch, yaw, roll) {
+        const ret = wasm.eulerrotationdeg_new(pitch, yaw, roll);
+        return EulerRotationDeg.__wrap(ret);
+    }
+}
+if (Symbol.dispose) EulerRotationDeg.prototype[Symbol.dispose] = EulerRotationDeg.prototype.free;
+
+const OrientationFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_orientation_free(ptr >>> 0, 1));
+
+export class Orientation {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(Orientation.prototype);
+        obj.__wbg_ptr = ptr;
+        OrientationFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        OrientationFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_orientation_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    get zoom() {
+        const ret = wasm.__wbg_get_orientation_zoom(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} arg0
+     */
+    set zoom(arg0) {
+        wasm.__wbg_set_orientation_zoom(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @returns {Translation}
+     */
+    get translation() {
+        const ret = wasm.__wbg_get_orientation_translation(this.__wbg_ptr);
+        return Translation.__wrap(ret);
+    }
+    /**
+     * @param {Translation} arg0
+     */
+    set translation(arg0) {
+        _assertClass(arg0, Translation);
+        var ptr0 = arg0.__destroy_into_raw();
+        wasm.__wbg_set_orientation_translation(this.__wbg_ptr, ptr0);
+    }
+    /**
+     * @returns {EulerRotationDeg}
+     */
+    get rotation() {
+        const ret = wasm.__wbg_get_orientation_rotation(this.__wbg_ptr);
+        return EulerRotationDeg.__wrap(ret);
+    }
+    /**
+     * @param {EulerRotationDeg} arg0
+     */
+    set rotation(arg0) {
+        _assertClass(arg0, EulerRotationDeg);
+        var ptr0 = arg0.__destroy_into_raw();
+        wasm.__wbg_set_orientation_rotation(this.__wbg_ptr, ptr0);
+    }
+    /**
+     * @param {number} zoom
+     * @param {Translation} translation
+     * @param {EulerRotationDeg} rotation
+     * @returns {Orientation}
+     */
+    static new(zoom, translation, rotation) {
+        _assertClass(translation, Translation);
+        var ptr0 = translation.__destroy_into_raw();
+        _assertClass(rotation, EulerRotationDeg);
+        var ptr1 = rotation.__destroy_into_raw();
+        const ret = wasm.orientation_new(zoom, ptr0, ptr1);
+        return Orientation.__wrap(ret);
+    }
+}
+if (Symbol.dispose) Orientation.prototype[Symbol.dispose] = Orientation.prototype.free;
 
 const OverlayFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -468,30 +630,93 @@ export class PixelValue {
      * @returns {number}
      */
     get z() {
-        const ret = wasm.__wbg_get_pixelvalue_z(this.__wbg_ptr);
+        const ret = wasm.__wbg_get_eulerrotationdeg_roll(this.__wbg_ptr);
         return ret;
     }
     /**
      * @param {number} arg0
      */
     set z(arg0) {
-        wasm.__wbg_set_pixelvalue_z(this.__wbg_ptr, arg0);
+        wasm.__wbg_set_eulerrotationdeg_roll(this.__wbg_ptr, arg0);
     }
     /**
      * @returns {number}
      */
-    get amplitude() {
-        const ret = wasm.__wbg_get_pixelvalue_amplitude(this.__wbg_ptr);
+    get texture() {
+        const ret = wasm.__wbg_get_pixelvalue_texture(this.__wbg_ptr);
         return ret;
     }
     /**
      * @param {number} arg0
      */
-    set amplitude(arg0) {
-        wasm.__wbg_set_pixelvalue_amplitude(this.__wbg_ptr, arg0);
+    set texture(arg0) {
+        wasm.__wbg_set_pixelvalue_texture(this.__wbg_ptr, arg0);
     }
 }
 if (Symbol.dispose) PixelValue.prototype[Symbol.dispose] = PixelValue.prototype.free;
+
+const TranslationFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_translation_free(ptr >>> 0, 1));
+
+export class Translation {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(Translation.prototype);
+        obj.__wbg_ptr = ptr;
+        TranslationFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        TranslationFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_translation_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    get x() {
+        const ret = wasm.__wbg_get_translation_x(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} arg0
+     */
+    set x(arg0) {
+        wasm.__wbg_set_translation_x(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @returns {number}
+     */
+    get y() {
+        const ret = wasm.__wbg_get_translation_y(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} arg0
+     */
+    set y(arg0) {
+        wasm.__wbg_set_translation_y(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} x
+     * @param {number} y
+     * @returns {Translation}
+     */
+    static new(x, y) {
+        const ret = wasm.translation_new(x, y);
+        return Translation.__wrap(ret);
+    }
+}
+if (Symbol.dispose) Translation.prototype[Symbol.dispose] = Translation.prototype.free;
 
 const WasmBindgenPixelRangeFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -592,20 +817,20 @@ export class WasmViewer {
      * @param {Uint8Array} data
      * @returns {Promise<void>}
      */
-    set_surface(data) {
+    set_topology(data) {
         const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmviewer_set_surface(this.__wbg_ptr, ptr0, len0);
+        const ret = wasm.wasmviewer_set_topology(this.__wbg_ptr, ptr0, len0);
         return ret;
     }
     /**
      * @param {Uint8Array} data
      * @returns {Promise<void>}
      */
-    set_amplitude(data) {
+    set_texture(data) {
         const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmviewer_set_amplitude(this.__wbg_ptr, ptr0, len0);
+        const ret = wasm.wasmviewer_set_texture(this.__wbg_ptr, ptr0, len0);
         return ret;
     }
     /**
@@ -628,8 +853,14 @@ export class WasmViewer {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
-    set_amplitude_shader() {
-        const ret = wasm.wasmviewer_set_amplitude_shader(this.__wbg_ptr);
+    set_texture_shader() {
+        const ret = wasm.wasmviewer_set_texture_shader(this.__wbg_ptr);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    set_turbo_colormap_shader() {
+        const ret = wasm.wasmviewer_set_turbo_colormap_shader(this.__wbg_ptr);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
@@ -663,6 +894,17 @@ export class WasmViewer {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
+    /**
+     * @param {Orientation} orientation
+     */
+    set_orientation(orientation) {
+        _assertClass(orientation, Orientation);
+        var ptr0 = orientation.__destroy_into_raw();
+        const ret = wasm.wasmviewer_set_orientation(this.__wbg_ptr, ptr0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
     reset_orientation() {
         const ret = wasm.wasmviewer_reset_orientation(this.__wbg_ptr);
         if (ret[1]) {
@@ -682,8 +924,8 @@ export class WasmViewer {
      * @param {number} start
      * @param {number} end
      */
-    set_amplitude_range(start, end) {
-        const ret = wasm.wasmviewer_set_amplitude_range(this.__wbg_ptr, start, end);
+    set_texture_range(start, end) {
+        const ret = wasm.wasmviewer_set_texture_range(this.__wbg_ptr, start, end);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
@@ -1174,7 +1416,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_737(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_758(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -2043,34 +2285,24 @@ function __wbg_get_imports() {
     imports.wbg.__wbg_writeTexture_c70826cc2ae8e127 = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
         arg0.writeTexture(arg1, arg2, arg3, arg4);
     }, arguments) };
+    imports.wbg.__wbindgen_cast_0ade0ef191179f89 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("Array<any>")], shim_idx: 688, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_11);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_0b056c8023dd830d = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("WheelEvent")], shim_idx: 688, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_11);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_1f65dd8f20505941 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("FocusEvent")], shim_idx: 688, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_11);
+        return ret;
+    };
     imports.wbg.__wbindgen_cast_2241b6af4c4b2941 = function(arg0, arg1) {
         // Cast intrinsic for `Ref(String) -> Externref`.
         const ret = getStringFromWasm0(arg0, arg1);
-        return ret;
-    };
-    imports.wbg.__wbindgen_cast_2289dec7f0430273 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("PageTransitionEvent")], shim_idx: 691, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_8);
-        return ret;
-    };
-    imports.wbg.__wbindgen_cast_525ab2384af8b21c = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("Array<any>"), NamedExternref("ResizeObserver")], shim_idx: 698, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_32);
-        return ret;
-    };
-    imports.wbg.__wbindgen_cast_5f7a7728c30de301 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("PointerEvent")], shim_idx: 691, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_8);
-        return ret;
-    };
-    imports.wbg.__wbindgen_cast_67f6c243116ba592 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("WheelEvent")], shim_idx: 691, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_8);
-        return ret;
-    };
-    imports.wbg.__wbindgen_cast_75a80db387d40b54 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("Event")], shim_idx: 691, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_8);
         return ret;
     };
     imports.wbg.__wbindgen_cast_77bc3e92745e9a35 = function(arg0, arg1) {
@@ -2080,19 +2312,24 @@ function __wbg_get_imports() {
         const ret = v0;
         return ret;
     };
-    imports.wbg.__wbindgen_cast_7a3186c446b6cec9 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("KeyboardEvent")], shim_idx: 691, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_8);
+    imports.wbg.__wbindgen_cast_9fa7c2cdec9388c6 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("PageTransitionEvent")], shim_idx: 688, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_11);
         return ret;
     };
-    imports.wbg.__wbindgen_cast_aa9a45fa18e777f9 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [], shim_idx: 695, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_13);
+    imports.wbg.__wbindgen_cast_a27a4a2c43ac4666 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("KeyboardEvent")], shim_idx: 688, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_11);
         return ret;
     };
-    imports.wbg.__wbindgen_cast_ac0eca9407d8a59a = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("Array<any>")], shim_idx: 691, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_8);
+    imports.wbg.__wbindgen_cast_ac57781ce5d2a83c = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("Array<any>"), NamedExternref("ResizeObserver")], shim_idx: 695, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_26);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_ae933fc9b0c94da8 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [], shim_idx: 692, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_8);
         return ret;
     };
     imports.wbg.__wbindgen_cast_cb9088102bce6b30 = function(arg0, arg1) {
@@ -2100,19 +2337,24 @@ function __wbg_get_imports() {
         const ret = getArrayU8FromWasm0(arg0, arg1);
         return ret;
     };
-    imports.wbg.__wbindgen_cast_d49407984149992e = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 690, function: Function { arguments: [NamedExternref("FocusEvent")], shim_idx: 691, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 690, __wbg_adapter_8);
-        return ret;
-    };
     imports.wbg.__wbindgen_cast_d6cd19b81560fd6e = function(arg0) {
         // Cast intrinsic for `F64 -> Externref`.
         const ret = arg0;
         return ret;
     };
-    imports.wbg.__wbindgen_cast_ec4477bbce4ecd33 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 757, function: Function { arguments: [Externref], shim_idx: 758, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 757, __wbg_adapter_35);
+    imports.wbg.__wbindgen_cast_d7e8d4cc36c8ec2f = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 755, function: Function { arguments: [Externref], shim_idx: 756, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 755, __wbg_adapter_31);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_ea6b2e6701e0384b = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("Event")], shim_idx: 688, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_11);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_fc6ec844dfbf25be = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 687, function: Function { arguments: [NamedExternref("PointerEvent")], shim_idx: 688, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, 687, __wbg_adapter_11);
         return ret;
     };
     imports.wbg.__wbindgen_init_externref_table = function() {

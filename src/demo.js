@@ -24,8 +24,7 @@ const pixelZ = document.getElementById('pixel-z');
 const pixelA = document.getElementById('pixel-a');
 
 // Control buttons
-const btnHeight = document.getElementById('btn-height');
-const btnAmplitude = document.getElementById('btn-amplitude');
+const shaderSelect = document.getElementById('shader-select');
 const btnReset = document.getElementById('btn-reset');
 const btnSetOverlay = document.getElementById('btn-set-overlay');
 const btnClearOverlay = document.getElementById('btn-clear-overlay');
@@ -34,7 +33,7 @@ const btnDownloadImage = document.getElementById('btn-download-image');
 // State
 let wasmModule = null;
 let wasmViewer = null;
-let isHeightMode = true;
+let currentShader = 'height';
 let isOverlayVisible = false;
 let isPollingEnabled = false;
 let isPolling = false;
@@ -268,34 +267,32 @@ async function initWasm() {
  * Set up button event handlers
  */
 function setupControls() {
-    const setHeightShader = () => {
-        if (wasmViewer && !isHeightMode) {
-            isHeightMode = true;
-            btnHeight.classList.add('active');
-            btnAmplitude.classList.remove('active');
-            wasmViewer.set_height_shader();
+    const setShader = (mode) => {
+        if (!wasmViewer || mode === currentShader) {
+            return;
+        }
+        currentShader = mode;
+        shaderSelect.value = mode;
+        switch (mode) {
+            case 'height':
+                wasmViewer.set_height_shader();
+                break;
+            case 'texture':
+                wasmViewer.set_texture_shader();
+                break;
+            case 'turbo':
+                wasmViewer.set_turbo_colormap_shader();
+                break;
         }
     };
 
-    const setAmplitudeShader = () => {
-        if (wasmViewer && isHeightMode) {
-            isHeightMode = false;
-            btnAmplitude.classList.add('active');
-            btnHeight.classList.remove('active');
-            wasmViewer.set_amplitude_shader();
-        }
-    };
-
-    const toggleShader = () => {
+    const cycleShader = () => {
         if (!wasmViewer) {
             return;
         }
-
-        if (isHeightMode) {
-            setAmplitudeShader();
-        } else {
-            setHeightShader();
-        }
+        const modes = ['height', 'texture', 'turbo'];
+        const idx = modes.indexOf(currentShader);
+        setShader(modes[(idx + 1) % modes.length]);
     };
 
     const setOverlay = async () => {
@@ -344,13 +341,9 @@ function setupControls() {
         }
     };
 
-    // Shader mode buttons - call viewer methods directly
-    btnHeight.addEventListener('click', () => {
-        setHeightShader();
-    });
-
-    btnAmplitude.addEventListener('click', () => {
-        setAmplitudeShader();
+    // Shader mode dropdown
+    shaderSelect.addEventListener('change', (event) => {
+        setShader(event.target.value);
     });
 
     // Reset view - call viewer method directly
@@ -388,7 +381,7 @@ function setupControls() {
         const key = event.key.toLowerCase();
         if (key === 's') {
             event.preventDefault();
-            toggleShader();
+            cycleShader();
         } else if (key === 't') {
             event.preventDefault();
             void toggleOverlay();
@@ -482,8 +475,7 @@ function parsePixelResult(result) {
         const x = readNumericMember(result, 'x')
         const y = readNumericMember(result, 'y')
         const z = readNumericMember(result, 'z')
-        const amplitude = readNumericMember(result, 'amplitude')
-        console.log(result)
+        const amplitude = readNumericMember(result, 'texture')
         if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
             return { x, y, z, amplitude };
         }
@@ -568,19 +560,19 @@ async function main() {
         try {
             const surfaceData = await loadSurfaceData();
             const amplitudeData = await loadAmplitudeData();
-            if (wasmViewer && typeof wasmViewer.set_surface === 'function') {
-                wasmViewer.set_surface(surfaceData);
-                wasmViewer.set_amplitude(amplitudeData);
-                wasmViewer.set_amplitude_range(0, 100);
+            if (wasmViewer && typeof wasmViewer.set_topology === 'function') {
+                await wasmViewer.set_topology(surfaceData);
+                await wasmViewer.set_texture(amplitudeData);
+                wasmViewer.set_texture_range(0, 100);
                 console.log('✅ Surface data set in WASM viewer');
-                hideLoading();
             } else {
-                console.warn('set_surface method not available on wasmViewer');
+                console.warn('set_topology method not available on wasmViewer');
             }
         } catch (error) {
             console.error('Failed to load surface data:', error);
             // Continue without surface data rather than failing completely
         }
+        hideLoading();
         console.log('✅ 3D Data Viewer ready!');
         console.log('wasmModule available:', !!wasmModule);
         console.log('wasmViewer available:', !!wasmViewer);
