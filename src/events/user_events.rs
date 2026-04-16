@@ -36,6 +36,7 @@ pub(crate) enum UserEvent {
     ZoomOut,
     SetPercentile(f32),
     SetTextureRange(u16, u16),
+    DisplayGrid(bool),
     CaptureImage(
         futures::channel::oneshot::Sender<
             Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>,
@@ -150,6 +151,11 @@ impl UserEvent {
                     .mip
                     .set_image(&data.dimensions().into(), &state.device);
 
+                state.renderer.update_axes_origin(
+                    data.dimensions(),
+                    state.interaction.percentile_range_buffer.z_range(),
+                );
+
                 state.scene = Some(Scene::new_topology(
                     data,
                     &state.device,
@@ -181,12 +187,18 @@ impl UserEvent {
                     percentile,
                     topology.as_ref().map(|v| v.as_slice()),
                 );
+                state
+                    .renderer
+                    .update_z_range(state.interaction.percentile_range_buffer.z_range());
             }
             UserEvent::SetTextureRange(start, end) => {
                 state
                     .interaction
                     .texture_range_buffer
                     .update(&state.queue, start, end);
+            }
+            UserEvent::DisplayGrid(visible) => {
+                state.renderer.display_grid(visible);
             }
         }
     }

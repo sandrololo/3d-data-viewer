@@ -6,8 +6,11 @@
  */
 
 import init, {
+    EulerRotationDeg,
+    Orientation,
     Overlay,
     OverlayColor,
+    Translation,
     WasmBindgenPixelRange,
     WasmViewer
 } from './assets/wasm/data-viewer-3d.js';
@@ -29,12 +32,17 @@ const btnReset = document.getElementById('btn-reset');
 const btnSetOverlay = document.getElementById('btn-set-overlay');
 const btnClearOverlay = document.getElementById('btn-clear-overlay');
 const btnDownloadImage = document.getElementById('btn-download-image');
+const btnToggleGrid = document.getElementById('btn-toggle-grid');
+
+const DEFAULT_ORIENTATION = () =>
+    Orientation.new(0.8, Translation.new(0.0, 0.0), EulerRotationDeg.new(70, 0, -45));
 
 // State
 let wasmModule = null;
 let wasmViewer = null;
 let currentShader = 'height';
 let isOverlayVisible = false;
+let isGridVisible = true;
 let isPollingEnabled = false;
 let isPolling = false;
 let overlayDefinitions = null;
@@ -342,12 +350,10 @@ function setupControls() {
             return;
         }
 
-        if (typeof wasmViewer.reset_orientation === 'function') {
-            try {
-                wasmViewer.reset_orientation();
-            } catch (error) {
-                console.error('Failed to reset view:', error);
-            }
+        try {
+            wasmViewer.set_orientation(DEFAULT_ORIENTATION());
+        } catch (error) {
+            console.error('Failed to reset view:', error);
         }
     };
 
@@ -359,6 +365,17 @@ function setupControls() {
     // Reset view - call viewer method directly
     btnReset.addEventListener('click', () => {
         resetView();
+    });
+
+    // Toggle grid visibility
+    const toggleGrid = () => {
+        if (!wasmViewer) return;
+        isGridVisible = !isGridVisible;
+        wasmViewer.display_grid(isGridVisible);
+    };
+
+    btnToggleGrid.addEventListener('click', () => {
+        toggleGrid();
     });
 
     // Set overlay - call viewer method directly
@@ -398,6 +415,9 @@ function setupControls() {
         } else if (key === 'r') {
             event.preventDefault();
             resetView();
+        } else if (key === 'g') {
+            event.preventDefault();
+            toggleGrid();
         }
     });
 
@@ -574,6 +594,7 @@ async function main() {
                 await wasmViewer.set_topology(surfaceData);
                 await wasmViewer.set_texture(amplitudeData);
                 wasmViewer.set_texture_range(0, 100);
+                wasmViewer.set_orientation(DEFAULT_ORIENTATION());
                 console.log('✅ Surface data set in WASM viewer');
             } else {
                 console.warn('set_topology method not available on wasmViewer');

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{num::NonZeroU32, sync::Arc};
 
 use wgpu::{BindGroupLayout, Surface, TextureFormat};
 use winit::{dpi::PhysicalSize, window::Window};
@@ -10,11 +10,13 @@ use crate::{
     },
     interaction::Interaction,
     mip::Mip,
-    render::{depth_buffer::DepthBuffer, pipeline::Pipeline},
+    render::{axes::Axes, depth_buffer::DepthBuffer, pipeline::Pipeline},
     scene::Scene,
 };
 
+pub(crate) mod axes;
 mod depth_buffer;
+pub(crate) mod font_atlas;
 pub(crate) mod pipeline;
 
 pub(crate) struct Renderer {
@@ -23,6 +25,8 @@ pub(crate) struct Renderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     pipeline: Pipeline,
+    axes: Axes,
+    axes_visible: bool,
     depth_buffer: DepthBuffer,
     image_info_bind_group: wgpu::BindGroup,
 }
@@ -65,6 +69,7 @@ impl Renderer {
             &image_info_bind_group_layout,
             interaction,
         );
+        let axes = Axes::new(&device, &queue, surface_format, interaction);
         let depth_buffer = DepthBuffer::new(window.inner_size(), &device);
 
         let mut this = Self {
@@ -73,6 +78,8 @@ impl Renderer {
             device,
             queue,
             pipeline,
+            axes,
+            axes_visible: true,
             image_info_bind_group,
             depth_buffer,
         };
@@ -95,7 +102,30 @@ impl Renderer {
             present_mode: wgpu::PresentMode::AutoVsync,
         };
         self.surface.configure(&self.device, &surface_config);
-        self.depth_buffer = DepthBuffer::new(window_size, &self.device)
+        self.depth_buffer = DepthBuffer::new(window_size, &self.device);
+        self.axes
+            .update_screen_size(&self.queue, window_size.width, window_size.height);
+    }
+
+    pub(crate) fn display_grid(&mut self, visible: bool) {
+        self.axes_visible = visible;
+    }
+
+    pub(crate) fn update_axes_origin(
+        &mut self,
+        image_size: (NonZeroU32, NonZeroU32),
+        z_range: (f32, f32),
+    ) {
+        self.axes.update_grid(
+            &self.device,
+            image_size.0.get(),
+            image_size.1.get(),
+            z_range,
+        );
+    }
+
+    pub(crate) fn update_z_range(&mut self, z_range: (f32, f32)) {
+        self.axes.update_z_range(&self.device, z_range);
     }
 
     pub(crate) fn render(&self, window: Arc<Window>, interaction: &Interaction, scene: &Scene) {
@@ -177,6 +207,11 @@ impl Renderer {
         renderpass.set_bind_group(3, &interaction.projection.bind_group, &[]);
 
         interaction.mip.update_gpu(&mut renderpass, &self.queue);
+
+        // Draw coordinate grid on top of the scene
+        if self.axes_visible {
+            self.axes.draw(&mut renderpass, interaction);
+        }
     }
 
     fn encode_post_process_phase(

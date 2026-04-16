@@ -167,6 +167,10 @@ impl WasmViewer {
         self.send_event(UserEvent::SetTextureRange(start, end))
     }
 
+    pub fn display_grid(&self, visible: bool) -> Result<(), JsValue> {
+        self.send_event(UserEvent::DisplayGrid(visible))
+    }
+
     fn send_event(&self, event: UserEvent) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy.send_event(event.into()).map_err(|e| e.to_string())?;

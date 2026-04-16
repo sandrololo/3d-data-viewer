@@ -1,6 +1,8 @@
 pub(crate) struct TopologyPercentileRangeBuffer {
     buffer: wgpu::Buffer,
     percentile: f32,
+    z_min: f32,
+    z_max: f32,
 }
 
 impl TopologyPercentileRangeBuffer {
@@ -8,7 +10,13 @@ impl TopologyPercentileRangeBuffer {
         Self {
             buffer: Self::create_buffer(device),
             percentile: 0.98,
+            z_min: 0.0,
+            z_max: 0.0,
         }
+    }
+
+    pub(crate) fn z_range(&self) -> (f32, f32) {
+        (self.z_min, self.z_max)
     }
 
     pub(crate) fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
@@ -33,7 +41,7 @@ impl TopologyPercentileRangeBuffer {
         }
     }
 
-    pub(crate) fn update_data(&self, queue: &wgpu::Queue, data: &[f32]) {
+    pub(crate) fn update_data(&mut self, queue: &wgpu::Queue, data: &[f32]) {
         let mut vec = data.to_vec();
         let (_, lower, _) = vec.select_nth_unstable_by(
             (data.len() as f32 * (1. - self.percentile)) as usize,
@@ -44,6 +52,8 @@ impl TopologyPercentileRangeBuffer {
             .select_nth_unstable_by((data.len() as f32 * self.percentile) as usize, |a, b| {
                 a.total_cmp(b)
             });
+        self.z_min = lower;
+        self.z_max = *upper;
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[lower, *upper]));
     }
 
