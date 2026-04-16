@@ -655,7 +655,7 @@ impl Axes {
         // ---- Grid line pipeline (LineList) ----
         let grid_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("grid_shader"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../axes_shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../shaders/axes.wgsl"))),
         });
 
         let grid_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -746,7 +746,9 @@ impl Axes {
         // ---- Label pipeline (TriangleList, billboard) ----
         let label_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("label_shader"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../label_shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "../shaders/axis-labels.wgsl"
+            ))),
         });
 
         let label_color_targets = [
