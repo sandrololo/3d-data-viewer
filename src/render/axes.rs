@@ -581,8 +581,8 @@ fn build_label_verts(
     let (z_data_min, z_data_max) = z_range;
     for i in 0..=n {
         if z_label_skip == 0 {
-            // max only: show only the last label (i == n, which is z_max = data_min)
-            if i != n {
+            // max only: show only the first label (i == 0, which is z_min = data_max)
+            if i != 0 {
                 continue;
             }
         } else if z_label_skip > 1 && i % z_label_skip != 0 {
