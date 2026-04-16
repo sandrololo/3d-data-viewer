@@ -77,7 +77,7 @@ impl LabelVertex {
 }
 
 /// Pixel size of a label glyph on screen.
-const LABEL_FONT_SCALE: f32 = 0.32;
+const LABEL_FONT_SCALE: f32 = 0.45;
 
 /// Append six vertices (two triangles) for one glyph quad.
 fn push_glyph_quad(
