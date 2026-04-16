@@ -29,12 +29,14 @@ const btnReset = document.getElementById('btn-reset');
 const btnSetOverlay = document.getElementById('btn-set-overlay');
 const btnClearOverlay = document.getElementById('btn-clear-overlay');
 const btnDownloadImage = document.getElementById('btn-download-image');
+const btnToggleGrid = document.getElementById('btn-toggle-grid');
 
 // State
 let wasmModule = null;
 let wasmViewer = null;
 let currentShader = 'height';
 let isOverlayVisible = false;
+let isGridVisible = true;
 let isPollingEnabled = false;
 let isPolling = false;
 let overlayDefinitions = null;
@@ -361,6 +363,17 @@ function setupControls() {
         resetView();
     });
 
+    // Toggle grid visibility
+    const toggleGrid = () => {
+        if (!wasmViewer) return;
+        isGridVisible = !isGridVisible;
+        wasmViewer.display_grid(isGridVisible);
+    };
+
+    btnToggleGrid.addEventListener('click', () => {
+        toggleGrid();
+    });
+
     // Set overlay - call viewer method directly
     btnSetOverlay.addEventListener('click', () => {
         void setOverlay();
@@ -398,6 +411,9 @@ function setupControls() {
         } else if (key === 'r') {
             event.preventDefault();
             resetView();
+        } else if (key === 'g') {
+            event.preventDefault();
+            toggleGrid();
         }
     });
 
