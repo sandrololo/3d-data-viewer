@@ -75,40 +75,13 @@ export class WasmViewer {
   reset_orientation(): void;
   set_percentile(percentile: number): void;
   set_texture_range(start: number, end: number): void;
+  display_grid(visible: boolean): void;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_orientation_free: (a: number, b: number) => void;
-  readonly __wbg_get_orientation_zoom: (a: number) => number;
-  readonly __wbg_set_orientation_zoom: (a: number, b: number) => void;
-  readonly __wbg_get_orientation_translation: (a: number) => number;
-  readonly __wbg_set_orientation_translation: (a: number, b: number) => void;
-  readonly __wbg_get_orientation_rotation: (a: number) => number;
-  readonly __wbg_set_orientation_rotation: (a: number, b: number) => void;
-  readonly orientation_new: (a: number, b: number, c: number) => number;
-  readonly __wbg_wasmbindgenpixelrange_free: (a: number, b: number) => void;
-  readonly wasmbindgenpixelrange_new: (a: number, b: number) => number;
-  readonly __wbg_overlaycolor_free: (a: number, b: number) => void;
-  readonly overlaycolor_new: (a: number, b: number, c: number, d: number) => number;
-  readonly __wbg_overlay_free: (a: number, b: number) => void;
-  readonly overlay_new: (a: number, b: number, c: number) => number;
-  readonly __wbg_translation_free: (a: number, b: number) => void;
-  readonly __wbg_get_translation_x: (a: number) => number;
-  readonly __wbg_set_translation_x: (a: number, b: number) => void;
-  readonly __wbg_get_translation_y: (a: number) => number;
-  readonly __wbg_set_translation_y: (a: number, b: number) => void;
-  readonly translation_new: (a: number, b: number) => number;
-  readonly main: (a: number, b: number) => number;
-  readonly __wbg_pixelvalue_free: (a: number, b: number) => void;
-  readonly __wbg_get_pixelvalue_x: (a: number) => number;
-  readonly __wbg_set_pixelvalue_x: (a: number, b: number) => void;
-  readonly __wbg_get_pixelvalue_y: (a: number) => number;
-  readonly __wbg_set_pixelvalue_y: (a: number, b: number) => void;
-  readonly __wbg_get_pixelvalue_texture: (a: number) => number;
-  readonly __wbg_set_pixelvalue_texture: (a: number, b: number) => void;
   readonly __wbg_eulerrotationdeg_free: (a: number, b: number) => void;
   readonly __wbg_get_eulerrotationdeg_pitch: (a: number) => number;
   readonly __wbg_set_eulerrotationdeg_pitch: (a: number, b: number) => void;
@@ -117,6 +90,20 @@ export interface InitOutput {
   readonly __wbg_get_eulerrotationdeg_roll: (a: number) => number;
   readonly __wbg_set_eulerrotationdeg_roll: (a: number, b: number) => void;
   readonly eulerrotationdeg_new: (a: number, b: number, c: number) => number;
+  readonly __wbg_orientation_free: (a: number, b: number) => void;
+  readonly __wbg_get_orientation_zoom: (a: number) => number;
+  readonly __wbg_set_orientation_zoom: (a: number, b: number) => void;
+  readonly __wbg_get_orientation_translation: (a: number) => number;
+  readonly __wbg_set_orientation_translation: (a: number, b: number) => void;
+  readonly __wbg_get_orientation_rotation: (a: number) => number;
+  readonly __wbg_set_orientation_rotation: (a: number, b: number) => void;
+  readonly orientation_new: (a: number, b: number, c: number) => number;
+  readonly __wbg_translation_free: (a: number, b: number) => void;
+  readonly __wbg_get_translation_x: (a: number) => number;
+  readonly __wbg_set_translation_x: (a: number, b: number) => void;
+  readonly __wbg_get_translation_y: (a: number) => number;
+  readonly __wbg_set_translation_y: (a: number, b: number) => void;
+  readonly translation_new: (a: number, b: number) => number;
   readonly __wbg_wasmviewer_free: (a: number, b: number) => void;
   readonly wasmviewer_new: (a: number, b: number) => [number, number, number];
   readonly wasmviewer_run: (a: number) => [number, number];
@@ -136,8 +123,23 @@ export interface InitOutput {
   readonly wasmviewer_reset_orientation: (a: number) => [number, number];
   readonly wasmviewer_set_percentile: (a: number, b: number) => [number, number];
   readonly wasmviewer_set_texture_range: (a: number, b: number, c: number) => [number, number];
-  readonly __wbg_set_pixelvalue_z: (a: number, b: number) => void;
+  readonly wasmviewer_display_grid: (a: number, b: number) => [number, number];
+  readonly __wbg_pixelvalue_free: (a: number, b: number) => void;
+  readonly __wbg_get_pixelvalue_x: (a: number) => number;
+  readonly __wbg_set_pixelvalue_x: (a: number, b: number) => void;
+  readonly __wbg_get_pixelvalue_y: (a: number) => number;
+  readonly __wbg_set_pixelvalue_y: (a: number, b: number) => void;
   readonly __wbg_get_pixelvalue_z: (a: number) => number;
+  readonly __wbg_set_pixelvalue_z: (a: number, b: number) => void;
+  readonly __wbg_get_pixelvalue_texture: (a: number) => number;
+  readonly __wbg_set_pixelvalue_texture: (a: number, b: number) => void;
+  readonly __wbg_wasmbindgenpixelrange_free: (a: number, b: number) => void;
+  readonly wasmbindgenpixelrange_new: (a: number, b: number) => number;
+  readonly __wbg_overlaycolor_free: (a: number, b: number) => void;
+  readonly overlaycolor_new: (a: number, b: number, c: number, d: number) => number;
+  readonly __wbg_overlay_free: (a: number, b: number) => void;
+  readonly overlay_new: (a: number, b: number, c: number) => number;
+  readonly main: (a: number, b: number) => number;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_1: WebAssembly.Table;
   readonly __wbindgen_exn_store: (a: number) => void;
@@ -146,11 +148,11 @@ export interface InitOutput {
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_6: WebAssembly.Table;
   readonly __externref_table_dealloc: (a: number) => void;
+  readonly closure694_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure701_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure762_externref_shim: (a: number, b: number, c: any) => void;
   readonly wasm_bindgen__convert__closures_____invoke__h9111653ea2b7a9f5: (a: number, b: number) => void;
-  readonly closure688_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure695_externref_shim: (a: number, b: number, c: any, d: any) => void;
-  readonly closure756_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure777_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure783_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
