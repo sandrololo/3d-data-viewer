@@ -128,7 +128,14 @@ impl Renderer {
         self.axes.update_z_range(&self.device, z_range);
     }
 
-    pub(crate) fn render(&self, window: Arc<Window>, interaction: &Interaction, scene: &Scene) {
+    pub(crate) fn render(&mut self, window: Arc<Window>, interaction: &Interaction, scene: &Scene) {
+        // Rebuild labels with view-dependent density before drawing.
+        if self.axes_visible {
+            let mvp =
+                interaction.projection.get_current() * interaction.transformation.get_current();
+            self.axes.update_labels(&self.device, mvp);
+        }
+
         let surface_texture = self
             .surface
             .get_current_texture()

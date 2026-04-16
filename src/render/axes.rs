@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use glam::Mat4;
 use wgpu::{Device, RenderPass, util::DeviceExt};
 
 use crate::{
@@ -520,6 +521,9 @@ fn build_label_verts(
     image_width: u32,
     image_height: u32,
     z_range: (f32, f32),
+    x_label_step: u32,
+    y_label_step: u32,
+    z_label_skip: u32,
 ) -> Vec<LabelVertex> {
     let mut verts = Vec::new();
     let label_color = [0.7, 0.7, 0.8, 1.0];
@@ -527,7 +531,12 @@ fn build_label_verts(
     let gap_px = 6.0_f32;
 
     // X axis labels along floor front edge (y_min, z_max) — below the ticks
-    let x_ticks = axis_label_values(image_width, 200, 100);
+    // x_label_step: 0 = max only, otherwise normal stepping
+    let x_ticks = if x_label_step == 0 {
+        vec![image_width]
+    } else {
+        axis_label_values(image_width, x_label_step, x_label_step / 2)
+    };
     for &px in &x_ticks {
         let t = px as f32 / image_width as f32;
         let world_x = g.x_min + t * (g.x_max - g.x_min);
@@ -545,7 +554,12 @@ fn build_label_verts(
     }
 
     // Y axis labels along floor right edge (x_max, z_max), inverted: 0 at y_max
-    let y_ticks = axis_label_values(image_height, 200, 100);
+    // y_label_step: 0 = max only, otherwise normal stepping
+    let y_ticks = if y_label_step == 0 {
+        vec![image_height]
+    } else {
+        axis_label_values(image_height, y_label_step, y_label_step / 2)
+    };
     for &py in &y_ticks {
         let t = py as f32 / image_height as f32;
         let world_y = g.y_max - t * (g.y_max - g.y_min);
@@ -562,10 +576,16 @@ fn build_label_verts(
         );
     }
 
-    // Z axis labels along right-back vertical edge (x_max, y_max) — every other division
+    // Z axis labels along right-back vertical edge (x_max, y_max)
+    // z_label_skip: 0 = max only (last division), otherwise skip factor
     let (z_data_min, z_data_max) = z_range;
     for i in 0..=n {
-        if i % 2 != 0 {
+        if z_label_skip == 0 {
+            // max only: show only the last label (i == n, which is z_max = data_min)
+            if i != n {
+                continue;
+            }
+        } else if z_label_skip > 1 && i % z_label_skip != 0 {
             continue;
         }
         let t = i as f32 / n as f32;
@@ -618,6 +638,8 @@ pub(crate) struct Axes {
     image_height: u32,
     aspect_ratio: f32,
     z_range: (f32, f32),
+    screen_width: f32,
+    screen_height: f32,
 }
 
 impl Axes {
@@ -818,14 +840,18 @@ impl Axes {
             image_height: 0,
             aspect_ratio: 1.0,
             z_range: (0.0, 0.0),
+            screen_width: 800.0,
+            screen_height: 600.0,
         }
     }
 
     /// Update the screen-size uniform (call on window resize).
-    pub(crate) fn update_screen_size(&self, queue: &wgpu::Queue, width: u32, height: u32) {
+    pub(crate) fn update_screen_size(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
+        self.screen_width = width.max(1) as f32;
+        self.screen_height = height.max(1) as f32;
         let data = ScreenSizeUniform {
-            width: width.max(1) as f32,
-            height: height.max(1) as f32,
+            width: self.screen_width,
+            height: self.screen_height,
         };
         queue.write_buffer(&self.screen_size_buffer, 0, bytemuck::bytes_of(&data));
     }
@@ -865,25 +891,99 @@ impl Axes {
         });
         self.grid_vertex_count = grid_verts.len() as u32;
 
-        // Billboard labels
-        if self.image_width > 0 && self.image_height > 0 {
-            let label_verts = build_label_verts(
-                &self.font_atlas,
-                &g,
-                self.image_width,
-                self.image_height,
-                self.z_range,
-            );
-            self.label_vertex_buffer =
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("label_vertex_buffer"),
-                    contents: bytemuck::cast_slice(&label_verts),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-            self.label_vertex_count = label_verts.len() as u32;
-        } else {
-            self.label_vertex_count = 0;
+        // Labels will be rebuilt in update_labels with view-dependent density
+        self.label_vertex_count = 0;
+    }
+
+    /// Rebuild label vertex buffer based on projected axis lengths.
+    /// Call this every frame (or when the view changes) before drawing.
+    ///
+    /// `mvp` is the current model-view-projection matrix used for rendering, needed to
+    /// project world-space coordinates to screen-space for label placement.
+    pub(crate) fn update_labels(&mut self, device: &wgpu::Device, mvp: Mat4) {
+        if self.image_width == 0 || self.image_height == 0 {
+            return;
         }
+
+        let g = GridGeometry::new(self.aspect_ratio);
+        let sw = self.screen_width;
+        let sh = self.screen_height;
+
+        // Project a world-space point to screen pixels.
+        let project = |x: f32, y: f32, z: f32| -> (f32, f32) {
+            let clip = mvp.mul_vec4(glam::Vec4::new(x, y, z, 1.0));
+            let ndc_x = clip.x / clip.w;
+            let ndc_y = clip.y / clip.w;
+            ((ndc_x * 0.5 + 0.5) * sw, (ndc_y * 0.5 + 0.5) * sh)
+        };
+
+        // Screen-space length of each axis in pixels.
+        let axis_screen_len = |x0: f32, y0: f32, z0: f32, x1: f32, y1: f32, z1: f32| -> f32 {
+            let (sx0, sy0) = project(x0, y0, z0);
+            let (sx1, sy1) = project(x1, y1, z1);
+            ((sx1 - sx0).powi(2) + (sy1 - sy0).powi(2)).sqrt()
+        };
+
+        let x_len = axis_screen_len(g.x_min, g.y_min, g.z_max, g.x_max, g.y_min, g.z_max);
+        let y_len = axis_screen_len(g.x_max, g.y_min, g.z_max, g.x_max, g.y_max, g.z_max);
+        let z_len = axis_screen_len(g.x_max, g.y_max, g.z_min, g.x_max, g.y_max, g.z_max);
+
+        // Choose label step based on screen-space axis length.
+        // <40px → max only (step=0), 40–80px → min+max only, >80px → computed density.
+        fn pick_xy_step(screen_px: f32, max_pixel: u32) -> u32 {
+            if screen_px < 40.0 {
+                return 0; // max only
+            }
+            if screen_px < 80.0 {
+                return max_pixel; // min + max only (step >= max → only 0 and max)
+            }
+            let desired_labels = (screen_px / 80.0).max(2.0);
+            let ideal_step = max_pixel as f32 / desired_labels;
+            let steps = [50, 100, 200, 500, 1000];
+            *steps
+                .iter()
+                .min_by_key(|&&s| ((s as f32) - ideal_step).abs() as u32)
+                .unwrap_or(&200)
+        }
+
+        // Z axis: <40px → max only (skip=0), 40–80px → min+max (skip=n), >80px → computed.
+        fn pick_z_skip(screen_px: f32) -> u32 {
+            if screen_px < 40.0 {
+                return 0; // max only
+            }
+            if screen_px < 80.0 {
+                return GRID_DIVISIONS; // min + max only
+            }
+            let desired_labels = (screen_px / 80.0).max(2.0);
+            let n = GRID_DIVISIONS as f32;
+            let ideal_skip = (n / desired_labels).max(1.0);
+            let skips = [1u32, 2, 5, 10];
+            *skips
+                .iter()
+                .min_by_key(|&&s| ((s as f32) - ideal_skip).abs() as u32)
+                .unwrap_or(&2)
+        }
+
+        let x_label_step = pick_xy_step(x_len, self.image_width);
+        let y_label_step = pick_xy_step(y_len, self.image_height);
+        let z_label_skip = pick_z_skip(z_len);
+
+        let label_verts = build_label_verts(
+            &self.font_atlas,
+            &g,
+            self.image_width,
+            self.image_height,
+            self.z_range,
+            x_label_step,
+            y_label_step,
+            z_label_skip,
+        );
+        self.label_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("label_vertex_buffer"),
+            contents: bytemuck::cast_slice(&label_verts),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        self.label_vertex_count = label_verts.len() as u32;
     }
 
     pub(crate) fn draw<'a>(

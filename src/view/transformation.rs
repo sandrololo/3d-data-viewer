@@ -61,6 +61,10 @@ impl Transformation {
         self.initial_position = Vec3::new(0.0, 0.0, 1.0);
     }
 
+    pub(crate) fn get_current(&self) -> Mat4 {
+        self.current
+    }
+
     pub(crate) fn update_gpu(&self, queue: &wgpu::Queue) {
         queue.write_buffer(
             &self.buffer,
