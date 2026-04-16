@@ -151,7 +151,10 @@ impl UserEvent {
                     .mip
                     .set_image(&data.dimensions().into(), &state.device);
 
-                state.renderer.update_axes_origin(data.dimensions());
+                state.renderer.update_axes_origin(
+                    data.dimensions(),
+                    state.interaction.percentile_range_buffer.z_range(),
+                );
 
                 state.scene = Some(Scene::new_topology(
                     data,
@@ -184,6 +187,9 @@ impl UserEvent {
                     percentile,
                     topology.as_ref().map(|v| v.as_slice()),
                 );
+                state
+                    .renderer
+                    .update_z_range(state.interaction.percentile_range_buffer.z_range());
             }
             UserEvent::SetTextureRange(start, end) => {
                 state
