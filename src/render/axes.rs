@@ -296,12 +296,15 @@ fn build_grid_lines(g: &GridGeometry, image_width: u32, image_height: u32) -> Ve
         }
     }
 
-    // ---- Floor at z_max (XY plane) — lines every 50 pixels ----
-    let px_step = 50_u32;
+    // ---- Floor at z_max (XY plane) ----
+    // Grid step = dimension / 10, rounded to the nearest 50.
+    let round50 = |v: u32| ((v + 25) / 50).max(1) * 50;
+    let x_step = round50(image_width / 10);
+    let y_step = round50(image_height / 10);
 
-    // Lines parallel to X (constant Y, spanning X) — one per 50px of image_height
+    // Lines parallel to X (constant Y, spanning X)
     {
-        let y_vals = axis_tick_values(image_height, px_step);
+        let y_vals = axis_tick_values(image_height, y_step);
         for &py in &y_vals {
             let t = py as f32 / image_height as f32;
             let y = g.y_max - t * (g.y_max - g.y_min);
@@ -320,9 +323,9 @@ fn build_grid_lines(g: &GridGeometry, image_width: u32, image_height: u32) -> Ve
             });
         }
     }
-    // Lines parallel to Y (constant X, spanning Y) — one per 50px of image_width
+    // Lines parallel to Y (constant X, spanning Y)
     {
-        let x_vals = axis_tick_values(image_width, px_step);
+        let x_vals = axis_tick_values(image_width, x_step);
         for &px in &x_vals {
             let t = px as f32 / image_width as f32;
             let x = g.x_min + t * (g.x_max - g.x_min);
@@ -354,9 +357,9 @@ fn build_grid_lines(g: &GridGeometry, image_width: u32, image_height: u32) -> Ve
         grid_color,
         edge_color,
     );
-    // Vertical lines (constant X, spanning Z) — match floor's 50px X spacing
+    // Vertical lines (constant X, spanning Z) — match floor's X spacing
     {
-        let x_vals = axis_tick_values(image_width, px_step);
+        let x_vals = axis_tick_values(image_width, x_step);
         for &px in &x_vals {
             let t = px as f32 / image_width as f32;
             let x = g.x_min + t * (g.x_max - g.x_min);
@@ -388,9 +391,9 @@ fn build_grid_lines(g: &GridGeometry, image_width: u32, image_height: u32) -> Ve
         grid_color,
         edge_color,
     );
-    // Vertical lines (constant Y, spanning Z) — match floor's 50px Y spacing
+    // Vertical lines (constant Y, spanning Z) — match floor's Y spacing
     {
-        let y_vals = axis_tick_values(image_height, px_step);
+        let y_vals = axis_tick_values(image_height, y_step);
         for &py in &y_vals {
             let t = py as f32 / image_height as f32;
             let y = g.y_max - t * (g.y_max - g.y_min);
@@ -475,7 +478,7 @@ fn build_grid_lines(g: &GridGeometry, image_width: u32, image_height: u32) -> Ve
     if image_width > 0 {
         push_ticks(
             &mut verts,
-            &axis_tick_values(image_width, 50),
+            &axis_tick_values(image_width, x_step),
             image_width,
             |t| [g.x_min + t * (g.x_max - g.x_min), g.y_min, g.z_max],
             [0.0, -1.0, 0.0],
@@ -488,7 +491,7 @@ fn build_grid_lines(g: &GridGeometry, image_width: u32, image_height: u32) -> Ve
     if image_height > 0 {
         push_ticks(
             &mut verts,
-            &axis_tick_values(image_height, 50),
+            &axis_tick_values(image_height, y_step),
             image_height,
             |t| [g.x_max, g.y_max - t * (g.y_max - g.y_min), g.z_max],
             [1.0, 0.0, 0.0],
