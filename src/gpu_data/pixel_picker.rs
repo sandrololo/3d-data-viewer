@@ -1,12 +1,11 @@
 use anyhow::anyhow;
-use futures::FutureExt;
 use imbuf::Image;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 
-use crate::events::SharedFuture;
+use crate::{events::SharedFuture, gpu_data::readback::GPUDataReadback};
 
 #[derive(Clone)]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -24,12 +23,9 @@ pub(crate) struct PixelPicker {
     /// Texture that stores picking data (pixel_x, pixel_y) for each fragment
     picking_texture: wgpu::Texture,
     pub picking_texture_view: wgpu::TextureView,
-    /// Buffer to copy a single pixel from the picking texture
-    readback_buffer: Arc<wgpu::Buffer>,
+    gpu_readback: GPUDataReadback<PixelValue>,
     mouse_position: PhysicalPosition<f64>,
     window_size: PhysicalSize<u32>,
-    /// Cached shared future - if a read is in progress, subsequent calls get the same future
-    pending_read: Arc<Mutex<Option<SharedFuture<PixelResult>>>>,
 }
 
 impl PixelPicker {
@@ -38,15 +34,13 @@ impl PixelPicker {
     pub(crate) fn new(device: &wgpu::Device, window_size: &PhysicalSize<u32>) -> Self {
         let (picking_texture, picking_texture_view) =
             Self::create_picking_texture(device, window_size);
-        let readback_buffer = Arc::new(Self::create_readback_buffer(device));
-
+        let readback_buffer = Self::create_readback_buffer(device);
         Self {
             picking_texture,
             picking_texture_view,
-            readback_buffer,
+            gpu_readback: GPUDataReadback::new(readback_buffer),
             mouse_position: PhysicalPosition::new(0.0, 0.0),
             window_size: *window_size,
-            pending_read: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -66,7 +60,7 @@ impl PixelPicker {
 
     /// Copy the pixel at the current mouse position from the picking texture to the readback buffer.
     pub(crate) fn copy_pixel_at_mouse(&self, encoder: &mut wgpu::CommandEncoder) {
-        if self.pending_read.lock().unwrap().is_some() {
+        if self.gpu_readback.has_pending_read() {
             return;
         }
         let x = (self.mouse_position.x as u32).min(self.window_size.width.saturating_sub(1));
@@ -80,7 +74,7 @@ impl PixelPicker {
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
-                buffer: &self.readback_buffer,
+                buffer: self.gpu_readback.get_buffer(),
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(256),
@@ -112,60 +106,23 @@ impl PixelPicker {
         topology: Arc<Image<f32, 1>>,
         texture: Arc<Image<u16, 1>>,
     ) -> SharedFuture<PixelResult> {
-        let mut pending = self.pending_read.lock().unwrap();
-
-        // If there's already a pending read, return a clone of it
-        if let Some(ref shared) = *pending {
-            return shared.clone();
-        }
-
-        // Create new read future
-        let buffer = self.readback_buffer.clone();
-        let pending_read = self.pending_read.clone();
-        let (tx, rx) = async_channel::bounded::<Result<(), wgpu::BufferAsyncError>>(1);
-
-        buffer.map_async(wgpu::MapMode::Read, .., move |result| {
-            let _ = tx.try_send(result);
-        });
-
-        let future: std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>> =
-            Box::pin(async move {
-                let _ = device.poll(wgpu::PollType::Poll);
-
-                rx.recv()
-                    .await
-                    .map_err(|e| anyhow!("Channel error: {:?}", e))?
-                    .map_err(|e| anyhow!("Buffer map error: {:?}", e))?;
-
-                let output_data = buffer.get_mapped_range(..);
-                let pixel = (
-                    bytemuck::cast_slice::<u8, u32>(&output_data)[0],
-                    bytemuck::cast_slice::<u8, u32>(&output_data)[1],
-                );
-                drop(output_data);
-                buffer.unmap();
-
-                // Clear the pending read so next call starts fresh
-                *pending_read
-                    .lock()
-                    .map_err(|e| anyhow!("Lock error: {:?}", e))? = None;
-                let buffer_index = (pixel.0 + topology.width().get() * pixel.1) as usize;
-                if buffer_index >= topology.buffer().len() || buffer_index >= texture.buffer().len()
-                {
-                    return Err(Arc::new(anyhow!("Pixel out of bounds: {:?}", pixel)));
-                }
-                let z = topology.buffer()[buffer_index];
-                Ok(PixelValue {
-                    x: pixel.0,
-                    y: pixel.1,
-                    z,
-                    texture: texture.buffer()[buffer_index],
-                })
-            });
-
-        let shared = future.shared();
-        *pending = Some(shared.clone());
-        shared
+        self.gpu_readback.get(device, move |buffer| {
+            let pixel = (
+                bytemuck::cast_slice::<u8, u32>(&buffer)[0],
+                bytemuck::cast_slice::<u8, u32>(&buffer)[1],
+            );
+            let buffer_index = (pixel.0 + topology.width().get() * pixel.1) as usize;
+            if buffer_index >= topology.buffer().len() || buffer_index >= texture.buffer().len() {
+                return Err(Arc::new(anyhow!("Pixel out of bounds: {:?}", pixel)));
+            }
+            let z = topology.buffer()[buffer_index];
+            Ok(PixelValue {
+                x: pixel.0,
+                y: pixel.1,
+                z,
+                texture: texture.buffer()[buffer_index],
+            })
+        })
     }
 
     fn create_picking_texture(

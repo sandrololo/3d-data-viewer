@@ -4,6 +4,7 @@ use std::num::NonZeroU32;
 
 mod capture;
 pub(crate) mod pixel_picker;
+mod readback;
 pub(crate) mod texture_image_range;
 pub(crate) mod topology_percentile_range;
 

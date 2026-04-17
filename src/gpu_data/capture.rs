@@ -1,17 +1,17 @@
-use futures::FutureExt;
 use image::{ExtendedColorType, ImageEncoder, codecs::png::CompressionType};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use crate::{events::SharedFuture, gpu_data::DataSize};
+use crate::{
+    events::SharedFuture,
+    gpu_data::{DataSize, readback::GPUDataReadback},
+};
 
 pub type CaptureResult = Result<Vec<u8>, Arc<anyhow::Error>>;
 
 pub(crate) struct Capture {
-    readback_buffer: Arc<wgpu::Buffer>,
+    gpu_readback: GPUDataReadback<Vec<u8>>,
     window_size: DataSize,
     surface_format: wgpu::TextureFormat,
-    /// Cached shared future - if a read is in progress, subsequent calls get the same future
-    pending_read: Arc<Mutex<Option<SharedFuture<CaptureResult>>>>,
 }
 
 impl Capture {
@@ -21,17 +21,17 @@ impl Capture {
         surface_format: wgpu::TextureFormat,
     ) -> Self {
         Self {
-            readback_buffer: Arc::new(Self::create_readback_buffer(device, &window_size)),
+            gpu_readback: GPUDataReadback::new(Self::create_readback_buffer(device, &window_size)),
             window_size,
             surface_format,
-            pending_read: Arc::new(Mutex::new(None)),
         }
     }
 
     pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: DataSize) {
         if self.window_size != window_size {
             self.window_size = window_size.clone();
-            self.readback_buffer = Arc::new(Self::create_readback_buffer(device, &window_size))
+            self.gpu_readback
+                .set_buffer(Self::create_readback_buffer(device, &window_size));
         }
     }
 
@@ -63,7 +63,7 @@ impl Capture {
         encoder: &mut wgpu::CommandEncoder,
         surface_texture: &wgpu::SurfaceTexture,
     ) {
-        if self.pending_read.lock().unwrap().is_some() {
+        if self.gpu_readback.has_pending_read() {
             return;
         }
 
@@ -79,7 +79,7 @@ impl Capture {
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
-                buffer: &self.readback_buffer,
+                buffer: self.gpu_readback.get_buffer(),
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_bytes_per_row),
@@ -95,88 +95,49 @@ impl Capture {
     }
 
     pub(crate) fn get(&self, device: Arc<wgpu::Device>) -> SharedFuture<CaptureResult> {
-        let mut pending = self.pending_read.lock().unwrap();
-
-        // If there's already a pending read, return a clone of it
-        if let Some(ref shared) = *pending {
-            return shared.clone();
-        }
-
-        // Create new read future
-        let buffer = self.readback_buffer.clone();
         let surface_format = self.surface_format;
-        let pending_read = self.pending_read.clone();
         let window_size = self.window_size.clone();
-        let (tx, rx) = async_channel::bounded::<Result<(), wgpu::BufferAsyncError>>(1);
+        self.gpu_readback.get(device, move |buffer| {
+            // Rows are padded to COPY_BYTES_PER_ROW_ALIGNMENT; copy only the
+            // unpadded bytes_per_row for each row into `rgba`.
+            let bytes_per_pixel = 4usize;
+            let unpadded_bytes_per_row = (window_size.width.get() as usize) * bytes_per_pixel;
+            let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+            let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
 
-        // Map the whole buffer slice for reading.
-        buffer
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |result| {
-                let _ = tx.try_send(result);
-            });
+            let mut rgba =
+                Vec::with_capacity(unpadded_bytes_per_row * window_size.height.get() as usize);
+            for row in 0..window_size.height.get() as usize {
+                let row_start = row * padded_bytes_per_row;
+                let row_end = row_start + unpadded_bytes_per_row;
+                rgba.extend_from_slice(&buffer[row_start..row_end]);
+            }
 
-        let future: std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>> =
-            Box::pin(async move {
-                let _ = device.poll(wgpu::PollType::Poll);
-
-                rx.recv()
-                    .await
-                    .map_err(|e| Arc::new(anyhow::anyhow!("Channel error: {:?}", e)))?
-                    .map_err(|e| Arc::new(anyhow::anyhow!("Buffer map error: {:?}", e)))?;
-
-                let slice = buffer.slice(..);
-                let output_data = slice.get_mapped_range();
-
-                // Rows are padded to COPY_BYTES_PER_ROW_ALIGNMENT; copy only the
-                // unpadded bytes_per_row for each row into `rgba`.
-                let bytes_per_pixel = 4usize;
-                let unpadded_bytes_per_row = (window_size.width.get() as usize) * bytes_per_pixel;
-                let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
-                let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
-
-                let mut rgba =
-                    Vec::with_capacity(unpadded_bytes_per_row * window_size.height.get() as usize);
-                for row in 0..window_size.height.get() as usize {
-                    let row_start = row * padded_bytes_per_row;
-                    let row_end = row_start + unpadded_bytes_per_row;
-                    rgba.extend_from_slice(&output_data[row_start..row_end]);
-                }
-
-                // Convert BGRA->RGBA if needed
-                match surface_format {
-                    wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb => {
-                        for i in (0..rgba.len()).step_by(4) {
-                            rgba.swap(i, i + 2);
-                        }
+            // Convert BGRA->RGBA if needed
+            match surface_format {
+                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb => {
+                    for i in (0..rgba.len()).step_by(4) {
+                        rgba.swap(i, i + 2);
                     }
-                    _ => {}
                 }
+                _ => {}
+            }
 
-                let mut png_encoded = Vec::new();
-                let encoder = ::image::codecs::png::PngEncoder::new_with_quality(
-                    &mut png_encoded,
-                    CompressionType::Fast,
-                    ::image::codecs::png::FilterType::default(),
-                );
-                encoder
-                    .write_image(
-                        &rgba,
-                        window_size.width.get(),
-                        window_size.height.get(),
-                        ExtendedColorType::Rgba8,
-                    )
-                    .map_err(|e| Arc::new(anyhow::anyhow!("PNG encoding error: {:?}", e)))?;
-
-                drop(output_data);
-                buffer.unmap();
-                // Clear the pending read so next call starts fresh
-                *pending_read.lock().unwrap() = None;
-                Ok(png_encoded)
-            });
-
-        let shared = future.shared();
-        *pending = Some(shared.clone());
-        shared
+            let mut png_encoded = Vec::new();
+            let encoder = ::image::codecs::png::PngEncoder::new_with_quality(
+                &mut png_encoded,
+                CompressionType::Fast,
+                ::image::codecs::png::FilterType::default(),
+            );
+            encoder
+                .write_image(
+                    &rgba,
+                    window_size.width.get(),
+                    window_size.height.get(),
+                    ExtendedColorType::Rgba8,
+                )
+                .map_err(|e| Arc::new(anyhow::anyhow!("PNG encoding error: {:?}", e)))?;
+            Ok(png_encoded)
+        })
     }
 }
