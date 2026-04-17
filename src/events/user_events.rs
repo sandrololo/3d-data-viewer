@@ -1,15 +1,12 @@
 use anyhow::anyhow;
-use futures::FutureExt;
+use futures::{FutureExt, future::Shared};
 use imbuf::Image;
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 use crate::{
     State,
     events::SharedFuture,
-    gpu_data::{
-        CaptureResult,
-        pixel_picker::{PixelResult, PixelValue},
-    },
+    gpu_data::{CaptureResult, pixel_picker::PixelResult},
     interaction::Orientation,
     render::pipeline::FragmentShaderVariant,
     scene::{Overlay, Scene},
@@ -43,36 +40,17 @@ impl UserEvent {
                 state.scene = None;
             }
             UserEvent::GetPixel(sender) => {
-                if let Some(scene) = &state.scene {
-                    if let Some(texture_image) = scene.get_texture_image() {
-                        state.interaction.pixel_picker.write_to_channel(
-                            state.device.clone(),
-                            scene.get_topology_image(),
-                            texture_image,
-                            sender,
-                        );
-                    } else {
-                        let future: std::pin::Pin<
-                            Box<dyn std::future::Future<Output = PixelResult>>,
-                        > = Box::pin(async move {
-                            Err::<PixelValue, Arc<anyhow::Error>>(Arc::new(anyhow!(
-                                "Texture image not initialized"
-                            )))
-                        });
-                        if let Err(_) = sender.send(future.shared()) {
-                            log::error!("Failed to return error message");
-                        }
-                    }
+                if let Some(scene) = &state.scene
+                    && let Some(texture_image) = scene.get_texture_image()
+                {
+                    state.interaction.pixel_picker.write_to_channel(
+                        state.device.clone(),
+                        scene.get_topology_image(),
+                        texture_image,
+                        sender,
+                    );
                 } else {
-                    let future: std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>> =
-                        Box::pin(async move {
-                            Err::<PixelValue, Arc<anyhow::Error>>(Arc::new(anyhow!(
-                                "Texture not initialized"
-                            )))
-                        });
-                    if let Err(_) = sender.send(future.shared()) {
-                        log::error!("Failed to return error message");
-                    }
+                    send_err(sender, "Texture not initialized")
                 }
             }
             UserEvent::CaptureImage(sender) => {
@@ -82,16 +60,7 @@ impl UserEvent {
                         .image_capture
                         .write_to_channel(state.device.clone(), sender)
                 } else {
-                    let future: std::pin::Pin<
-                        Box<dyn std::future::Future<Output = CaptureResult>>,
-                    > = Box::pin(async move {
-                        Err::<Vec<u8>, Arc<anyhow::Error>>(Arc::new(anyhow!(
-                            "Texture not initialized"
-                        )))
-                    });
-                    if let Err(_) = sender.send(future.shared()) {
-                        log::error!("Failed to return error message");
-                    }
+                    send_err(sender, "Texture not initialized");
                 }
             }
             UserEvent::SetFragmentShader(variant) => {
@@ -178,5 +147,22 @@ impl UserEvent {
                 state.renderer.display_grid(visible);
             }
         }
+    }
+}
+
+fn send_err<T>(
+    sender: futures::channel::oneshot::Sender<
+        Shared<Pin<Box<dyn Future<Output = Result<T, Arc<anyhow::Error>>>>>>,
+    >,
+    msg: &str,
+) where
+    T: Clone,
+{
+    let msg = msg.to_owned();
+    let future: std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<T, Arc<anyhow::Error>>>>,
+    > = Box::pin(async move { Err(Arc::new(anyhow!("{}", msg))) });
+    if sender.send(future.shared()).is_err() {
+        log::error!("Failed to return error message");
     }
 }
