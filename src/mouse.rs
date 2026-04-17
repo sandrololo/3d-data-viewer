@@ -4,6 +4,11 @@ use winit::{
     event::{ElementState, MouseButton, MouseScrollDelta},
 };
 
+/// How much each scroll unit affects the zoom multiplier.
+const SCROLL_ZOOM_SENSITIVITY: f32 = 0.1;
+/// Divisor to convert pixel-based scroll deltas to the same scale as line deltas.
+const PIXEL_SCROLL_DIVISOR: f32 = 100.0;
+
 pub(crate) struct Mouse {
     pub current_position: PhysicalPosition<f64>,
     left_button: ElementState,
@@ -34,11 +39,11 @@ impl Mouse {
     pub(crate) fn register_scroll_event(&mut self, delta: &MouseScrollDelta) {
         match delta {
             MouseScrollDelta::LineDelta(_delta_x, delta_y) => {
-                self.current_zoom *= -0.1 * delta_y + 1.0;
+                self.current_zoom *= -SCROLL_ZOOM_SENSITIVITY * delta_y + 1.0;
             }
             MouseScrollDelta::PixelDelta(pos) => {
-                let delta_y = pos.y as f32 / 100.0;
-                self.current_zoom *= -0.1 * delta_y + 1.0;
+                let delta_y = pos.y as f32 / PIXEL_SCROLL_DIVISOR;
+                self.current_zoom *= -SCROLL_ZOOM_SENSITIVITY * delta_y + 1.0;
             }
         }
     }

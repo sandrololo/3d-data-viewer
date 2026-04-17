@@ -6,6 +6,11 @@ use crate::gpu_data::DataSize;
 use crate::index_buffer::{IndexBuffer, IndexBufferBuilder};
 use crate::vertex_buffer::VertexBuffer;
 
+/// Maximum index count for a mip level to be considered renderable.
+const MAX_MIP_INDEX_COUNT: u64 = 2u64.pow(28);
+/// Minimum index count below which a mip level is too coarse to be useful.
+const MIN_MIP_INDEX_COUNT: u64 = 2u64.pow(15);
+
 struct MipData {
     mip_levels: Vec<u32>,
     index_buffer: IndexBuffer,
@@ -45,8 +50,7 @@ impl Mip {
         let mip_levels = (0..10u32)
             .filter(|level| {
                 let num_indices = IndexBufferBuilder::triangle_strip_length(image_size, *level);
-                // A higher number of indices doesn't make sense to render. 2^15 is no problem, therefore no need to go lower.
-                num_indices < 2u32.pow(28) as u64 && num_indices > 2u32.pow(15) as u64
+                num_indices < MAX_MIP_INDEX_COUNT && num_indices > MIN_MIP_INDEX_COUNT
             })
             .collect();
         let index_buffer =

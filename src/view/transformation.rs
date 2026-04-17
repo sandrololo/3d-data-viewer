@@ -3,6 +3,9 @@ use glam::{Mat4, Vec3};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{BindGroupLayout, util::DeviceExt};
 
+/// Multiplier to amplify mouse-movement distance into a visible rotation angle.
+const ROTATION_SENSITIVITY: f32 = 100.0;
+
 #[derive(Clone, Copy)]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct EulerRotationDeg {
@@ -81,10 +84,10 @@ impl Transformation {
     pub(crate) fn rotate(&mut self, new_position: Vec3) {
         if self.initial_position != new_position {
             let rot_axis = self.initial_position.cross(new_position);
-            // Axis length represents the mouse distance moved and is multiplied by constant *100
+            // Axis length represents the mouse distance moved, which we amplify into a visible rotation angle.
             let rot = Mat4::from_axis_angle(
                 -Vec3::normalize(rot_axis),
-                rot_axis.length() * 100.0 * std::f32::consts::PI / 180.0,
+                rot_axis.length() * ROTATION_SENSITIVITY * std::f32::consts::PI / 180.0,
             );
             self.current = rot * self.initial;
         }

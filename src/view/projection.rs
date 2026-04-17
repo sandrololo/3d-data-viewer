@@ -3,6 +3,10 @@ use glam::{Mat4, Vec2, Vec4};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{BindGroupLayout, util::DeviceExt};
 
+/// Half-diagonal of a unit cube (√3). Used to pad the orthographic projection
+/// so the full cube diagonal fits in the viewport.
+const UNIT_CUBE_HALF_DIAGONAL: f32 = 1.732_050_8; // 
+
 #[derive(Clone, Copy)]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct Translation {
@@ -95,8 +99,7 @@ impl Projection {
             dy = dx / self.aspect_ratio;
         }
         // Pad the XY view to match the diagonal range used by the 3D scene.
-        let pad_xy = 3.0_f32.sqrt();
-        Vec2::new(dx * pad_xy, dy * pad_xy)
+        Vec2::new(dx * UNIT_CUBE_HALF_DIAGONAL, dy * UNIT_CUBE_HALF_DIAGONAL)
     }
 
     pub(crate) fn change_position(
@@ -130,9 +133,8 @@ impl Projection {
         let x_max = self.zoom - self.current_delta.x;
         let y_min = -self.zoom - self.current_delta.y;
         let y_max = self.zoom - self.current_delta.y;
-        let pad3d = 3.0_f32.sqrt();
-        let z_min = -pad3d;
-        let z_max = pad3d;
+        let z_min = -UNIT_CUBE_HALF_DIAGONAL;
+        let z_max = UNIT_CUBE_HALF_DIAGONAL;
 
         let view_span = self.visible_span();
         let dx = view_span.x;
