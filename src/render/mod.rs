@@ -5,8 +5,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
     gpu_data::{
-        Capture, DataSize, pixel_picker::PixelPicker,
-        texture_image_range::TextureImageRangeBuffer,
+        Capture, DataSize, pixel_picker::PixelPicker, texture_image_range::TextureImageRangeBuffer,
         topology_percentile_range::TopologyPercentileRangeBuffer,
     },
     interaction::Interaction,
@@ -72,7 +71,7 @@ impl Renderer {
             interaction,
         );
         let axes = Axes::new(&device, &queue, surface_format, interaction);
-        let depth_buffer = DepthBuffer::new(window.inner_size(), &device);
+        let depth_buffer = DepthBuffer::new(&device, window.inner_size());
 
         let mut this = Self {
             surface,
@@ -104,7 +103,7 @@ impl Renderer {
             present_mode: wgpu::PresentMode::AutoVsync,
         };
         self.surface.configure(&self.device, &surface_config);
-        self.depth_buffer = DepthBuffer::new(window_size, &self.device);
+        self.depth_buffer = DepthBuffer::new(&self.device, window_size);
         self.axes
             .update_screen_size(&self.queue, window_size.width, window_size.height);
     }
@@ -152,8 +151,20 @@ impl Renderer {
         let surface_view = self.create_surface_view_phase(&surface_texture);
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
-        self.encode_scene_phase(&mut encoder, &surface_view, interaction, pixel_picker, scene);
-        self.encode_post_process_phase(&mut encoder, &surface_texture, interaction, pixel_picker, image_capture);
+        self.encode_scene_phase(
+            &mut encoder,
+            &surface_view,
+            interaction,
+            pixel_picker,
+            scene,
+        );
+        self.encode_post_process_phase(
+            &mut encoder,
+            &surface_texture,
+            interaction,
+            pixel_picker,
+            image_capture,
+        );
 
         self.queue.submit([encoder.finish()]);
         window.pre_present_notify();

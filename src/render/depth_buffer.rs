@@ -7,7 +7,7 @@ pub(crate) struct DepthBuffer {
 }
 
 impl DepthBuffer {
-    pub(crate) fn new(window_size: PhysicalSize<u32>, device: &Device) -> Self {
+    pub(crate) fn new(device: &Device, window_size: PhysicalSize<u32>) -> Self {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             size: wgpu::Extent3d {
