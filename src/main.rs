@@ -40,8 +40,15 @@ mod view;
 #[cfg(target_arch = "wasm32")]
 mod wasm_viewer;
 
+use std::num::NonZeroU32;
+
 use crate::{
     events::{ErrorEvent, Event, SharedFuture, SystemEvent, UserEvent},
+    gpu_data::{
+        Capture, DataSize, pixel_picker::PixelPicker,
+        texture_image_range::TextureImageRangeBuffer,
+        topology_percentile_range::TopologyPercentileRangeBuffer,
+    },
     interaction::Interaction,
     render::Renderer,
     scene::Scene,
@@ -66,6 +73,10 @@ struct State {
     texture_bind_group_layout: wgpu::BindGroupLayout,
     renderer: Renderer,
     interaction: Interaction,
+    pixel_picker: PixelPicker,
+    image_capture: Capture,
+    percentile_range_buffer: TopologyPercentileRangeBuffer,
+    texture_range_buffer: TextureImageRangeBuffer,
     scene: Option<Scene>,
 }
 
@@ -94,7 +105,20 @@ impl State {
 
         let texture_bind_group_layout = Scene::create_bind_group_layout(&device);
 
-        let interaction = Interaction::new(&device, &window.inner_size(), surface_format);
+        let interaction = Interaction::new(&device, &window.inner_size());
+        let pixel_picker = PixelPicker::new(&device, &window.inner_size());
+        let image_capture = Capture::new(
+            &device,
+            DataSize {
+                width: NonZeroU32::new(window.inner_size().width.max(1))
+                    .expect("Takes the maximum of value and 1"),
+                height: NonZeroU32::new(window.inner_size().height.max(1))
+                    .expect("Takes the maximum of value and 1"),
+            },
+            surface_format,
+        );
+        let percentile_range_buffer = TopologyPercentileRangeBuffer::new(&device);
+        let texture_range_buffer = TextureImageRangeBuffer::new(&device);
 
         let renderer = Renderer::new(
             &window,
@@ -104,6 +128,8 @@ impl State {
             surface,
             surface_format,
             &interaction,
+            &percentile_range_buffer,
+            &texture_range_buffer,
         );
 
         Ok(State {
@@ -113,6 +139,10 @@ impl State {
             texture_bind_group_layout,
             renderer,
             interaction,
+            pixel_picker,
+            image_capture,
+            percentile_range_buffer,
+            texture_range_buffer,
             scene: None,
         })
     }
@@ -127,7 +157,7 @@ impl State {
                 if let Some(scene) = &self.scene
                     && let Some(texture_image) = scene.get_texture_image()
                 {
-                    self.interaction.pixel_picker.write_to_channel(
+                    self.pixel_picker.write_to_channel(
                         self.device.clone(),
                         scene.get_topology_image(),
                         texture_image,
@@ -139,8 +169,7 @@ impl State {
             }
             UserEvent::CaptureImage(sender) => {
                 if self.scene.is_some() {
-                    self.interaction
-                        .image_capture
+                    self.image_capture
                         .write_to_channel(self.device.clone(), sender)
                 } else {
                     send_err(sender, "Texture not initialized");
@@ -170,8 +199,7 @@ impl State {
             }
             UserEvent::SetTopology(data) => {
                 log::info!("Setting new topology image");
-                self.interaction
-                    .percentile_range_buffer
+                self.percentile_range_buffer
                     .update_data(&self.queue, data.buffer());
 
                 self.interaction
@@ -180,7 +208,7 @@ impl State {
 
                 self.renderer.update_axes_origin(
                     data.dimensions(),
-                    self.interaction.percentile_range_buffer.z_range(),
+                    self.percentile_range_buffer.z_range(),
                 );
 
                 self.scene = Some(Scene::new_topology(
@@ -206,17 +234,16 @@ impl State {
             }
             UserEvent::SetPercentile(percentile) => {
                 let topology = self.scene.as_ref().map(|scene| scene.get_topology_image());
-                self.interaction.percentile_range_buffer.update_percentile(
+                self.percentile_range_buffer.update_percentile(
                     &self.queue,
                     percentile,
                     topology,
                 );
                 self.renderer
-                    .update_z_range(self.interaction.percentile_range_buffer.z_range());
+                    .update_z_range(self.percentile_range_buffer.z_range());
             }
             UserEvent::SetTextureRange(start, end) => {
-                self.interaction
-                    .texture_range_buffer
+                self.texture_range_buffer
                     .update(&self.queue, start, end);
             }
             UserEvent::DisplayGrid(visible) => {
@@ -329,7 +356,6 @@ impl ApplicationHandler<Event> for ImageViewer3D {
             &mut request_redraw,
             &event,
             app_state.window.inner_size(),
-            &app_state.device,
         );
         match event {
             WindowEvent::CloseRequested => {
@@ -341,6 +367,8 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                     app_state.renderer.render(
                         app_state.window.clone(),
                         &app_state.interaction,
+                        &app_state.pixel_picker,
+                        &app_state.image_capture,
                         scene,
                     );
                 }
@@ -348,6 +376,17 @@ impl ApplicationHandler<Event> for ImageViewer3D {
             WindowEvent::Resized(size) => {
                 request_redraw = true;
                 app_state.renderer.configure_surface(size);
+                app_state.pixel_picker.resize(&app_state.device, &size);
+                app_state.image_capture.resize(
+                    &app_state.device,
+                    DataSize {
+                        width: NonZeroU32::new(size.width).expect("Window size should not be 0"),
+                        height: NonZeroU32::new(size.height).expect("Window size should not be 0"),
+                    },
+                );
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                app_state.pixel_picker.update_mouse_position(position);
             }
             _ => (),
         }

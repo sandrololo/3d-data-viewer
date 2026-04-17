@@ -4,7 +4,11 @@ use wgpu::{BindGroupLayout, Surface, TextureFormat};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
-    gpu_data::DataSize,
+    gpu_data::{
+        Capture, DataSize, pixel_picker::PixelPicker,
+        texture_image_range::TextureImageRangeBuffer,
+        topology_percentile_range::TopologyPercentileRangeBuffer,
+    },
     interaction::Interaction,
     render::{axes::Axes, depth_buffer::DepthBuffer, pipeline::Pipeline},
     scene::Scene,
@@ -36,6 +40,8 @@ impl Renderer {
         surface: Surface<'static>,
         surface_format: TextureFormat,
         interaction: &Interaction,
+        percentile_range_buffer: &TopologyPercentileRangeBuffer,
+        texture_range_buffer: &TextureImageRangeBuffer,
     ) -> Self {
         let image_info_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -52,8 +58,8 @@ impl Renderer {
             layout: &image_info_bind_group_layout,
             entries: &[
                 DataSize::get_bind_group_entry(&interaction.mip.image_dims_buffer),
-                interaction.percentile_range_buffer.get_bind_group_entry(),
-                interaction.texture_range_buffer.get_bind_group_entry(),
+                percentile_range_buffer.get_bind_group_entry(),
+                texture_range_buffer.get_bind_group_entry(),
                 interaction.mip.get_bind_group_entry(),
             ],
         });
@@ -124,7 +130,14 @@ impl Renderer {
         self.axes.update_z_range(&self.device, z_range);
     }
 
-    pub(crate) fn render(&mut self, window: Arc<Window>, interaction: &Interaction, scene: &Scene) {
+    pub(crate) fn render(
+        &mut self,
+        window: Arc<Window>,
+        interaction: &Interaction,
+        pixel_picker: &PixelPicker,
+        image_capture: &Capture,
+        scene: &Scene,
+    ) {
         // Rebuild labels with view-dependent density before drawing.
         if self.axes_visible {
             let mvp =
@@ -139,15 +152,15 @@ impl Renderer {
         let surface_view = self.create_surface_view_phase(&surface_texture);
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
-        self.encode_scene_phase(&mut encoder, &surface_view, interaction, scene);
-        self.encode_post_process_phase(&mut encoder, &surface_texture, interaction);
+        self.encode_scene_phase(&mut encoder, &surface_view, interaction, pixel_picker, scene);
+        self.encode_post_process_phase(&mut encoder, &surface_texture, interaction, pixel_picker, image_capture);
 
         self.queue.submit([encoder.finish()]);
         window.pre_present_notify();
         surface_texture.present();
 
         #[cfg(not(target_arch = "wasm32"))]
-        self.log_hover_pixel_phase(interaction, scene);
+        self.log_hover_pixel_phase(pixel_picker, scene);
     }
 
     fn create_surface_view_phase(
@@ -169,6 +182,7 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
         interaction: &Interaction,
+        pixel_picker: &PixelPicker,
         scene: &Scene,
     ) {
         // Two color attachments: main color + picking texture
@@ -185,7 +199,7 @@ impl Renderer {
                     },
                 }),
                 Some(wgpu::RenderPassColorAttachment {
-                    view: &interaction.pixel_picker.picking_texture_view,
+                    view: &pixel_picker.picking_texture_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -222,15 +236,18 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         surface_texture: &wgpu::SurfaceTexture,
         interaction: &Interaction,
+        pixel_picker: &PixelPicker,
+        image_capture: &Capture,
     ) {
-        interaction.pixel_picker.copy_pixel_at_mouse(encoder);
-        interaction.update_gpu(&self.queue, encoder, surface_texture);
+        pixel_picker.copy_pixel_at_mouse(encoder);
+        image_capture.copy_texture(encoder, surface_texture);
+        interaction.update_gpu(&self.queue);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn log_hover_pixel_phase(&self, interaction: &Interaction, scene: &Scene) {
+    fn log_hover_pixel_phase(&self, pixel_picker: &PixelPicker, scene: &Scene) {
         if let Some(texture_image) = scene.get_texture_image() {
-            match pollster::block_on(interaction.pixel_picker.get(
+            match pollster::block_on(pixel_picker.get(
                 self.device.clone(),
                 scene.get_topology_image(),
                 texture_image,
