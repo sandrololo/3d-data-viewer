@@ -1,4 +1,4 @@
-use futures::{FutureExt, future::Shared};
+use futures::FutureExt;
 use image::{ExtendedColorType, ImageEncoder, codecs::png::CompressionType};
 use std::sync::{Arc, Mutex};
 

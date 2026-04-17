@@ -7,6 +7,7 @@ use crate::{
     render::depth_buffer::DepthBuffer, vertex_buffer::VertexBuffer,
 };
 
+#[derive(Debug)]
 pub(crate) enum FragmentShaderVariant {
     Height,
     Texture,

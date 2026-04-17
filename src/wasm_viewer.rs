@@ -9,6 +9,7 @@ use crate::{
     events::{Event, UserEvent},
     gpu_data::pixel_picker::PixelValue,
     interaction::Orientation,
+    render::pipeline::FragmentShaderVariant,
     scene::Overlay,
 };
 
@@ -124,15 +125,17 @@ impl WasmViewer {
     }
 
     pub fn set_height_shader(&self) -> Result<(), JsValue> {
-        self.send_event(UserEvent::SetHeightShader)
+        self.send_event(UserEvent::SetFragmentShader(FragmentShaderVariant::Height))
     }
 
     pub fn set_texture_shader(&self) -> Result<(), JsValue> {
-        self.send_event(UserEvent::SetTextureShader)
+        self.send_event(UserEvent::SetFragmentShader(FragmentShaderVariant::Texture))
     }
 
     pub fn set_turbo_colormap_shader(&self) -> Result<(), JsValue> {
-        self.send_event(UserEvent::SetTurboColormapShader)
+        self.send_event(UserEvent::SetFragmentShader(
+            FragmentShaderVariant::TurboColormap,
+        ))
     }
 
     pub fn set_overlays(&self, overlays: Vec<Overlay>) -> Result<(), JsValue> {

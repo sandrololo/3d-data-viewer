@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use futures::FutureExt;
-use futures::future::Shared;
 use imbuf::Image;
 use std::sync::{Arc, Mutex};
 #[cfg(target_arch = "wasm32")]

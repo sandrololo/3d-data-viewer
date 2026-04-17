@@ -23,9 +23,7 @@ pub(crate) enum UserEvent {
     SetTexture(Image<u16, 1>),
     SetOrientation(Orientation),
     ResetOrientation,
-    SetTextureShader,
-    SetHeightShader,
-    SetTurboColormapShader,
+    SetFragmentShader(FragmentShaderVariant),
     SetOverlays(Arc<Vec<Overlay>>),
     ClearOverlays,
     GetPixel(futures::channel::oneshot::Sender<SharedFuture<PixelResult>>),
@@ -96,23 +94,9 @@ impl UserEvent {
                     }
                 }
             }
-            UserEvent::SetTextureShader => {
-                log::info!("Setting texture shader");
-                state
-                    .interaction
-                    .set_fragment_shader_variant(FragmentShaderVariant::Texture);
-            }
-            UserEvent::SetHeightShader => {
-                log::info!("Setting height shader");
-                state
-                    .interaction
-                    .set_fragment_shader_variant(FragmentShaderVariant::Height);
-            }
-            UserEvent::SetTurboColormapShader => {
-                log::info!("Setting turbo colormap shader");
-                state
-                    .interaction
-                    .set_fragment_shader_variant(FragmentShaderVariant::TurboColormap);
+            UserEvent::SetFragmentShader(variant) => {
+                log::info!("Setting shader: {:?}", variant);
+                state.interaction.set_fragment_shader_variant(variant);
             }
             UserEvent::SetOverlays(overlays) => {
                 log::info!("Setting overlays");
