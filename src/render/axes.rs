@@ -628,6 +628,7 @@ pub(crate) struct Axes {
     // Billboard text labels (TriangleList)
     label_pipeline: wgpu::RenderPipeline,
     label_vertex_buffer: wgpu::Buffer,
+    label_vertex_buffer_capacity: usize,
     label_vertex_count: u32,
     font_atlas: FontAtlas,
 
@@ -821,10 +822,13 @@ impl Axes {
         });
 
         // Empty label buffer (no labels until image is loaded).
-        let label_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        // Pre-allocate enough for a reasonable number of label vertices.
+        let label_vertex_buffer_capacity = std::mem::size_of::<LabelVertex>() * 2048;
+        let label_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("label_vertex_buffer"),
-            contents: &[0u8; std::mem::size_of::<LabelVertex>() * 6],
-            usage: wgpu::BufferUsages::VERTEX,
+            size: label_vertex_buffer_capacity as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         Self {
@@ -834,6 +838,7 @@ impl Axes {
 
             label_pipeline,
             label_vertex_buffer,
+            label_vertex_buffer_capacity,
             label_vertex_count: 0,
             font_atlas,
 
@@ -905,7 +910,12 @@ impl Axes {
     ///
     /// `mvp` is the current model-view-projection matrix used for rendering, needed to
     /// project world-space coordinates to screen-space for label placement.
-    pub(crate) fn update_labels(&mut self, device: &wgpu::Device, mvp: Mat4) {
+    pub(crate) fn update_labels(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        mvp: Mat4,
+    ) {
         if self.image_width == 0 || self.image_height == 0 {
             return;
         }
@@ -983,11 +993,19 @@ impl Axes {
             y_label_step,
             z_label_skip,
         );
-        self.label_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("label_vertex_buffer"),
-            contents: bytemuck::cast_slice(&label_verts),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let data = bytemuck::cast_slice::<LabelVertex, u8>(&label_verts);
+        if data.len() <= self.label_vertex_buffer_capacity {
+            queue.write_buffer(&self.label_vertex_buffer, 0, data);
+        } else {
+            self.label_vertex_buffer_capacity = data.len().next_power_of_two();
+            self.label_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("label_vertex_buffer"),
+                size: self.label_vertex_buffer_capacity as u64,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            queue.write_buffer(&self.label_vertex_buffer, 0, data);
+        }
         self.label_vertex_count = label_verts.len() as u32;
     }
 

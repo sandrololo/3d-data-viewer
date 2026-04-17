@@ -142,7 +142,7 @@ impl Renderer {
         if self.axes_visible {
             let mvp =
                 interaction.projection.get_current() * interaction.transformation.get_current();
-            self.axes.update_labels(&self.device, mvp);
+            self.axes.update_labels(&self.device, &self.queue, mvp);
         }
 
         let surface_texture = self
