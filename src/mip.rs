@@ -1,5 +1,4 @@
 use std::num::NonZeroU32;
-use std::u32;
 
 use wgpu::util::DeviceExt;
 

@@ -42,7 +42,7 @@ impl TextureImage {
     }
 
     pub(crate) fn write_to_queue(&self, queue: &wgpu::Queue) {
-        if let Some(image) = &self.image.as_ref() {
+        if let Some(image) = self.image.as_ref() {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: &self.data,
@@ -50,7 +50,7 @@ impl TextureImage {
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
-                bytemuck::cast_slice(&image.buffer()),
+                bytemuck::cast_slice(image.buffer()),
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(2 * image.width().get()),

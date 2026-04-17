@@ -18,15 +18,8 @@ impl Keyboard {
     }
 
     pub(crate) fn register_event(&mut self, event: winit::event::KeyEvent) {
-        match event.logical_key {
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Control) => {
-                if event.state == ElementState::Pressed {
-                    self.control_button = ElementState::Pressed;
-                } else {
-                    self.control_button = ElementState::Released;
-                }
-            }
-            _ => (),
+        if let winit::keyboard::Key::Named(winit::keyboard::NamedKey::Control) = event.logical_key {
+            self.control_button = event.state;
         }
     }
 }

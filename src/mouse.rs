@@ -22,15 +22,8 @@ impl Default for Mouse {
 
 impl Mouse {
     pub(crate) fn register_button_event(&mut self, button: &MouseButton, state: &ElementState) {
-        match button {
-            MouseButton::Left => {
-                if state == &ElementState::Pressed {
-                    self.left_button = ElementState::Pressed;
-                } else {
-                    self.left_button = ElementState::Released;
-                }
-            }
-            _ => (),
+        if let MouseButton::Left = button {
+            self.left_button = *state;
         }
     }
 

@@ -17,23 +17,25 @@ impl IndexBufferBuilder {
     }
 
     pub(crate) fn new_triangle_strip(image_size: DataSize, mip_levels: &Vec<u32>) -> Self {
-        let mut mip_level_indices: Vec<Vec<u32>> = Vec::new();
         log::info!("Creating index buffer for mip levels: {:?}", mip_levels);
-        for mip_level in mip_levels {
-            let triangle_strip = triangle_strip(&DataSize {
-                width: NonZeroU32::new(image_size.width.get() / 2u32.pow(*mip_level as u32))
-                    .expect("Can't be zero"),
-                height: NonZeroU32::new(image_size.height.get() / 2u32.pow(*mip_level as u32))
-                    .expect("Can't be zero"),
-            });
-            log::info!(
-                "MIP level {:?} index buffer length: {:?}",
-                mip_level,
-                triangle_strip.len()
-            );
-            log::info!("Number of triangles: {:?}", triangle_strip.len() - 2);
-            mip_level_indices.push(triangle_strip);
-        }
+        let mip_level_indices = mip_levels
+            .iter()
+            .map(|mip_level| {
+                let triangle_strip = triangle_strip(&DataSize {
+                    width: NonZeroU32::new(image_size.width.get() / 2u32.pow(*mip_level as u32))
+                        .expect("Can't be zero"),
+                    height: NonZeroU32::new(image_size.height.get() / 2u32.pow(*mip_level as u32))
+                        .expect("Can't be zero"),
+                });
+                log::info!(
+                    "MIP level {:?} index buffer length: {:?}",
+                    mip_level,
+                    triangle_strip.len()
+                );
+                log::info!("Number of triangles: {:?}", triangle_strip.len() - 2);
+                triangle_strip
+            })
+            .collect();
         Self { mip_level_indices }
     }
 
