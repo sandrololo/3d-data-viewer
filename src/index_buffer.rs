@@ -10,13 +10,13 @@ pub(crate) struct IndexBufferBuilder {
 }
 
 impl IndexBufferBuilder {
-    pub(crate) fn triangle_strip_length(image_size: &DataSize, mip_level: u32) -> u64 {
+    pub(crate) fn triangle_strip_length(image_size: DataSize, mip_level: u32) -> u64 {
         let width = image_size.width.get() / 2u32.pow(mip_level as u32);
         let height = image_size.height.get() / 2u32.pow(mip_level as u32);
         (width * height * 2) as u64
     }
 
-    pub(crate) fn new_triangle_strip(image_size: &DataSize, mip_levels: &Vec<u32>) -> Self {
+    pub(crate) fn new_triangle_strip(image_size: DataSize, mip_levels: &Vec<u32>) -> Self {
         let mut mip_level_indices: Vec<Vec<u32>> = Vec::new();
         log::info!("Creating index buffer for mip levels: {:?}", mip_levels);
         for mip_level in mip_levels {

@@ -7,7 +7,7 @@ pub(crate) struct VertexBuffer {
 }
 
 impl VertexBuffer {
-    pub(crate) fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
+    pub(crate) fn new(image_size: DataSize, device: &wgpu::Device) -> Self {
         let vertices: Vec<u32> = (0..image_size.width.get() * image_size.height.get()).collect();
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),

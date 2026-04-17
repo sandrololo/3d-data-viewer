@@ -33,7 +33,7 @@ impl TopologyData {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub(crate) struct DataSize {
     pub width: NonZeroU32,
     pub height: NonZeroU32,

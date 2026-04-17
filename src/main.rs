@@ -176,7 +176,7 @@ impl State {
 
                 self.interaction
                     .mip
-                    .set_image(&data.dimensions().into(), &self.device);
+                    .set_image(data.dimensions().into(), &self.device);
 
                 self.renderer.update_axes_origin(
                     data.dimensions(),

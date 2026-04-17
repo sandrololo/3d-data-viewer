@@ -42,7 +42,7 @@ impl Mip {
         self.current_level = 2;
     }
 
-    pub(crate) fn set_image(&mut self, image_size: &DataSize, device: &wgpu::Device) {
+    pub(crate) fn set_image(&mut self, image_size: DataSize, device: &wgpu::Device) {
         let mip_levels = (0..10u32)
             .filter(|level| {
                 let num_indices = IndexBufferBuilder::triangle_strip_length(image_size, *level);
@@ -51,9 +51,8 @@ impl Mip {
             })
             .collect();
         let index_buffer =
-            IndexBufferBuilder::new_triangle_strip(&image_size, &mip_levels).create_buffer(&device);
-        let vertex_buffer = VertexBuffer::new(&image_size, &device);
-        let image_size = image_size.clone();
+            IndexBufferBuilder::new_triangle_strip(image_size, &mip_levels).create_buffer(&device);
+        let vertex_buffer = VertexBuffer::new(image_size, &device);
         let mip_data = MipData {
             mip_levels,
             index_buffer,

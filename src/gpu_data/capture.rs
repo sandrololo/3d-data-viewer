@@ -29,7 +29,6 @@ impl Capture {
 
     pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: DataSize) {
         if self.window_size != window_size {
-            self.window_size = window_size.clone();
             self.gpu_readback
                 .set_buffer(Self::create_readback_buffer(device, &window_size));
         }
