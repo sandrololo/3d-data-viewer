@@ -1,5 +1,5 @@
-#[cfg(not(target_arch = "wasm32"))]
 use anyhow::anyhow;
+use futures::FutureExt;
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -40,10 +40,8 @@ mod view;
 #[cfg(target_arch = "wasm32")]
 mod wasm_viewer;
 
-#[cfg(not(target_arch = "wasm32"))]
-use crate::events::UserEvent;
 use crate::{
-    events::{ErrorEvent, Event, SystemEvent},
+    events::{ErrorEvent, Event, SharedFuture, SystemEvent, UserEvent},
     interaction::Interaction,
     render::Renderer,
     scene::Scene,
@@ -117,6 +115,128 @@ impl State {
             interaction,
             scene: None,
         })
+    }
+
+    fn apply_user_event(&mut self, event: UserEvent) {
+        match event {
+            UserEvent::ResetView => {
+                self.interaction.reset();
+                self.scene = None;
+            }
+            UserEvent::GetPixel(sender) => {
+                if let Some(scene) = &self.scene
+                    && let Some(texture_image) = scene.get_texture_image()
+                {
+                    self.interaction.pixel_picker.write_to_channel(
+                        self.device.clone(),
+                        scene.get_topology_image(),
+                        texture_image,
+                        sender,
+                    );
+                } else {
+                    send_err(sender, "Texture not initialized")
+                }
+            }
+            UserEvent::CaptureImage(sender) => {
+                if self.scene.is_some() {
+                    self.interaction
+                        .image_capture
+                        .write_to_channel(self.device.clone(), sender)
+                } else {
+                    send_err(sender, "Texture not initialized");
+                }
+            }
+            UserEvent::SetFragmentShader(variant) => {
+                log::info!("Setting shader: {:?}", variant);
+                self.interaction.set_fragment_shader_variant(variant);
+            }
+            UserEvent::SetOverlays(overlays) => {
+                log::info!("Setting overlays");
+                if let Some(scene) = &mut self.scene {
+                    scene.set_overlays(overlays, &self.queue);
+                }
+            }
+            UserEvent::ClearOverlays => {
+                log::info!("Clearing overlays");
+                if let Some(scene) = &mut self.scene {
+                    scene.clear_overlays(&self.queue);
+                }
+            }
+            UserEvent::SetOrientation(orientation) => {
+                self.interaction.set_orientation(orientation);
+            }
+            UserEvent::ResetOrientation => {
+                self.interaction.reset_orientation();
+            }
+            UserEvent::SetTopology(data) => {
+                log::info!("Setting new topology image");
+                self.interaction
+                    .percentile_range_buffer
+                    .update_data(&self.queue, data.buffer());
+
+                self.interaction
+                    .mip
+                    .set_image(&data.dimensions().into(), &self.device);
+
+                self.renderer.update_axes_origin(
+                    data.dimensions(),
+                    self.interaction.percentile_range_buffer.z_range(),
+                );
+
+                self.scene = Some(Scene::new_topology(
+                    data,
+                    &self.device,
+                    &self.queue,
+                    &self.texture_bind_group_layout,
+                ));
+            }
+            UserEvent::SetTexture(data) => {
+                log::info!("Setting new texture image");
+                if let Some(scene) = &mut self.scene {
+                    scene.set_texture(data, &self.queue);
+                } else {
+                    log::warn!("Can't set texture image, topology not initialized");
+                }
+            }
+            UserEvent::ZoomIn => {
+                self.interaction.zoom_in();
+            }
+            UserEvent::ZoomOut => {
+                self.interaction.zoom_out();
+            }
+            UserEvent::SetPercentile(percentile) => {
+                let topology = self.scene.as_ref().map(|scene| scene.get_topology_image());
+                self.interaction.percentile_range_buffer.update_percentile(
+                    &self.queue,
+                    percentile,
+                    topology,
+                );
+                self.renderer
+                    .update_z_range(self.interaction.percentile_range_buffer.z_range());
+            }
+            UserEvent::SetTextureRange(start, end) => {
+                self.interaction
+                    .texture_range_buffer
+                    .update(&self.queue, start, end);
+            }
+            UserEvent::DisplayGrid(visible) => {
+                self.renderer.display_grid(visible);
+            }
+        }
+    }
+}
+
+fn send_err<T>(
+    sender: futures::channel::oneshot::Sender<SharedFuture<Result<T, Arc<anyhow::Error>>>>,
+    msg: &str,
+) where
+    T: Clone,
+{
+    let msg = msg.to_owned();
+    let future: std::pin::Pin<Box<dyn Future<Output = Result<T, Arc<anyhow::Error>>>>> =
+        Box::pin(async move { Err(Arc::new(anyhow!("{}", msg))) });
+    if sender.send(future.shared()).is_err() {
+        log::error!("Failed to return error message");
     }
 }
 
@@ -273,7 +393,7 @@ impl ApplicationHandler<Event> for ImageViewer3D {
             }
             Event::User(user_event) => {
                 if let Some(app_state) = self.state.as_mut() {
-                    user_event.apply(app_state);
+                    app_state.apply_user_event(user_event);
                 }
             }
         }
