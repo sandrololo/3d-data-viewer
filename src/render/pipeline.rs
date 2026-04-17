@@ -50,8 +50,8 @@ impl Pipeline {
             Some(surface_format.add_srgb_suffix().into()),
             Some(PixelPicker::PICKING_FORMAT.into()),
         ];
-        let texture_fs_pipeline_descriptor = &wgpu::RenderPipelineDescriptor {
-            label: Some("texture_pipeline"),
+        let base_descriptor = wgpu::RenderPipelineDescriptor {
+            label: None,
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -59,12 +59,7 @@ impl Pipeline {
                 buffers: &[VertexBuffer::desc()],
                 compilation_options: Default::default(),
             },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_texture"),
-                compilation_options: Default::default(),
-                targets: &texture_formats,
-            }),
+            fragment: None,
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
                 strip_index_format: Some(wgpu::IndexFormat::Uint32),
@@ -75,31 +70,23 @@ impl Pipeline {
             multiview: None,
             cache: None,
         };
-        let render_pipeline_texture = device.create_render_pipeline(texture_fs_pipeline_descriptor);
 
-        let mut height_fs_pipeline_descriptor = texture_fs_pipeline_descriptor.clone();
-        height_fs_pipeline_descriptor.label = Some("height_pipeline");
-        height_fs_pipeline_descriptor.fragment = Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_height"),
-            compilation_options: Default::default(),
-            targets: &texture_formats,
-        });
-        let render_pipeline_height = device.create_render_pipeline(&height_fs_pipeline_descriptor);
+        let create_pipeline = |label, entry_point| {
+            let mut desc = base_descriptor.clone();
+            desc.label = Some(label);
+            desc.fragment = Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some(entry_point),
+                compilation_options: Default::default(),
+                targets: &texture_formats,
+            });
+            device.create_render_pipeline(&desc)
+        };
 
-        let mut turbo_colormap_fs_pipeline_descriptor = texture_fs_pipeline_descriptor.clone();
-        turbo_colormap_fs_pipeline_descriptor.label = Some("turbo_colormap_pipeline");
-        turbo_colormap_fs_pipeline_descriptor.fragment = Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_turbo_colormap"),
-            compilation_options: Default::default(),
-            targets: &texture_formats,
-        });
-        let turbo_colormap = device.create_render_pipeline(&turbo_colormap_fs_pipeline_descriptor);
         Self {
-            texture: render_pipeline_texture,
-            height: render_pipeline_height,
-            turbo_colormap,
+            texture: create_pipeline("texture_pipeline", "fs_texture"),
+            height: create_pipeline("height_pipeline", "fs_height"),
+            turbo_colormap: create_pipeline("turbo_colormap_pipeline", "fs_turbo_colormap"),
         }
     }
 
