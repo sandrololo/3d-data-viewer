@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use imbuf::Image;
+
 pub(crate) struct TopologyPercentileRangeBuffer {
     buffer: wgpu::Buffer,
     percentile: f32,
@@ -30,26 +34,27 @@ impl TopologyPercentileRangeBuffer {
         &mut self,
         queue: &wgpu::Queue,
         percentile: f32,
-        data: Option<&[f32]>,
+        data: Option<Arc<Image<f32, 1>>>,
     ) {
         assert!(percentile >= 0.5, "Percentile must be greater than 0.5");
         assert!(percentile < 1.0, "Percentile must be less than 1.0");
         log::info!("Updating percentile: {}", percentile);
         self.percentile = percentile;
         if let Some(data) = data {
-            self.update_data(queue, data);
+            self.update_data(queue, data.buffer());
         }
     }
 
     pub(crate) fn update_data(&mut self, queue: &wgpu::Queue, data: &[f32]) {
         let mut vec = data.to_vec();
+        let total_pixels = vec.len();
         let (_, lower, _) = vec.select_nth_unstable_by(
-            (data.len() as f32 * (1. - self.percentile)) as usize,
+            (total_pixels as f32 * (1. - self.percentile)) as usize,
             |a, b| a.total_cmp(b),
         );
         let lower = *lower;
         let (_, upper, _) = vec
-            .select_nth_unstable_by((data.len() as f32 * self.percentile) as usize, |a, b| {
+            .select_nth_unstable_by((total_pixels as f32 * self.percentile) as usize, |a, b| {
                 a.total_cmp(b)
             });
         self.z_min = lower;

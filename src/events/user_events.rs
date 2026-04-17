@@ -1,7 +1,7 @@
 use anyhow::anyhow;
-use futures::{FutureExt, future::Shared};
+use futures::FutureExt;
 use imbuf::Image;
-use std::{pin::Pin, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     State,
@@ -124,14 +124,11 @@ impl UserEvent {
                 state.interaction.zoom_out();
             }
             UserEvent::SetPercentile(percentile) => {
-                let topology = state
-                    .scene
-                    .as_ref()
-                    .map(|scene| scene.get_topology_image().buffer().to_vec());
+                let topology = state.scene.as_ref().map(|scene| scene.get_topology_image());
                 state.interaction.percentile_range_buffer.update_percentile(
                     &state.queue,
                     percentile,
-                    topology.as_ref().map(|v| v.as_slice()),
+                    topology,
                 );
                 state
                     .renderer
@@ -151,17 +148,14 @@ impl UserEvent {
 }
 
 fn send_err<T>(
-    sender: futures::channel::oneshot::Sender<
-        Shared<Pin<Box<dyn Future<Output = Result<T, Arc<anyhow::Error>>>>>>,
-    >,
+    sender: futures::channel::oneshot::Sender<SharedFuture<Result<T, Arc<anyhow::Error>>>>,
     msg: &str,
 ) where
     T: Clone,
 {
     let msg = msg.to_owned();
-    let future: std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<T, Arc<anyhow::Error>>>>,
-    > = Box::pin(async move { Err(Arc::new(anyhow!("{}", msg))) });
+    let future: std::pin::Pin<Box<dyn Future<Output = Result<T, Arc<anyhow::Error>>>>> =
+        Box::pin(async move { Err(Arc::new(anyhow!("{}", msg))) });
     if sender.send(future.shared()).is_err() {
         log::error!("Failed to return error message");
     }
