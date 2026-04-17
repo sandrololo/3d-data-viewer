@@ -1,10 +1,11 @@
 use anyhow::anyhow;
-use futures::{FutureExt, future::Shared};
+use futures::FutureExt;
 use imbuf::Image;
 use std::sync::Arc;
 
 use crate::{
     State,
+    events::SharedFuture,
     gpu_data::{
         CaptureResult,
         pixel_picker::{PixelResult, PixelValue},
@@ -27,21 +28,13 @@ pub(crate) enum UserEvent {
     SetTurboColormapShader,
     SetOverlays(Arc<Vec<Overlay>>),
     ClearOverlays,
-    GetPixel(
-        futures::channel::oneshot::Sender<
-            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
-        >,
-    ),
+    GetPixel(futures::channel::oneshot::Sender<SharedFuture<PixelResult>>),
     ZoomIn,
     ZoomOut,
     SetPercentile(f32),
     SetTextureRange(u16, u16),
     DisplayGrid(bool),
-    CaptureImage(
-        futures::channel::oneshot::Sender<
-            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>,
-        >,
-    ),
+    CaptureImage(futures::channel::oneshot::Sender<SharedFuture<CaptureResult>>),
 }
 
 impl UserEvent {

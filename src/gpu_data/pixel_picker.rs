@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::*;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 
+use crate::events::SharedFuture;
+
 #[derive(Clone)]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct PixelValue {
@@ -28,9 +30,7 @@ pub(crate) struct PixelPicker {
     mouse_position: PhysicalPosition<f64>,
     window_size: PhysicalSize<u32>,
     /// Cached shared future - if a read is in progress, subsequent calls get the same future
-    pending_read: Arc<
-        Mutex<Option<Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>>>,
-    >,
+    pending_read: Arc<Mutex<Option<SharedFuture<PixelResult>>>>,
 }
 
 impl PixelPicker {
@@ -102,9 +102,7 @@ impl PixelPicker {
         device: Arc<wgpu::Device>,
         topology: Arc<Image<f32, 1>>,
         texture: Arc<Image<u16, 1>>,
-        sender: futures::channel::oneshot::Sender<
-            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>>,
-        >,
+        sender: futures::channel::oneshot::Sender<SharedFuture<PixelResult>>,
     ) {
         sender.send(self.get(device, topology, texture)).unwrap();
     }
@@ -114,7 +112,7 @@ impl PixelPicker {
         device: Arc<wgpu::Device>,
         topology: Arc<Image<f32, 1>>,
         texture: Arc<Image<u16, 1>>,
-    ) -> Shared<std::pin::Pin<Box<dyn std::future::Future<Output = PixelResult>>>> {
+    ) -> SharedFuture<PixelResult> {
         let mut pending = self.pending_read.lock().unwrap();
 
         // If there's already a pending read, return a clone of it

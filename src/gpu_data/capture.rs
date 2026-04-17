@@ -2,7 +2,7 @@ use futures::{FutureExt, future::Shared};
 use image::{ExtendedColorType, ImageEncoder, codecs::png::CompressionType};
 use std::sync::{Arc, Mutex};
 
-use crate::gpu_data::DataSize;
+use crate::{events::SharedFuture, gpu_data::DataSize};
 
 pub type CaptureResult = Result<Vec<u8>, Arc<anyhow::Error>>;
 
@@ -11,9 +11,7 @@ pub(crate) struct Capture {
     window_size: DataSize,
     surface_format: wgpu::TextureFormat,
     /// Cached shared future - if a read is in progress, subsequent calls get the same future
-    pending_read: Arc<
-        Mutex<Option<Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>>>,
-    >,
+    pending_read: Arc<Mutex<Option<SharedFuture<CaptureResult>>>>,
 }
 
 impl Capture {
@@ -55,9 +53,7 @@ impl Capture {
     pub(crate) fn write_to_channel(
         &self,
         device: Arc<wgpu::Device>,
-        sender: futures::channel::oneshot::Sender<
-            Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>>,
-        >,
+        sender: futures::channel::oneshot::Sender<SharedFuture<CaptureResult>>,
     ) {
         sender.send(self.get(device)).unwrap();
     }
@@ -98,10 +94,7 @@ impl Capture {
         );
     }
 
-    pub(crate) fn get(
-        &self,
-        device: Arc<wgpu::Device>,
-    ) -> Shared<std::pin::Pin<Box<dyn std::future::Future<Output = CaptureResult>>>> {
+    pub(crate) fn get(&self, device: Arc<wgpu::Device>) -> SharedFuture<CaptureResult> {
         let mut pending = self.pending_read.lock().unwrap();
 
         // If there's already a pending read, return a clone of it
