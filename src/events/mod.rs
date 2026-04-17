@@ -9,7 +9,6 @@ mod user_events;
 
 pub(crate) type SharedFuture<T> = Shared<std::pin::Pin<Box<dyn std::future::Future<Output = T>>>>;
 
-#[allow(dead_code)]
 pub(crate) enum Event {
     User(UserEvent),
     System(SystemEvent),
