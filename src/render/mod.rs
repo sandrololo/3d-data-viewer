@@ -4,12 +4,8 @@ use wgpu::{BindGroupLayout, Surface, TextureFormat};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
-    gpu_data::{
-        DataSize, texture_image_range::TextureImageRangeBuffer,
-        topology_percentile_range::TopologyPercentileRangeBuffer,
-    },
+    gpu_data::DataSize,
     interaction::Interaction,
-    mip::Mip,
     render::{axes::Axes, depth_buffer::DepthBuffer, pipeline::Pipeline},
     scene::Scene,
 };
@@ -45,10 +41,10 @@ impl Renderer {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("image_info_bind_group_layout"),
                 entries: &[
-                    DataSize::get_bind_group_layout_entry(),
-                    TopologyPercentileRangeBuffer::get_bind_group_layout_entry(),
-                    TextureImageRangeBuffer::get_bind_group_layout_entry(),
-                    Mip::get_bind_group_layout_entry(),
+                    uniform_buffer_layout_entry(0),
+                    uniform_buffer_layout_entry(1),
+                    uniform_buffer_layout_entry(2),
+                    uniform_buffer_layout_entry(3),
                 ],
             });
         let image_info_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -255,5 +251,18 @@ impl Renderer {
         } else {
             log::error!("Texture image not initialized");
         }
+    }
+}
+
+pub(crate) fn uniform_buffer_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
     }
 }
