@@ -1,6 +1,4 @@
-use imbuf::Image;
-use std::{num::NonZeroU32, sync::Arc};
-use tiff::decoder::{Decoder, DecodingResult, Limits};
+use std::sync::Arc;
 use wasm_bindgen::{JsValue, prelude::*};
 use winit::event_loop::EventLoop;
 
@@ -11,6 +9,7 @@ use crate::{
     interaction::Orientation,
     render::pipeline::FragmentShaderVariant,
     scene::Overlay,
+    tiff_decode::decode_tiff,
 };
 
 #[wasm_bindgen]
@@ -53,52 +52,14 @@ impl WasmViewer {
     }
 
     pub async fn set_topology(&self, data: Vec<u8>) -> Result<(), JsValue> {
-        let mut decoder = Decoder::new(std::io::Cursor::new(&data))
-            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-            .with_limits(Limits::unlimited());
-        let dimensions = decoder
-            .dimensions()
+        let image = decode_tiff::<f32, _>(std::io::Cursor::new(&data))
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-        let decoded_data = match decoder
-            .read_image()
-            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-        {
-            DecodingResult::F32(data) => Ok(data),
-            x => Err(JsValue::from_str(&format!(
-                "Unsupported image format: {:?}",
-                x
-            ))),
-        }?;
-        let image = Image::<f32, 1>::new_vec(
-            decoded_data,
-            NonZeroU32::new(dimensions.0).ok_or(JsValue::from_str("Invalid width"))?,
-            NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
-        );
         self.send_event(UserEvent::SetTopology(image))
     }
 
     pub async fn set_texture(&self, data: Vec<u8>) -> Result<(), JsValue> {
-        let mut decoder = Decoder::new(std::io::Cursor::new(&data))
-            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-            .with_limits(Limits::unlimited());
-        let dimensions = decoder
-            .dimensions()
+        let image = decode_tiff::<u16, _>(std::io::Cursor::new(&data))
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-        let decoded_data = match decoder
-            .read_image()
-            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
-        {
-            DecodingResult::U16(data) => Ok(data),
-            x => Err(JsValue::from_str(&format!(
-                "Unsupported image format: {:?}",
-                x
-            ))),
-        }?;
-        let image = Image::<u16, 1>::new_vec(
-            decoded_data,
-            NonZeroU32::new(dimensions.0).ok_or(JsValue::from_str("Invalid width"))?,
-            NonZeroU32::new(dimensions.1).ok_or(JsValue::from_str("Invalid height"))?,
-        );
         self.send_event(UserEvent::SetTexture(image))
     }
 

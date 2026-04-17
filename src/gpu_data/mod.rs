@@ -13,23 +13,8 @@ pub(crate) struct TopologyData(pub Image<f32, 1>);
 impl TopologyData {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
-        use std::fs::File;
-
-        use anyhow::anyhow;
-        use tiff::decoder::{Decoder, DecodingResult, Limits};
-
-        let file = File::open(path)?;
-        let mut decoder = Decoder::new(file)?.with_limits(Limits::unlimited());
-        let dimensions = decoder.dimensions()?;
-        let data = match decoder.read_image()? {
-            DecodingResult::F32(data) => Ok(Image::<f32, 1>::new_vec(
-                data,
-                NonZeroU32::new(dimensions.0).ok_or(anyhow!("Invalid width"))?,
-                NonZeroU32::new(dimensions.1).ok_or(anyhow!("Invalid height"))?,
-            )),
-            _ => Err(anyhow::anyhow!("Unsupported topology data format")),
-        }?;
-        Ok(Self(data))
+        let file = std::fs::File::open(path)?;
+        Ok(Self(crate::tiff_decode::decode_tiff(file)?))
     }
 }
 

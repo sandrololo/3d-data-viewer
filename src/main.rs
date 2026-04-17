@@ -35,6 +35,7 @@ mod mip;
 mod mouse;
 mod render;
 mod scene;
+mod tiff_decode;
 mod vertex_buffer;
 mod view;
 #[cfg(target_arch = "wasm32")]
