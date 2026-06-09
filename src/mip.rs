@@ -23,6 +23,7 @@ pub(crate) struct Mip {
     pub(crate) image_dims_buffer: wgpu::Buffer,
     mip_data: Option<MipData>,
     current_level: u32,
+    override_level: Option<u32>,
 }
 
 impl Mip {
@@ -38,12 +39,14 @@ impl Mip {
             image_dims_buffer,
             mip_data: None,
             current_level: 2,
+            override_level: None,
         }
     }
 
     pub(crate) fn reset(&mut self) {
         self.mip_data = None;
         self.current_level = 2;
+        self.override_level = None;
     }
 
     pub(crate) fn set_image(&mut self, image_size: DataSize, device: &wgpu::Device) {
@@ -66,6 +69,9 @@ impl Mip {
     }
 
     pub(crate) fn set_zoom(&mut self, zoom: f32) {
+        if self.override_level.is_some() {
+            return;
+        }
         if let Some(mip_data) = &self.mip_data {
             let levels = &mip_data.mip_levels;
             let index = ((zoom * 1.2 * levels.len() as f32) as usize)
@@ -76,6 +82,14 @@ impl Mip {
             self.current_level = 2;
         }
         log::info!("Set MIP level to: {}", self.current_level);
+    }
+
+    pub(crate) fn set_override_level(&mut self, level: Option<u32>) {
+        self.override_level = level;
+        if let Some(level) = level {
+            self.current_level = level;
+            log::info!("MIP level overridden to: {}", level);
+        }
     }
 
     pub(crate) fn update_gpu(&self, renderpass: &mut wgpu::RenderPass, queue: &wgpu::Queue) {

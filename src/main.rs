@@ -46,8 +46,7 @@ use std::num::NonZeroU32;
 use crate::{
     events::{ErrorEvent, Event, SharedFuture, SystemEvent, UserEvent},
     gpu_data::{
-        Capture, DataSize, pixel_picker::PixelPicker,
-        texture_image_range::TextureImageRangeBuffer,
+        Capture, DataSize, pixel_picker::PixelPicker, texture_image_range::TextureImageRangeBuffer,
         topology_percentile_range::TopologyPercentileRangeBuffer,
     },
     interaction::Interaction,
@@ -207,10 +206,8 @@ impl State {
                     .mip
                     .set_image(data.dimensions().into(), &self.device);
 
-                self.renderer.update_axes_origin(
-                    data.dimensions(),
-                    self.percentile_range_buffer.z_range(),
-                );
+                self.renderer
+                    .update_axes_origin(data.dimensions(), self.percentile_range_buffer.z_range());
 
                 self.scene = Some(Scene::new_topology(
                     data,
@@ -235,17 +232,16 @@ impl State {
             }
             UserEvent::SetPercentile(percentile) => {
                 let topology = self.scene.as_ref().map(|scene| scene.get_topology_image());
-                self.percentile_range_buffer.update_percentile(
-                    &self.queue,
-                    percentile,
-                    topology,
-                );
+                self.percentile_range_buffer
+                    .update_percentile(&self.queue, percentile, topology);
                 self.renderer
                     .update_z_range(self.percentile_range_buffer.z_range());
             }
             UserEvent::SetTextureRange(start, end) => {
-                self.texture_range_buffer
-                    .update(&self.queue, start, end);
+                self.texture_range_buffer.update(&self.queue, start, end);
+            }
+            UserEvent::SetMipOverride(level) => {
+                self.interaction.mip.set_override_level(level);
             }
             UserEvent::DisplayGrid(visible) => {
                 self.renderer.display_grid(visible);

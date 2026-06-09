@@ -25,6 +25,7 @@ pub(crate) enum UserEvent {
     ZoomOut,
     SetPercentile(f32),
     SetTextureRange(u16, u16),
+    SetMipOverride(Option<u32>),
     DisplayGrid(bool),
     CaptureImage(futures::channel::oneshot::Sender<SharedFuture<CaptureResult>>),
 }

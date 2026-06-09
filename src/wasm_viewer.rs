@@ -131,6 +131,10 @@ impl WasmViewer {
         self.send_event(UserEvent::SetTextureRange(start, end))
     }
 
+    pub fn set_mip_override(&self, level: Option<u32>) -> Result<(), JsValue> {
+        self.send_event(UserEvent::SetMipOverride(level))
+    }
+
     pub fn display_grid(&self, visible: bool) -> Result<(), JsValue> {
         self.send_event(UserEvent::DisplayGrid(visible))
     }
