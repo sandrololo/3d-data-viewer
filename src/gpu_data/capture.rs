@@ -31,6 +31,7 @@ impl Capture {
         if self.window_size != window_size {
             self.gpu_readback
                 .set_buffer(Self::create_readback_buffer(device, &window_size));
+            self.window_size = window_size;
         }
     }
 
