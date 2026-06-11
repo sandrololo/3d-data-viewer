@@ -371,16 +371,20 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                 }
             }
             WindowEvent::Resized(size) => {
-                request_redraw = true;
-                app_state.renderer.configure_surface(size);
-                app_state.pixel_picker.resize(&app_state.device, &size);
-                app_state.image_capture.resize(
-                    &app_state.device,
-                    DataSize {
-                        width: NonZeroU32::new(size.width).expect("Window size should not be 0"),
-                        height: NonZeroU32::new(size.height).expect("Window size should not be 0"),
-                    },
-                );
+                if size.width > 0 && size.height > 0 {
+                    request_redraw = true;
+                    app_state.renderer.configure_surface(size);
+                    app_state.pixel_picker.resize(&app_state.device, &size);
+                    app_state.image_capture.resize(
+                        &app_state.device,
+                        DataSize {
+                            width: NonZeroU32::new(size.width)
+                                .expect("Window size should not be 0"),
+                            height: NonZeroU32::new(size.height)
+                                .expect("Window size should not be 0"),
+                        },
+                    );
+                }
             }
             WindowEvent::CursorMoved { position, .. } => {
                 app_state.pixel_picker.update_mouse_position(position);
