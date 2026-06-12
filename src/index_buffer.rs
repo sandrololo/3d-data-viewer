@@ -76,6 +76,11 @@ pub(crate) struct IndexBuffer {
 impl IndexBuffer {
     pub(crate) fn set_mip_level_buffer(&self, mip_level: u32, renderpass: &mut wgpu::RenderPass) {
         let buffer = &self.mip_level_buffers[mip_level as usize];
+        // Nothing to draw when every triangle is masked out (empty index buffer).
+        // Slicing an empty buffer would panic ("buffer slices can not be empty").
+        if buffer.size() == 0 {
+            return;
+        }
         renderpass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint32);
         renderpass.draw_indexed(
             0..buffer.size() as u32 / std::mem::size_of::<u32>() as u32,
