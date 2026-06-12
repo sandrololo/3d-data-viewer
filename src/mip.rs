@@ -52,15 +52,35 @@ impl Mip {
     pub(crate) fn set_image(&mut self, image_size: DataSize, device: &wgpu::Device) {
         let mip_levels = (0..10u32)
             .filter(|level| {
-                let num_indices = IndexBufferBuilder::triangle_strip_length(image_size, *level);
+                let num_indices = IndexBufferBuilder::triangle_list_length(image_size, *level);
                 num_indices < MAX_MIP_INDEX_COUNT && num_indices > MIN_MIP_INDEX_COUNT
             })
             .collect();
         let index_buffer =
-            IndexBufferBuilder::new_triangle_strip(image_size, &mip_levels).create_buffer(&device);
+            IndexBufferBuilder::new_triangle_list(image_size, &mip_levels).create_buffer(&device);
         let vertex_buffer = VertexBuffer::new(image_size, &device);
         let mip_data = MipData {
             mip_levels,
+            index_buffer,
+            vertex_buffer,
+            image_size,
+        };
+        self.mip_data = Some(mip_data);
+    }
+
+    /// Sets the image with a validity mask. Pixels where mask is 0 will create holes in the mesh.
+    /// The mask must have the same dimensions as the image (width * height bytes, 0=invalid, 1=valid).
+    pub(crate) fn set_image_masked(
+        &mut self,
+        image_size: DataSize,
+        mask: &[u8],
+        device: &wgpu::Device,
+    ) {
+        let index_buffer =
+            IndexBufferBuilder::new_triangle_list_masked(image_size, mask).create_buffer(&device);
+        let vertex_buffer = VertexBuffer::new(image_size, &device);
+        let mip_data = MipData {
+            mip_levels: vec![0],
             index_buffer,
             vertex_buffer,
             image_size,
@@ -102,9 +122,14 @@ impl Mip {
                 0,
                 mip_data.vertex_buffer.buffer.slice(0..(w * h * 4) as u64),
             );
+            let buffer_index = mip_data
+                .mip_levels
+                .iter()
+                .position(|&l| l == self.current_level)
+                .unwrap_or(0) as u32;
             mip_data
                 .index_buffer
-                .set_mip_level_buffer(self.current_level, renderpass);
+                .set_mip_level_buffer(buffer_index, renderpass);
             queue.write_buffer(
                 &self.mip_buffer,
                 0,

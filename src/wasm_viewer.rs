@@ -57,6 +57,25 @@ impl WasmViewer {
         self.send_event(UserEvent::SetTopology(image))
     }
 
+    /// Sets a topology with a validity mask. The mask is a flat array of bytes (0=invalid, 1=valid)
+    /// with the same dimensions (width*height) as the topology image.
+    /// Invalid pixels will create holes in the rendered mesh.
+    pub async fn set_topology_masked(&self, data: Vec<u8>, mask: Vec<u8>) -> Result<(), JsValue> {
+        let image = decode_tiff::<f32, _>(std::io::Cursor::new(&data))
+            .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
+        let expected_len = (image.width().get() * image.height().get()) as usize;
+        if mask.len() != expected_len {
+            return Err(JsValue::from_str(&format!(
+                "Mask length ({}) does not match image dimensions ({}x{} = {})",
+                mask.len(),
+                image.width().get(),
+                image.height().get(),
+                expected_len,
+            )));
+        }
+        self.send_event(UserEvent::SetTopologyMasked(image, mask))
+    }
+
     pub async fn set_texture(&self, data: Vec<u8>) -> Result<(), JsValue> {
         let image = decode_tiff::<u16, _>(std::io::Cursor::new(&data))
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;

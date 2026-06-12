@@ -216,6 +216,25 @@ impl State {
                     &self.texture_bind_group_layout,
                 ));
             }
+            UserEvent::SetTopologyMasked(data, mask) => {
+                log::info!("Setting new masked topology image");
+                self.percentile_range_buffer
+                    .update_data(&self.queue, data.buffer());
+
+                self.interaction
+                    .mip
+                    .set_image_masked(data.dimensions().into(), &mask, &self.device);
+
+                self.renderer
+                    .update_axes_origin(data.dimensions(), self.percentile_range_buffer.z_range());
+
+                self.scene = Some(Scene::new_topology(
+                    data,
+                    &self.device,
+                    &self.queue,
+                    &self.texture_bind_group_layout,
+                ));
+            }
             UserEvent::SetTexture(data) => {
                 log::info!("Setting new texture image");
                 if let Some(scene) = &mut self.scene {

@@ -14,6 +14,7 @@ use crate::{
 pub(crate) enum UserEvent {
     ResetView,
     SetTopology(Image<f32, 1>),
+    SetTopologyMasked(Image<f32, 1>, Vec<u8>),
     SetTexture(Image<u16, 1>),
     SetOrientation(Orientation),
     ResetOrientation,

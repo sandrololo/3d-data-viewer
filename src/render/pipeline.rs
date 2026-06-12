@@ -61,8 +61,8 @@ impl Pipeline {
             },
             fragment: None,
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
-                strip_index_format: Some(wgpu::IndexFormat::Uint32),
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
                 ..Default::default()
             },
             depth_stencil: Some(DepthBuffer::depth_stencil_state()),
