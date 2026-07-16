@@ -2,20 +2,20 @@ use image::{ExtendedColorType, ImageEncoder, codecs::png::CompressionType};
 use std::sync::Arc;
 
 use crate::{
-    events::SharedFuture,
+    SharedFuture,
     gpu_data::{DataSize, readback::GPUDataReadback},
 };
 
 pub type CaptureResult = Result<Vec<u8>, Arc<anyhow::Error>>;
 
-pub(crate) struct Capture {
+pub struct Capture {
     gpu_readback: GPUDataReadback<Vec<u8>>,
     window_size: DataSize,
     surface_format: wgpu::TextureFormat,
 }
 
 impl Capture {
-    pub(crate) fn new(
+    pub fn new(
         device: &wgpu::Device,
         window_size: DataSize,
         surface_format: wgpu::TextureFormat,
@@ -27,7 +27,7 @@ impl Capture {
         }
     }
 
-    pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: DataSize) {
+    pub fn resize(&mut self, device: &wgpu::Device, window_size: DataSize) {
         if self.window_size != window_size {
             self.gpu_readback
                 .set_buffer(Self::create_readback_buffer(device, &window_size));
@@ -50,7 +50,7 @@ impl Capture {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn write_to_channel(
+    pub fn write_to_channel(
         &self,
         device: Arc<wgpu::Device>,
         sender: futures::channel::oneshot::Sender<SharedFuture<CaptureResult>>,
@@ -58,11 +58,7 @@ impl Capture {
         sender.send(self.get(device)).unwrap();
     }
 
-    pub(crate) fn copy_texture(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        surface_texture: &wgpu::SurfaceTexture,
-    ) {
+    pub fn copy_texture(&self, encoder: &mut wgpu::CommandEncoder, color_texture: &wgpu::Texture) {
         if self.gpu_readback.has_pending_read() {
             return;
         }
@@ -73,7 +69,7 @@ impl Capture {
 
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture: &surface_texture.texture,
+                texture: color_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
                 aspect: wgpu::TextureAspect::All,
@@ -94,7 +90,7 @@ impl Capture {
         );
     }
 
-    pub(crate) fn get(&self, device: Arc<wgpu::Device>) -> SharedFuture<CaptureResult> {
+    pub fn get(&self, device: Arc<wgpu::Device>) -> SharedFuture<CaptureResult> {
         let surface_format = self.surface_format;
         let window_size = self.window_size.clone();
         self.gpu_readback.get(device, move |buffer| {

@@ -1,14 +1,10 @@
 use anyhow::anyhow;
 use imbuf::Image;
 use std::sync::Arc;
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-use winit::dpi::{PhysicalPosition, PhysicalSize};
 
-use crate::{events::SharedFuture, gpu_data::readback::GPUDataReadback};
+use crate::{SharedFuture, gpu_data::readback::GPUDataReadback};
 
 #[derive(Clone)]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct PixelValue {
     pub x: u32,
     pub y: u32,
@@ -19,52 +15,54 @@ pub struct PixelValue {
 /// Result type for pixel reads - must be Clone for Shared futures
 pub type PixelResult = Result<PixelValue, Arc<anyhow::Error>>;
 
-pub(crate) struct PixelPicker {
+pub struct PixelPicker {
     /// Texture that stores picking data (pixel_x, pixel_y) for each fragment
     picking_texture: wgpu::Texture,
     pub picking_texture_view: wgpu::TextureView,
     gpu_readback: GPUDataReadback<PixelValue>,
-    mouse_position: PhysicalPosition<f64>,
-    window_size: PhysicalSize<u32>,
+    /// Mouse position in physical pixels relative to the render target.
+    mouse_position: (f32, f32),
+    /// Render-target size in physical pixels.
+    target_size: (u32, u32),
 }
 
 impl PixelPicker {
-    pub(crate) const PICKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
+    pub const PICKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Uint;
 
-    pub(crate) fn new(device: &wgpu::Device, window_size: &PhysicalSize<u32>) -> Self {
+    pub fn new(device: &wgpu::Device, target_size: (u32, u32)) -> Self {
         let (picking_texture, picking_texture_view) =
-            Self::create_picking_texture(device, window_size);
+            Self::create_picking_texture(device, target_size);
         let readback_buffer = Self::create_readback_buffer(device);
         Self {
             picking_texture,
             picking_texture_view,
             gpu_readback: GPUDataReadback::new(readback_buffer),
-            mouse_position: PhysicalPosition::new(0.0, 0.0),
-            window_size: *window_size,
+            mouse_position: (0.0, 0.0),
+            target_size,
         }
     }
 
-    pub(crate) fn resize(&mut self, device: &wgpu::Device, window_size: &PhysicalSize<u32>) {
-        if &self.window_size != window_size {
+    pub fn resize(&mut self, device: &wgpu::Device, target_size: (u32, u32)) {
+        if self.target_size != target_size {
             let (picking_texture, picking_texture_view) =
-                Self::create_picking_texture(device, window_size);
+                Self::create_picking_texture(device, target_size);
             self.picking_texture = picking_texture;
             self.picking_texture_view = picking_texture_view;
-            self.window_size = *window_size;
+            self.target_size = target_size;
         }
     }
 
-    pub(crate) fn update_mouse_position(&mut self, position: PhysicalPosition<f64>) {
-        self.mouse_position = position;
+    pub fn update_mouse_position(&mut self, x: f32, y: f32) {
+        self.mouse_position = (x, y);
     }
 
     /// Copy the pixel at the current mouse position from the picking texture to the readback buffer.
-    pub(crate) fn copy_pixel_at_mouse(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub fn copy_pixel_at_mouse(&self, encoder: &mut wgpu::CommandEncoder) {
         if self.gpu_readback.has_pending_read() {
             return;
         }
-        let x = (self.mouse_position.x as u32).min(self.window_size.width.saturating_sub(1));
-        let y = (self.mouse_position.y as u32).min(self.window_size.height.saturating_sub(1));
+        let x = (self.mouse_position.0 as u32).min(self.target_size.0.saturating_sub(1));
+        let y = (self.mouse_position.1 as u32).min(self.target_size.1.saturating_sub(1));
 
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -89,18 +87,7 @@ impl PixelPicker {
         );
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn write_to_channel(
-        &self,
-        device: Arc<wgpu::Device>,
-        topology: Arc<Image<f32, 1>>,
-        texture: Arc<Image<u16, 1>>,
-        sender: futures::channel::oneshot::Sender<SharedFuture<PixelResult>>,
-    ) {
-        sender.send(self.get(device, topology, texture)).unwrap();
-    }
-
-    pub(crate) fn get(
+    pub fn get(
         &self,
         device: Arc<wgpu::Device>,
         topology: Arc<Image<f32, 1>>,
@@ -127,13 +114,13 @@ impl PixelPicker {
 
     fn create_picking_texture(
         device: &wgpu::Device,
-        window_size: &PhysicalSize<u32>,
+        target_size: (u32, u32),
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("picking_texture"),
             size: wgpu::Extent3d {
-                width: window_size.width.max(1),
-                height: window_size.height.max(1),
+                width: target_size.0.max(1),
+                height: target_size.1.max(1),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,

@@ -619,7 +619,7 @@ struct ScreenSizeUniform {
 }
 
 #[allow(dead_code)]
-pub(crate) struct Axes {
+pub struct Axes {
     // Grid lines (LineList)
     grid_pipeline: wgpu::RenderPipeline,
     grid_vertex_buffer: wgpu::Buffer,
@@ -647,7 +647,7 @@ pub(crate) struct Axes {
 }
 
 impl Axes {
-    pub(crate) fn new(
+    pub fn new(
         device: &Device,
         queue: &wgpu::Queue,
         surface_format: wgpu::TextureFormat,
@@ -662,10 +662,10 @@ impl Axes {
         let grid_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("grid_pipeline_layout"),
             bind_group_layouts: &[
-                &interaction.transformation.bind_group_layout,
-                &interaction.projection.bind_group_layout,
+                Some(&interaction.transformation.bind_group_layout),
+                Some(&interaction.projection.bind_group_layout),
             ],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let color_targets = [
@@ -702,7 +702,7 @@ impl Axes {
             },
             depth_stencil: Some(DepthBuffer::depth_stencil_state()),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -769,20 +769,20 @@ impl Axes {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("label_pipeline_layout"),
                 bind_group_layouts: &[
-                    &interaction.transformation.bind_group_layout, // group 0
-                    &interaction.projection.bind_group_layout,     // group 1
-                    &screen_size_bind_group_layout,                // group 2
-                    &font_atlas.bind_group_layout,                 // group 3
+                    Some(&interaction.transformation.bind_group_layout), // group 0
+                    Some(&interaction.projection.bind_group_layout),     // group 1
+                    Some(&screen_size_bind_group_layout),                // group 2
+                    Some(&font_atlas.bind_group_layout),                 // group 3
                 ],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         // Depth test: read (so labels are occluded by the image) but do not
         // write (so labels don't occlude each other or the grid).
         let label_depth_stencil = wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth32Float,
-            depth_write_enabled: false,
-            depth_compare: wgpu::CompareFunction::Less,
+            depth_write_enabled: Some(false),
+            depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         };
@@ -808,7 +808,7 @@ impl Axes {
             },
             depth_stencil: Some(label_depth_stencil),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -856,7 +856,7 @@ impl Axes {
     }
 
     /// Update the screen-size uniform (call on window resize).
-    pub(crate) fn update_screen_size(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
+    pub fn update_screen_size(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
         self.screen_width = width.max(1) as f32;
         self.screen_height = height.max(1) as f32;
         let data = ScreenSizeUniform {
@@ -867,7 +867,7 @@ impl Axes {
     }
 
     /// Rebuild the grid to match the loaded image dimensions.
-    pub(crate) fn update_grid(
+    pub fn update_grid(
         &mut self,
         device: &wgpu::Device,
         image_width: u32,
@@ -882,7 +882,7 @@ impl Axes {
     }
 
     /// Rebuild the grid with a new z-range, keeping the current image dimensions.
-    pub(crate) fn update_z_range(&mut self, device: &wgpu::Device, z_range: (f32, f32)) {
+    pub fn update_z_range(&mut self, device: &wgpu::Device, z_range: (f32, f32)) {
         self.z_range = z_range;
         if self.image_width > 0 && self.image_height > 0 {
             self.rebuild_geometry(device);
@@ -910,12 +910,7 @@ impl Axes {
     ///
     /// `mvp` is the current model-view-projection matrix used for rendering, needed to
     /// project world-space coordinates to screen-space for label placement.
-    pub(crate) fn update_labels(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        mvp: Mat4,
-    ) {
+    pub fn update_labels(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, mvp: Mat4) {
         if self.image_width == 0 || self.image_height == 0 {
             return;
         }
@@ -1009,11 +1004,7 @@ impl Axes {
         self.label_vertex_count = label_verts.len() as u32;
     }
 
-    pub(crate) fn draw<'a>(
-        &'a self,
-        renderpass: &mut RenderPass<'a>,
-        interaction: &'a Interaction,
-    ) {
+    pub fn draw<'a>(&'a self, renderpass: &mut RenderPass<'a>, interaction: &'a Interaction) {
         // 1. Draw grid lines
         renderpass.set_pipeline(&self.grid_pipeline);
         renderpass.set_bind_group(0, &interaction.transformation.bind_group, &[]);

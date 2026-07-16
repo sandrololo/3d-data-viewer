@@ -2,15 +2,109 @@ use std::sync::Arc;
 use wasm_bindgen::{JsValue, prelude::*};
 use winit::event_loop::EventLoop;
 
-use crate::{
-    ImageViewer3D,
-    events::{Event, UserEvent},
-    gpu_data::pixel_picker::PixelValue,
+use data_viewer_3d::{
     interaction::Orientation,
     render::pipeline::FragmentShaderVariant,
     scene::Overlay,
     tiff_decode::decode_tiff,
+    view::{projection::Translation, transformation::EulerRotationDeg},
 };
+
+use crate::{
+    ImageViewer3D,
+    events::{Event, UserEvent},
+};
+
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug)]
+pub struct WasmBindgenPixelRange {
+    start: u32,
+    end: u32,
+}
+
+#[wasm_bindgen]
+impl WasmBindgenPixelRange {
+    pub fn new(start: u32, end: u32) -> Self {
+        Self { start, end }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug)]
+pub struct OverlayColor([u8; 4]);
+
+#[wasm_bindgen]
+impl OverlayColor {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self([r, g, b, a])
+    }
+}
+
+#[wasm_bindgen(js_name = Overlay)]
+pub struct WasmOverlay {
+    pixelrange: Vec<WasmBindgenPixelRange>,
+    color: OverlayColor,
+}
+
+#[wasm_bindgen(js_class = Overlay)]
+impl WasmOverlay {
+    pub fn new(pixelrange: Vec<WasmBindgenPixelRange>, color: OverlayColor) -> Self {
+        Self { pixelrange, color }
+    }
+}
+
+impl From<&WasmOverlay> for Overlay {
+    fn from(overlay: &WasmOverlay) -> Self {
+        Overlay::new(
+            overlay.pixelrange.iter().map(|r| r.start..r.end).collect(),
+            overlay.color.0,
+        )
+    }
+}
+
+#[wasm_bindgen(js_name = Orientation)]
+#[derive(Copy, Clone)]
+pub struct WasmOrientation {
+    zoom: f32,
+    translation_x: f32,
+    translation_y: f32,
+    pitch: f32,
+    yaw: f32,
+    roll: f32,
+}
+
+#[wasm_bindgen(js_class = Orientation)]
+impl WasmOrientation {
+    pub fn new(zoom: f32, x: f32, y: f32, pitch: f32, yaw: f32, roll: f32) -> Self {
+        Self {
+            zoom,
+            translation_x: x,
+            translation_y: y,
+            pitch,
+            yaw,
+            roll,
+        }
+    }
+}
+
+impl From<WasmOrientation> for Orientation {
+    fn from(o: WasmOrientation) -> Self {
+        Orientation::new(
+            o.zoom,
+            Translation::new(o.translation_x, o.translation_y),
+            EulerRotationDeg::new(o.pitch, o.yaw, o.roll),
+        )
+    }
+}
+
+#[wasm_bindgen(js_name = PixelValue)]
+#[derive(Copy, Clone)]
+pub struct WasmPixelValue {
+    pub x: u32,
+    pub y: u32,
+    pub z: f32,
+    pub texture: u16,
+}
 
 #[wasm_bindgen]
 pub struct WasmViewer {
@@ -82,15 +176,20 @@ impl WasmViewer {
         self.send_event(UserEvent::SetTexture(image))
     }
 
-    pub async fn get_pixel_value(&self) -> Result<PixelValue, JsValue> {
+    pub async fn get_pixel_value(&self) -> Result<WasmPixelValue, JsValue> {
         let (sender, receiver) = futures::channel::oneshot::channel();
         self.send_event(UserEvent::GetPixel(sender))?;
-        let pixels = receiver
+        let pixel = receiver
             .await
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?
             .await
             .map_err(|e| JsValue::from_str(&format!("Error: {}", e)))?;
-        Ok(pixels)
+        Ok(WasmPixelValue {
+            x: pixel.x,
+            y: pixel.y,
+            z: pixel.z,
+            texture: pixel.texture,
+        })
     }
 
     pub async fn capture_image(&self) -> Result<Vec<u8>, JsValue> {
@@ -118,7 +217,8 @@ impl WasmViewer {
         ))
     }
 
-    pub fn set_overlays(&self, overlays: Vec<Overlay>) -> Result<(), JsValue> {
+    pub fn set_overlays(&self, overlays: Vec<WasmOverlay>) -> Result<(), JsValue> {
+        let overlays = overlays.iter().map(Overlay::from).collect::<Vec<_>>();
         self.send_event(UserEvent::SetOverlays(Arc::new(overlays)))
     }
 
@@ -134,8 +234,8 @@ impl WasmViewer {
         self.send_event(UserEvent::ZoomOut)
     }
 
-    pub fn set_orientation(&self, orientation: Orientation) -> Result<(), JsValue> {
-        self.send_event(UserEvent::SetOrientation(orientation))
+    pub fn set_orientation(&self, orientation: WasmOrientation) -> Result<(), JsValue> {
+        self.send_event(UserEvent::SetOrientation(orientation.into()))
     }
 
     pub fn reset_orientation(&self) -> Result<(), JsValue> {

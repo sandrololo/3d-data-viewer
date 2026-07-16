@@ -7,21 +7,21 @@ use crate::{
     render::depth_buffer::DepthBuffer, vertex_buffer::VertexBuffer,
 };
 
-#[derive(Debug)]
-pub(crate) enum FragmentShaderVariant {
+#[derive(Debug, Clone, Copy)]
+pub enum FragmentShaderVariant {
     Height,
     Texture,
     TurboColormap,
 }
 
-pub(crate) struct Pipeline {
+pub struct Pipeline {
     texture: wgpu::RenderPipeline,
     height: wgpu::RenderPipeline,
     turbo_colormap: wgpu::RenderPipeline,
 }
 
 impl Pipeline {
-    pub(crate) fn new(
+    pub fn new(
         device: &Device,
         surface_format: TextureFormat,
         texture_bind_group_layout: &BindGroupLayout,
@@ -37,12 +37,12 @@ impl Pipeline {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render_pipeline_layout"),
                 bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &image_info_bind_group_layout,
-                    &interaction.transformation.bind_group_layout,
-                    &interaction.projection.bind_group_layout,
+                    Some(texture_bind_group_layout),
+                    Some(image_info_bind_group_layout),
+                    Some(&interaction.transformation.bind_group_layout),
+                    Some(&interaction.projection.bind_group_layout),
                 ],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         // Two render targets: main color + picking texture
@@ -67,7 +67,7 @@ impl Pipeline {
             },
             depth_stencil: Some(DepthBuffer::depth_stencil_state()),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         };
 
@@ -90,7 +90,7 @@ impl Pipeline {
         }
     }
 
-    pub(crate) fn get(&self, variant: &FragmentShaderVariant) -> &RenderPipeline {
+    pub fn get(&self, variant: &FragmentShaderVariant) -> &RenderPipeline {
         match variant {
             FragmentShaderVariant::Height => &self.height,
             FragmentShaderVariant::Texture => &self.texture,

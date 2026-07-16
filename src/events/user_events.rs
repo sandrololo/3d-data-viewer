@@ -1,8 +1,8 @@
 use imbuf::Image;
 use std::sync::Arc;
 
-use crate::{
-    events::SharedFuture,
+use data_viewer_3d::{
+    SharedFuture,
     gpu_data::{CaptureResult, pixel_picker::PixelResult},
     interaction::Orientation,
     render::pipeline::FragmentShaderVariant,

@@ -1,6 +1,4 @@
 use glam::{Mat4, Vec2, Vec4};
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{BindGroupLayout, util::DeviceExt};
 
 /// Half-diagonal of a unit cube (√3). Used to pad the orthographic projection
@@ -8,7 +6,6 @@ use wgpu::{BindGroupLayout, util::DeviceExt};
 const UNIT_CUBE_HALF_DIAGONAL: f32 = 1.732_050_8; // 
 
 #[derive(Clone, Copy)]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct Translation {
     pub x: f32,
     pub y: f32,
@@ -20,14 +17,14 @@ impl From<Translation> for Vec2 {
     }
 }
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl Translation {
+    #[allow(dead_code)]
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 }
 
-pub(crate) struct Projection {
+pub struct Projection {
     initial_position: Vec2,
     initial_delta: Vec2,
     current_delta: Vec2,
@@ -39,7 +36,7 @@ pub(crate) struct Projection {
 }
 
 impl Projection {
-    pub(crate) fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device) -> Self {
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("projection_buffer"),
             contents: bytemuck::cast_slice(&Mat4::IDENTITY.to_cols_array()),
@@ -66,7 +63,7 @@ impl Projection {
         }
     }
 
-    pub(crate) fn update_gpu(&self, queue: &wgpu::Queue) {
+    pub fn update_gpu(&self, queue: &wgpu::Queue) {
         queue.write_buffer(
             &self.buffer,
             0,
@@ -74,18 +71,18 @@ impl Projection {
         );
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.initial_position = Vec2::ZERO;
         self.initial_delta = Vec2::ZERO;
         self.current_delta = Vec2::ZERO;
         self.zoom = 1.0;
     }
 
-    pub(crate) fn move_by(&mut self, t: Translation) {
+    pub fn move_by(&mut self, t: Translation) {
         self.current_delta = t.into();
     }
 
-    pub(crate) fn start_move(&mut self, position: Vec2) {
+    pub fn start_move(&mut self, position: Vec2) {
         self.initial_position = position;
         self.initial_delta = self.current_delta;
     }
@@ -102,12 +99,7 @@ impl Projection {
         Vec2::new(dx * UNIT_CUBE_HALF_DIAGONAL, dy * UNIT_CUBE_HALF_DIAGONAL)
     }
 
-    pub(crate) fn change_position(
-        &mut self,
-        position: Vec2,
-        screen_width: u32,
-        screen_height: u32,
-    ) {
+    pub fn change_position(&mut self, position: Vec2, screen_width: u32, screen_height: u32) {
         let screen_w = screen_width.saturating_sub(1).max(1) as f32;
         let screen_h = screen_height.saturating_sub(1).max(1) as f32;
         let ndc_delta = position - self.initial_position;
@@ -120,15 +112,15 @@ impl Projection {
         self.current_delta = world_delta + self.initial_delta;
     }
 
-    pub(crate) fn zoom(&mut self, zoom_factor: f32) {
+    pub fn zoom(&mut self, zoom_factor: f32) {
         self.zoom = zoom_factor;
     }
 
-    pub(crate) fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
+    pub fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.aspect_ratio = aspect_ratio;
     }
 
-    pub(crate) fn get_current(&self) -> Mat4 {
+    pub fn get_current(&self) -> Mat4 {
         let x_min = -self.zoom - self.current_delta.x;
         let x_max = self.zoom - self.current_delta.x;
         let y_min = -self.zoom - self.current_delta.y;

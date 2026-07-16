@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use imbuf::Image;
 use tiff::decoder::{Decoder, DecodingResult, Limits};
 
-pub(crate) trait TiffDecodable: Sized {
+pub trait TiffDecodable: Sized {
     fn extract(result: DecodingResult) -> anyhow::Result<Vec<Self>>;
 }
 
@@ -26,7 +26,10 @@ impl TiffDecodable for u16 {
     }
 }
 
-pub(crate) fn decode_tiff<T: TiffDecodable + imbuf::PixelTypePrimitive, R: std::io::Read + std::io::Seek>(
+pub fn decode_tiff<
+    T: TiffDecodable + imbuf::PixelTypePrimitive,
+    R: std::io::Read + std::io::Seek,
+>(
     reader: R,
 ) -> anyhow::Result<Image<T, 1>> {
     let mut decoder = Decoder::new(reader)?.with_limits(Limits::unlimited());

@@ -1,7 +1,7 @@
 use imbuf::Image;
 use std::sync::Arc;
 
-pub(crate) struct TopologyTexture {
+pub struct TopologyTexture {
     pub data: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub image: Arc<Image<f32, 1>>,
@@ -9,7 +9,7 @@ pub(crate) struct TopologyTexture {
 }
 
 impl TopologyTexture {
-    pub(crate) fn new(image: Arc<Image<f32, 1>>, device: &wgpu::Device) -> Self {
+    pub fn new(image: Arc<Image<f32, 1>>, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image.width().get(),
             height: image.height().get(),
@@ -36,7 +36,7 @@ impl TopologyTexture {
         }
     }
 
-    pub(crate) fn write_to_queue(&self, queue: &wgpu::Queue) {
+    pub fn write_to_queue(&self, queue: &wgpu::Queue) {
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &self.data,

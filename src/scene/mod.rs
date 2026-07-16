@@ -2,13 +2,13 @@ use imbuf::Image;
 use std::sync::Arc;
 use wgpu::{BindGroup, Queue};
 
-pub(crate) use crate::scene::{overlay::*, texture_image::*, topology::*};
+pub use crate::scene::{overlay::*, texture_image::*, topology::*};
 
 mod overlay;
 mod texture_image;
 mod topology;
 
-pub(crate) struct Scene {
+pub struct Scene {
     overlay: OverlayTexture,
     topology: TopologyTexture,
     texture: TextureImage,
@@ -16,7 +16,7 @@ pub(crate) struct Scene {
 }
 
 impl Scene {
-    pub(crate) fn new_topology(
+    pub fn new_topology(
         topology: Image<f32, 1>,
         device: &wgpu::Device,
         queue: &Queue,
@@ -52,34 +52,34 @@ impl Scene {
         }
     }
 
-    pub(crate) fn get_topology_image(&self) -> Arc<Image<f32, 1>> {
+    pub fn get_topology_image(&self) -> Arc<Image<f32, 1>> {
         self.topology.image.clone()
     }
 
-    pub(crate) fn set_texture(&mut self, data: Image<u16, 1>, queue: &Queue) {
+    pub fn set_texture(&mut self, data: Image<u16, 1>, queue: &Queue) {
         self.texture.set_image(data);
         self.texture.write_to_queue(queue);
     }
 
-    pub(crate) fn get_texture_image(&self) -> Option<Arc<Image<u16, 1>>> {
+    pub fn get_texture_image(&self) -> Option<Arc<Image<u16, 1>>> {
         self.texture.image.clone()
     }
 
-    pub(crate) fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>, queue: &Queue) {
+    pub fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>, queue: &Queue) {
         self.overlay.set_overlays(overlays);
         self.overlay.write_to_queue(queue);
     }
 
-    pub(crate) fn clear_overlays(&mut self, queue: &Queue) {
+    pub fn clear_overlays(&mut self, queue: &Queue) {
         self.overlay.set_overlays(Arc::new(Vec::new()));
         self.overlay.write_to_queue(queue);
     }
 
-    pub(crate) fn get_bind_group(&self) -> &BindGroup {
+    pub fn get_bind_group(&self) -> &BindGroup {
         &self.bind_group
     }
 
-    pub(crate) fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("texture_bind_group_layout"),
             entries: &[

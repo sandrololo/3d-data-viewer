@@ -10,7 +10,7 @@ const GLYPHS: &[char] = &[
 
 /// Metrics for a single rasterised glyph.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct GlyphInfo {
+pub struct GlyphInfo {
     /// UV rect in the atlas: (u_min, v_min, u_max, v_max).
     pub uv: [f32; 4],
     /// Size of the glyph bitmap in pixels.
@@ -24,7 +24,7 @@ pub(crate) struct GlyphInfo {
 }
 
 #[allow(dead_code)]
-pub(crate) struct FontAtlas {
+pub struct FontAtlas {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
@@ -38,7 +38,7 @@ pub(crate) struct FontAtlas {
 }
 
 impl FontAtlas {
-    pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let font_data = include_bytes!("../DejaVuSansMono.ttf");
         let font = fontdue::Font::from_bytes(font_data as &[u8], fontdue::FontSettings::default())
             .expect("failed to parse embedded font");
@@ -198,14 +198,14 @@ impl FontAtlas {
     }
 
     /// Look up glyph metrics for a character (falls back to space).
-    pub(crate) fn glyph(&self, ch: char) -> &GlyphInfo {
+    pub fn glyph(&self, ch: char) -> &GlyphInfo {
         self.glyphs
             .get(&ch)
             .unwrap_or_else(|| self.glyphs.get(&' ').unwrap())
     }
 
     /// Compute the total pixel width of a string.
-    pub(crate) fn text_width(&self, text: &str) -> f32 {
+    pub fn text_width(&self, text: &str) -> f32 {
         text.chars().map(|ch| self.glyph(ch).advance).sum()
     }
 }

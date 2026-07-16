@@ -1,66 +1,22 @@
 use crate::gpu_data::DataSize;
-use std::{
-    ops::{Deref, Range},
-    sync::Arc,
-};
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
+use std::{ops::Range, sync::Arc};
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-#[derive(Copy, Clone, Debug)]
-pub struct WasmBindgenPixelRange {
-    start: u32,
-    end: u32,
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-impl WasmBindgenPixelRange {
-    pub fn new(start: u32, end: u32) -> Self {
-        Self { start, end }
-    }
-}
-
-impl From<WasmBindgenPixelRange> for Range<u32> {
-    fn from(range: WasmBindgenPixelRange) -> Self {
-        range.start..range.end
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub struct OverlayColor([u8; 4]);
-
-impl Deref for OverlayColor {
-    type Target = [u8; 4];
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-impl OverlayColor {
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self([r, g, b, a])
-    }
-}
-
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+/// A coloured overlay region, expressed as flat pixel-index ranges (`y*width + x`).
+/// This is the same range model imanot/imask uses for 2D layers, so a single layer
+/// definition can drive both the 2D mask stack and this 3D overlay texture.
+#[derive(Clone, Debug)]
 pub struct Overlay {
-    pixelrange: Vec<WasmBindgenPixelRange>,
-    color: OverlayColor,
+    pub pixelrange: Vec<Range<u32>>,
+    pub color: [u8; 4],
 }
 
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
 impl Overlay {
-    pub fn new(pixelrange: Vec<WasmBindgenPixelRange>, color: OverlayColor) -> Self {
+    pub fn new(pixelrange: Vec<Range<u32>>, color: [u8; 4]) -> Self {
         Self { pixelrange, color }
     }
 }
 
-pub(crate) struct OverlayTexture {
+pub struct OverlayTexture {
     texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub overlays: Arc<Vec<Overlay>>,
@@ -68,7 +24,7 @@ pub(crate) struct OverlayTexture {
 }
 
 impl OverlayTexture {
-    pub(crate) fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
+    pub fn new(image_size: &DataSize, device: &wgpu::Device) -> Self {
         let size = wgpu::Extent3d {
             width: image_size.width.get(),
             height: image_size.height.get(),
@@ -84,11 +40,11 @@ impl OverlayTexture {
         }
     }
 
-    pub(crate) fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
+    pub fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
         self.overlays = overlays;
     }
 
-    pub(crate) fn write_to_queue(&self, queue: &wgpu::Queue) {
+    pub fn write_to_queue(&self, queue: &wgpu::Queue) {
         let overlay_data = self.create_overlay_data();
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -107,16 +63,13 @@ impl OverlayTexture {
         );
     }
 
-    /// Creates a texture data array where each pixel (u32 index) maps to an RGBA color
-    /// Returns a vec where each 4 bytes represents RGBA for that pixel index
-    /// If a pixel has no overlay, it's [0, 0, 0, 0]
     fn create_overlay_data(&self) -> Vec<u8> {
         let total_pixels = (self.size.width * self.size.height) as usize;
         let mut data = vec![0u8; total_pixels * 4];
 
         for overlay in self.overlays.iter() {
             for range in &overlay.pixelrange {
-                for pixel_idx in Range::<u32>::from(*range) {
+                for pixel_idx in range.clone() {
                     let idx = (pixel_idx as usize) * 4;
                     if idx + 3 < data.len() {
                         data[idx] = overlay.color[0];

@@ -1,14 +1,8 @@
 use glam::{Vec2, Vec3};
-use log::error;
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{Device, Queue};
-use winit::{dpi::PhysicalSize, event::WindowEvent};
 
 use crate::{
-    keyboard::Keyboard,
     mip::Mip,
-    mouse::Mouse,
     render::pipeline::FragmentShaderVariant,
     view::{
         projection::{Projection, Translation},
@@ -16,15 +10,15 @@ use crate::{
     },
 };
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+const SCROLL_ZOOM_SENSITIVITY: f32 = 0.1;
+
+#[derive(Clone, Copy)]
 pub struct Orientation {
     pub zoom: f32,
     pub translation: Translation,
     pub rotation: EulerRotationDeg,
 }
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-#[allow(dead_code)]
 impl Orientation {
     pub fn new(zoom: f32, translation: Translation, rotation: EulerRotationDeg) -> Self {
         Self {
@@ -42,10 +36,9 @@ enum DragMode {
     Rotate,
 }
 
-pub(crate) struct Interaction {
-    mouse: Mouse,
-    keyboard: Keyboard,
+pub struct Interaction {
     drag_mode: DragMode,
+    zoom_level: f32,
     pub mip: Mip,
     pub transformation: Transformation,
     pub projection: Projection,
@@ -53,162 +46,104 @@ pub(crate) struct Interaction {
 }
 
 impl Interaction {
-    pub(crate) fn new(device: &Device, window_size: &PhysicalSize<u32>) -> Self {
-        let transformation = Transformation::new(&device);
-        let mut projection = Projection::new(&device);
-        projection.update_aspect_ratio(window_size.width as f32 / window_size.height as f32);
+    pub fn new(device: &Device, aspect_ratio: f32) -> Self {
+        let transformation = Transformation::new(device);
+        let mut projection = Projection::new(device);
+        projection.update_aspect_ratio(aspect_ratio);
 
         Self {
-            mouse: Mouse::default(),
-            keyboard: Keyboard::default(),
             drag_mode: DragMode::None,
-            mip: Mip::new(&device),
+            zoom_level: 1.0,
+            mip: Mip::new(device),
             transformation,
             projection,
             fragment_shader_variant: FragmentShaderVariant::Height,
         }
     }
 
-    pub(crate) fn handle_event(
-        &mut self,
-        request_redraw: &mut bool,
-        event: &WindowEvent,
-        window_size: PhysicalSize<u32>,
-    ) {
-        match event {
-            WindowEvent::Resized(size) => {
-                *request_redraw = true;
-                self.projection
-                    .update_aspect_ratio(size.width as f32 / size.height as f32);
-            }
-            WindowEvent::CursorMoved {
-                device_id: _,
-                position,
-            } => {
-                self.mouse.register_move_event(*position);
-                if self.mouse.is_left_button_pressed() {
-                    match self.mouse.get_device_coordinates(window_size) {
-                        Ok(new_position) => {
-                            if self.mouse.is_pointer_inside(Vec2::from(new_position)) {
-                                *request_redraw = true;
-                                let target_mode = if self.keyboard.is_control_pressed() {
-                                    DragMode::Pan
-                                } else {
-                                    DragMode::Rotate
-                                };
+    /// Begin a drag at the given normalized device coordinate. `pan` selects panning
+    /// (e.g. Ctrl/Cmd held) versus arc-ball rotation.
+    pub fn begin_drag(&mut self, ndc: Vec2, pan: bool) {
+        self.drag_mode = if pan {
+            self.projection.start_move(ndc);
+            DragMode::Pan
+        } else {
+            self.transformation.start_move(Vec3::from((ndc, 1.0)));
+            DragMode::Rotate
+        };
+    }
 
-                                if self.drag_mode != target_mode {
-                                    self.drag_mode = target_mode;
-                                    match self.drag_mode {
-                                        DragMode::Pan => self.projection.start_move(new_position),
-                                        DragMode::Rotate => self
-                                            .transformation
-                                            .start_move(Vec3::from((new_position, 1.0))),
-                                        DragMode::None => (),
-                                    }
-                                } else if self.drag_mode == DragMode::Pan {
-                                    self.projection.change_position(
-                                        new_position,
-                                        window_size.width,
-                                        window_size.height,
-                                    );
-                                } else {
-                                    self.transformation.rotate(Vec3::from((new_position, 1.0)));
-                                }
-                            }
-                        }
-                        Err(e) => error!("Failed to calculate pointer position: {}", e),
-                    }
-                }
-            }
-            WindowEvent::MouseInput {
-                device_id: _,
-                state,
-                button,
-            } => {
-                self.mouse.register_button_event(button, state);
-                if self.mouse.is_left_button_pressed() {
-                    match self.mouse.get_device_coordinates(window_size) {
-                        Ok(pos) => {
-                            self.drag_mode = if self.keyboard.is_control_pressed() {
-                                self.projection.start_move(pos);
-                                DragMode::Pan
-                            } else {
-                                self.transformation.start_move(Vec3::from((pos, 1.0)));
-                                DragMode::Rotate
-                            };
-                        }
-                        Err(e) => error!("Failed to calculate pointer position: {}", e),
-                    }
-                } else {
-                    self.drag_mode = DragMode::None;
-                }
-            }
-            WindowEvent::MouseWheel {
-                device_id: _,
-                delta,
-                phase: _,
-            } => {
-                *request_redraw = true;
-                self.mouse.register_scroll_event(delta);
-                self.projection.zoom(self.mouse.get_zoom());
-                self.mip.set_zoom(self.mouse.get_zoom());
-            }
-            WindowEvent::KeyboardInput {
-                device_id: _,
-                event,
-                is_synthetic: _,
-            } => {
-                self.keyboard.register_event(event.clone());
-            }
-            _ => (),
+    /// `size` is the render-target size in physical pixels.
+    pub fn drag(&mut self, ndc: Vec2, size: (u32, u32)) {
+        match self.drag_mode {
+            DragMode::Pan => self.projection.change_position(ndc, size.0, size.1),
+            DragMode::Rotate => self.transformation.rotate(Vec3::from((ndc, 1.0))),
+            DragMode::None => {}
         }
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub fn end_drag(&mut self) {
+        self.drag_mode = DragMode::None;
+    }
+
+    /// `delta_y` is positive when scrolling up (zoom in).
+    pub fn scroll(&mut self, delta_y: f32) {
+        self.zoom_level *= -SCROLL_ZOOM_SENSITIVITY * delta_y + 1.0;
+        self.apply_zoom();
+    }
+
+    pub fn zoom_in(&mut self) {
+        self.zoom_level *= 0.9;
+        self.apply_zoom();
+    }
+
+    pub fn zoom_out(&mut self) {
+        self.zoom_level *= 1.1;
+        self.apply_zoom();
+    }
+
+    fn apply_zoom(&mut self) {
+        self.zoom_level = self.zoom_level.clamp(0.05, 20.0);
+        self.projection.zoom(self.zoom_level);
+        self.mip.set_zoom(self.zoom_level);
+    }
+
+    pub fn reset(&mut self) {
         self.reset_orientation();
         self.mip.reset();
     }
 
-    pub(crate) fn set_orientation(&mut self, orientation: Orientation) {
+    pub fn set_orientation(&mut self, orientation: Orientation) {
         self.drag_mode = DragMode::None;
-        self.mouse.set_zoom(orientation.zoom);
+        self.zoom_level = orientation.zoom;
         self.projection.zoom(orientation.zoom);
         self.mip.set_zoom(orientation.zoom);
         self.projection.move_by(orientation.translation);
         self.transformation.rotate_euler(orientation.rotation);
     }
 
-    pub(crate) fn reset_orientation(&mut self) {
+    pub fn reset_orientation(&mut self) {
         self.projection.reset();
         self.transformation.reset();
         self.drag_mode = DragMode::None;
-        self.mouse.reset_zoom();
-        self.mip.set_zoom(self.mouse.get_zoom());
+        self.zoom_level = 1.0;
+        self.mip.set_zoom(self.zoom_level);
     }
 
-    pub(crate) fn zoom_in(&mut self) {
-        self.mouse.zoom_in();
-        self.projection.zoom(self.mouse.get_zoom());
-        self.mip.set_zoom(self.mouse.get_zoom());
+    pub fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
+        self.projection.update_aspect_ratio(aspect_ratio);
     }
 
-    pub(crate) fn zoom_out(&mut self) {
-        self.mouse.zoom_out();
-        self.projection.zoom(self.mouse.get_zoom());
-        self.mip.set_zoom(self.mouse.get_zoom());
-    }
-
-    pub(crate) fn update_gpu(&self, queue: &Queue) {
+    pub fn update_gpu(&self, queue: &Queue) {
         self.transformation.update_gpu(queue);
         self.projection.update_gpu(queue);
     }
 
-    pub(crate) fn get_fragment_shader_variant(&self) -> &FragmentShaderVariant {
+    pub fn get_fragment_shader_variant(&self) -> &FragmentShaderVariant {
         &self.fragment_shader_variant
     }
 
-    pub(crate) fn set_fragment_shader_variant(&mut self, variant: FragmentShaderVariant) {
+    pub fn set_fragment_shader_variant(&mut self, variant: FragmentShaderVariant) {
         self.fragment_shader_variant = variant;
     }
 }
