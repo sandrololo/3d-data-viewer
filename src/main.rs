@@ -110,17 +110,11 @@ impl State {
         let texture_bind_group_layout = Scene::create_bind_group_layout(&device);
 
         let size = window.inner_size();
-        let size = (size.width.max(1), size.height.max(1));
-        let interaction = Interaction::new(&device, size.0 as f32 / size.1 as f32);
-        let pixel_picker = PixelPicker::new(&device, size);
-        let image_capture = Capture::new(
-            &device,
-            DataSize {
-                width: NonZeroU32::new(size.0).expect("Takes the maximum of value and 1"),
-                height: NonZeroU32::new(size.1).expect("Takes the maximum of value and 1"),
-            },
-            surface_format,
-        );
+        let width = NonZeroU32::new(size.width.max(1)).expect("Takes the maximum of value and 1");
+        let height = NonZeroU32::new(size.height.max(1)).expect("Takes the maximum of value and 1");
+        let interaction = Interaction::new(&device, width.get() as f32 / height.get() as f32);
+        let pixel_picker = PixelPicker::new(&device, (width.get(), height.get()));
+        let image_capture = Capture::new(&device, DataSize { width, height }, surface_format);
         let percentile_range_buffer = TopologyPercentileRangeBuffer::new(&device);
         let texture_range_buffer = TextureImageRangeBuffer::new(&device);
 
@@ -132,7 +126,7 @@ impl State {
             &interaction,
             &percentile_range_buffer,
             &texture_range_buffer,
-            size,
+            (width.get(), height.get()),
         );
 
         let mut state = State {
@@ -153,7 +147,7 @@ impl State {
             texture_range_buffer,
             scene: None,
         };
-        state.configure_surface(PhysicalSize::new(size.0, size.1));
+        state.configure_surface(PhysicalSize::new(width.get(), height.get()));
         Ok(state)
     }
 
