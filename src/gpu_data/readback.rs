@@ -60,15 +60,14 @@ impl<T: Clone + Send + 'static> GPUDataReadback<T> {
                     .map_err(|e| anyhow!("Buffer map error: {:?}", e))?;
 
                 let output_data = buffer.get_mapped_range(..);
-                let result = extract_result(&output_data)?;
+                let result = extract_result(&output_data);
                 drop(output_data);
+                // Must also run when extraction fails, or the readback wedges forever.
                 buffer.unmap();
-
-                // Clear the pending read so next call starts fresh
                 *pending_read
                     .lock()
                     .map_err(|e| anyhow!("Lock error: {:?}", e))? = None;
-                Ok(result)
+                result
             });
 
         let shared = future.shared();
