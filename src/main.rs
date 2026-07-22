@@ -5,7 +5,8 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    dpi::PhysicalSize,
+    event::{ElementState, MouseButton, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
@@ -27,24 +28,15 @@ mod wasm_commands {
 }
 
 mod events;
-mod gpu_data;
-mod index_buffer;
-mod interaction;
 mod keyboard;
-mod mip;
 mod mouse;
-mod render;
-mod scene;
-mod tiff_decode;
-mod vertex_buffer;
-mod view;
 #[cfg(target_arch = "wasm32")]
 mod wasm_viewer;
 
 use std::num::NonZeroU32;
 
-use crate::{
-    events::{ErrorEvent, Event, SharedFuture, SystemEvent, UserEvent},
+use data_viewer_3d::{
+    SharedFuture,
     gpu_data::{
         Capture, DataSize, pixel_picker::PixelPicker, texture_image_range::TextureImageRangeBuffer,
         topology_percentile_range::TopologyPercentileRangeBuffer,
@@ -52,6 +44,12 @@ use crate::{
     interaction::Interaction,
     render::Renderer,
     scene::Scene,
+};
+
+use crate::{
+    events::{ErrorEvent, Event, SystemEvent, UserEvent},
+    keyboard::Keyboard,
+    mouse::Mouse,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -70,9 +68,14 @@ struct State {
     window: Arc<Window>,
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
+    surface: wgpu::Surface<'static>,
+    surface_format: wgpu::TextureFormat,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     renderer: Renderer,
     interaction: Interaction,
+    mouse: Mouse,
+    keyboard: Keyboard,
+    dragging: bool,
     pixel_picker: PixelPicker,
     image_capture: Capture,
     percentile_range_buffer: TopologyPercentileRangeBuffer,
@@ -82,7 +85,8 @@ struct State {
 
 impl State {
     async fn new(window: Arc<Window>) -> Result<State, InitializationError> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await?;
@@ -105,46 +109,93 @@ impl State {
 
         let texture_bind_group_layout = Scene::create_bind_group_layout(&device);
 
-        let interaction = Interaction::new(&device, &window.inner_size());
-        let pixel_picker = PixelPicker::new(&device, &window.inner_size());
-        let image_capture = Capture::new(
-            &device,
-            DataSize {
-                width: NonZeroU32::new(window.inner_size().width.max(1))
-                    .expect("Takes the maximum of value and 1"),
-                height: NonZeroU32::new(window.inner_size().height.max(1))
-                    .expect("Takes the maximum of value and 1"),
-            },
-            surface_format,
-        );
+        let size = window.inner_size();
+        let width = NonZeroU32::new(size.width.max(1)).expect("Takes the maximum of value and 1");
+        let height = NonZeroU32::new(size.height.max(1)).expect("Takes the maximum of value and 1");
+        let interaction = Interaction::new(&device, width.get() as f32 / height.get() as f32);
+        let pixel_picker = PixelPicker::new(&device, (width.get(), height.get()));
+        let image_capture = Capture::new(&device, DataSize { width, height }, surface_format);
         let percentile_range_buffer = TopologyPercentileRangeBuffer::new(&device);
         let texture_range_buffer = TextureImageRangeBuffer::new(&device);
 
         let renderer = Renderer::new(
-            &window,
             device.clone(),
             queue.clone(),
             &texture_bind_group_layout,
-            surface,
-            surface_format,
+            surface_format.add_srgb_suffix(),
             &interaction,
             &percentile_range_buffer,
             &texture_range_buffer,
+            (width.get(), height.get()),
         );
 
-        Ok(State {
+        let mut state = State {
             window,
             device,
             queue,
+            surface,
+            surface_format,
             texture_bind_group_layout,
             renderer,
             interaction,
+            mouse: Mouse::default(),
+            keyboard: Keyboard::default(),
+            dragging: false,
             pixel_picker,
             image_capture,
             percentile_range_buffer,
             texture_range_buffer,
             scene: None,
-        })
+        };
+        state.configure_surface(PhysicalSize::new(width.get(), height.get()));
+        Ok(state)
+    }
+
+    fn configure_surface(&mut self, window_size: PhysicalSize<u32>) {
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            format: self.surface_format,
+            // Request compatibility with the sRGB-format texture view we're going to create later.
+            view_formats: vec![self.surface_format.add_srgb_suffix()],
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            width: window_size.width,
+            height: window_size.height,
+            desired_maximum_frame_latency: 2,
+            present_mode: wgpu::PresentMode::AutoVsync,
+        };
+        self.surface.configure(&self.device, &surface_config);
+    }
+
+    fn render(&mut self) {
+        let Some(scene) = &self.scene else {
+            return;
+        };
+        let surface_texture = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            other => {
+                log::warn!("Skipping frame, no surface texture: {:?}", other);
+                return;
+            }
+        };
+        let surface_view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor {
+                // Without add_srgb_suffix() the image we will be working with
+                // might not be "gamma correct".
+                format: Some(self.surface_format.add_srgb_suffix()),
+                ..Default::default()
+            });
+        self.renderer.render(
+            &surface_view,
+            &surface_texture.texture,
+            &self.interaction,
+            &self.pixel_picker,
+            &self.image_capture,
+            scene,
+        );
+        self.window.pre_present_notify();
+        surface_texture.present();
     }
 
     fn apply_user_event(&mut self, event: UserEvent) {
@@ -157,20 +208,28 @@ impl State {
                 if let Some(scene) = &self.scene
                     && let Some(texture_image) = scene.get_texture_image()
                 {
-                    self.pixel_picker.write_to_channel(
-                        self.device.clone(),
-                        scene.get_topology_image(),
-                        texture_image,
-                        sender,
-                    );
+                    if sender
+                        .send(self.pixel_picker.get(
+                            self.device.clone(),
+                            scene.get_topology_image(),
+                            texture_image,
+                        ))
+                        .is_err()
+                    {
+                        log::error!("Failed to return pixel value");
+                    }
                 } else {
                     send_err(sender, "Texture not initialized")
                 }
             }
             UserEvent::CaptureImage(sender) => {
                 if self.scene.is_some() {
-                    self.image_capture
-                        .write_to_channel(self.device.clone(), sender)
+                    if sender
+                        .send(self.image_capture.get(self.device.clone()))
+                        .is_err()
+                    {
+                        log::error!("Failed to return capture");
+                    }
                 } else {
                     send_err(sender, "Texture not initialized");
                 }
@@ -221,9 +280,11 @@ impl State {
                 self.percentile_range_buffer
                     .update_data(&self.queue, data.buffer());
 
-                self.interaction
-                    .mip
-                    .set_image_masked(data.dimensions().into(), &mask, &self.device);
+                self.interaction.mip.set_image_masked(
+                    data.dimensions().into(),
+                    &mask,
+                    &self.device,
+                );
 
                 self.renderer
                     .update_axes_origin(data.dimensions(), self.percentile_range_buffer.z_range());
@@ -367,33 +428,27 @@ impl ApplicationHandler<Event> for ImageViewer3D {
             log::warn!("State is None, ignoring event");
             return;
         };
+        let window_size = app_state.window.inner_size();
         let mut request_redraw = false;
-        app_state.interaction.handle_event(
-            &mut request_redraw,
-            &event,
-            app_state.window.inner_size(),
-        );
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                if let Some(scene) = &app_state.scene {
-                    app_state.renderer.render(
-                        app_state.window.clone(),
-                        &app_state.interaction,
-                        &app_state.pixel_picker,
-                        &app_state.image_capture,
-                        scene,
-                    );
-                }
+                app_state.render();
             }
             WindowEvent::Resized(size) => {
                 if size.width > 0 && size.height > 0 {
                     request_redraw = true;
-                    app_state.renderer.configure_surface(size);
-                    app_state.pixel_picker.resize(&app_state.device, &size);
+                    app_state.configure_surface(size);
+                    app_state.renderer.resize((size.width, size.height));
+                    app_state
+                        .interaction
+                        .update_aspect_ratio(size.width as f32 / size.height as f32);
+                    app_state
+                        .pixel_picker
+                        .resize(&app_state.device, (size.width, size.height));
                     app_state.image_capture.resize(
                         &app_state.device,
                         DataSize {
@@ -406,7 +461,48 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                app_state.pixel_picker.update_mouse_position(position);
+                app_state.mouse.register_move_event(position);
+                app_state
+                    .pixel_picker
+                    .update_mouse_position(position.x as f32, position.y as f32);
+                if app_state.dragging {
+                    match app_state.mouse.get_device_coordinates(window_size) {
+                        Ok(ndc) => {
+                            if app_state.mouse.is_pointer_inside(ndc) {
+                                request_redraw = true;
+                                app_state
+                                    .interaction
+                                    .drag(ndc, (window_size.width, window_size.height));
+                            }
+                        }
+                        Err(e) => log::error!("Failed to calculate pointer position: {}", e),
+                    }
+                }
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == MouseButton::Left {
+                    if state == ElementState::Pressed {
+                        match app_state.mouse.get_device_coordinates(window_size) {
+                            Ok(ndc) => {
+                                app_state
+                                    .interaction
+                                    .begin_drag(ndc, app_state.keyboard.is_control_pressed());
+                                app_state.dragging = true;
+                            }
+                            Err(e) => log::error!("Failed to calculate pointer position: {}", e),
+                        }
+                    } else {
+                        app_state.interaction.end_drag();
+                        app_state.dragging = false;
+                    }
+                }
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                request_redraw = true;
+                app_state.interaction.scroll(Mouse::scroll_delta(&delta));
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                app_state.keyboard.register_event(event);
             }
             _ => (),
         }
@@ -426,12 +522,12 @@ impl ApplicationHandler<Event> for ImageViewer3D {
                 #[cfg(target_arch = "wasm32")]
                 {
                     // Resize first while we still own the event
-                    state.renderer.configure_surface(state.window.inner_size());
-                    // Update projection aspect ratio to match viewport
-                    state.interaction.projection.update_aspect_ratio(
-                        state.window.inner_size().width as f32
-                            / state.window.inner_size().height as f32,
-                    );
+                    let size = state.window.inner_size();
+                    state.configure_surface(size);
+                    state.renderer.resize((size.width, size.height));
+                    state
+                        .interaction
+                        .update_aspect_ratio(size.width as f32 / size.height as f32);
                     // Store window reference for JavaScript to request redraws
                     wasm_commands::set_window(state.window.clone());
                 }
@@ -461,17 +557,16 @@ impl ApplicationHandler<Event> for ImageViewer3D {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> anyhow::Result<()> {
-    use crate::gpu_data::TopologyData;
-
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
         .format_timestamp_secs()
         .init();
 
-    let data = TopologyData::from_file("example-img.tiff").unwrap();
+    let file = std::fs::File::open("example-img.tiff")?;
+    let data = data_viewer_3d::tiff_decode::decode_tiff::<f32, _>(file)?;
     let event_loop = EventLoop::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
     proxy
-        .send_event(UserEvent::SetTopology(data.0).into())
+        .send_event(UserEvent::SetTopology(data).into())
         .map_err(|e| anyhow!("Error: {}", e))?;
 
     let mut app = ImageViewer3D::new(&event_loop);

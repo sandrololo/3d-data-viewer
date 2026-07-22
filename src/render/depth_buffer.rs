@@ -1,18 +1,17 @@
 use wgpu::Device;
-use winit::dpi::PhysicalSize;
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-pub(crate) struct DepthBuffer {
+pub struct DepthBuffer {
     depth_view: wgpu::TextureView,
 }
 
 impl DepthBuffer {
-    pub(crate) fn new(device: &Device, window_size: PhysicalSize<u32>) -> Self {
+    pub fn new(device: &Device, (width, height): (u32, u32)) -> Self {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             size: wgpu::Extent3d {
-                width: window_size.width.max(1),
-                height: window_size.height.max(1),
+                width: width.max(1),
+                height: height.max(1),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -26,9 +25,9 @@ impl DepthBuffer {
         Self { depth_view }
     }
 
-    pub(crate) fn renderpass_depth_stencil_attachement(
+    pub fn renderpass_depth_stencil_attachement(
         &self,
-    ) -> wgpu::RenderPassDepthStencilAttachment {
+    ) -> wgpu::RenderPassDepthStencilAttachment<'_> {
         wgpu::RenderPassDepthStencilAttachment {
             view: &self.depth_view,
             depth_ops: Some(wgpu::Operations {
@@ -39,11 +38,11 @@ impl DepthBuffer {
         }
     }
 
-    pub(crate) fn depth_stencil_state() -> wgpu::DepthStencilState {
+    pub fn depth_stencil_state() -> wgpu::DepthStencilState {
         wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Less,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }

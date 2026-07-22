@@ -4,19 +4,19 @@ use wgpu::util::DeviceExt;
 
 use crate::gpu_data::DataSize;
 
-pub(crate) struct IndexBufferBuilder {
+pub struct IndexBufferBuilder {
     // The index of the first Vec is the mip level
     mip_level_indices: Vec<Vec<u32>>,
 }
 
 impl IndexBufferBuilder {
-    pub(crate) fn triangle_list_length(image_size: DataSize, mip_level: u32) -> u64 {
+    pub fn triangle_list_length(image_size: DataSize, mip_level: u32) -> u64 {
         let width = image_size.width.get() / 2u32.pow(mip_level);
         let height = image_size.height.get() / 2u32.pow(mip_level);
         ((width - 1) * (height - 1) * 6) as u64
     }
 
-    pub(crate) fn new_triangle_list(image_size: DataSize, mip_levels: &Vec<u32>) -> Self {
+    pub fn new_triangle_list(image_size: DataSize, mip_levels: &Vec<u32>) -> Self {
         log::info!("Creating index buffer for mip levels: {:?}", mip_levels);
         let mip_level_indices = mip_levels
             .iter()
@@ -42,7 +42,7 @@ impl IndexBufferBuilder {
     /// Creates a triangle list index buffer where triangles touching any invalid (0) pixel
     /// in the mask are excluded, creating holes in the mesh.
     /// The mask must have the same dimensions as the image.
-    pub(crate) fn new_triangle_list_masked(image_size: DataSize, mask: &[u8]) -> Self {
+    pub fn new_triangle_list_masked(image_size: DataSize, mask: &[u8]) -> Self {
         log::info!("Creating masked index buffer");
         let indices = triangle_list_masked(&image_size, mask);
         log::info!(
@@ -55,7 +55,7 @@ impl IndexBufferBuilder {
         }
     }
 
-    pub(crate) fn create_buffer(&self, device: &wgpu::Device) -> IndexBuffer {
+    pub fn create_buffer(&self, device: &wgpu::Device) -> IndexBuffer {
         let mut mip_level_buffers: Vec<wgpu::Buffer> = Vec::new();
         for indices in &self.mip_level_indices {
             let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -69,12 +69,12 @@ impl IndexBufferBuilder {
     }
 }
 
-pub(crate) struct IndexBuffer {
+pub struct IndexBuffer {
     mip_level_buffers: Vec<wgpu::Buffer>,
 }
 
 impl IndexBuffer {
-    pub(crate) fn set_mip_level_buffer(&self, mip_level: u32, renderpass: &mut wgpu::RenderPass) {
+    pub fn set_mip_level_buffer(&self, mip_level: u32, renderpass: &mut wgpu::RenderPass) {
         let buffer = &self.mip_level_buffers[mip_level as usize];
         // Nothing to draw when every triangle is masked out (empty index buffer).
         // Slicing an empty buffer would panic ("buffer slices can not be empty").

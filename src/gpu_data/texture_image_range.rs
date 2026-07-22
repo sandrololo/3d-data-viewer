@@ -1,13 +1,13 @@
 use wgpu::util::DeviceExt;
 
-pub(crate) struct TextureImageRangeBuffer {
+pub struct TextureImageRangeBuffer {
     buffer: wgpu::Buffer,
     start: u16,
     end: u16,
 }
 
 impl TextureImageRangeBuffer {
-    pub(crate) fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device) -> Self {
         Self {
             buffer: Self::create_buffer(device, 0, 2000),
             start: 0,
@@ -15,14 +15,14 @@ impl TextureImageRangeBuffer {
         }
     }
 
-    pub(crate) fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
+    pub fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding: 2,
             resource: self.buffer.as_entire_binding(),
         }
     }
 
-    pub(crate) fn update(&mut self, queue: &wgpu::Queue, start: u16, end: u16) {
+    pub fn update(&mut self, queue: &wgpu::Queue, start: u16, end: u16) {
         assert!(start < end, "Start must be less than end");
         log::info!("Updating texture range: {} - {}", start, end);
         self.start = start;

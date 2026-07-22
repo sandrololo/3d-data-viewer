@@ -18,16 +18,16 @@ struct MipData {
     image_size: DataSize,
 }
 
-pub(crate) struct Mip {
-    pub(crate) mip_buffer: wgpu::Buffer,
-    pub(crate) image_dims_buffer: wgpu::Buffer,
+pub struct Mip {
+    pub mip_buffer: wgpu::Buffer,
+    pub image_dims_buffer: wgpu::Buffer,
     mip_data: Option<MipData>,
     current_level: u32,
     override_level: Option<u32>,
 }
 
 impl Mip {
-    pub(crate) fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device) -> Self {
         let mip_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("mip_level_buffer"),
             contents: bytemuck::cast_slice(&[2u32]),
@@ -43,13 +43,13 @@ impl Mip {
         }
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.mip_data = None;
         self.current_level = 2;
         self.override_level = None;
     }
 
-    pub(crate) fn set_image(&mut self, image_size: DataSize, device: &wgpu::Device) {
+    pub fn set_image(&mut self, image_size: DataSize, device: &wgpu::Device) {
         let mip_levels = (0..10u32)
             .filter(|level| {
                 let num_indices = IndexBufferBuilder::triangle_list_length(image_size, *level);
@@ -70,12 +70,7 @@ impl Mip {
 
     /// Sets the image with a validity mask. Pixels where mask is 0 will create holes in the mesh.
     /// The mask must have the same dimensions as the image (width * height bytes, 0=invalid, 1=valid).
-    pub(crate) fn set_image_masked(
-        &mut self,
-        image_size: DataSize,
-        mask: &[u8],
-        device: &wgpu::Device,
-    ) {
+    pub fn set_image_masked(&mut self, image_size: DataSize, mask: &[u8], device: &wgpu::Device) {
         let index_buffer =
             IndexBufferBuilder::new_triangle_list_masked(image_size, mask).create_buffer(&device);
         let vertex_buffer = VertexBuffer::new(image_size, &device);
@@ -88,7 +83,7 @@ impl Mip {
         self.mip_data = Some(mip_data);
     }
 
-    pub(crate) fn set_zoom(&mut self, zoom: f32) {
+    pub fn set_zoom(&mut self, zoom: f32) {
         if self.override_level.is_some() {
             return;
         }
@@ -104,7 +99,7 @@ impl Mip {
         log::info!("Set MIP level to: {}", self.current_level);
     }
 
-    pub(crate) fn set_override_level(&mut self, level: Option<u32>) {
+    pub fn set_override_level(&mut self, level: Option<u32>) {
         self.override_level = level;
         if let Some(level) = level {
             self.current_level = level;
@@ -112,7 +107,7 @@ impl Mip {
         }
     }
 
-    pub(crate) fn update_gpu(&self, renderpass: &mut wgpu::RenderPass, queue: &wgpu::Queue) {
+    pub fn update_gpu(&self, renderpass: &mut wgpu::RenderPass, queue: &wgpu::Queue) {
         if let Some(mip_data) = &self.mip_data {
             let (w, h) = (
                 mip_data.image_size.width.get() / 2u32.pow(self.current_level),
@@ -143,7 +138,7 @@ impl Mip {
         }
     }
 
-    pub(crate) fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
+    pub fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding: 3,
             resource: self.mip_buffer.as_entire_binding(),

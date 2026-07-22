@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use imbuf::Image;
 
-pub(crate) struct TopologyPercentileRangeBuffer {
+pub struct TopologyPercentileRangeBuffer {
     buffer: wgpu::Buffer,
     percentile: f32,
     z_min: f32,
@@ -10,7 +10,7 @@ pub(crate) struct TopologyPercentileRangeBuffer {
 }
 
 impl TopologyPercentileRangeBuffer {
-    pub(crate) fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device) -> Self {
         Self {
             buffer: Self::create_buffer(device),
             percentile: 0.98,
@@ -19,18 +19,18 @@ impl TopologyPercentileRangeBuffer {
         }
     }
 
-    pub(crate) fn z_range(&self) -> (f32, f32) {
+    pub fn z_range(&self) -> (f32, f32) {
         (self.z_min, self.z_max)
     }
 
-    pub(crate) fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry {
+    pub fn get_bind_group_entry(&self) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding: 1,
             resource: self.buffer.as_entire_binding(),
         }
     }
 
-    pub(crate) fn update_percentile(
+    pub fn update_percentile(
         &mut self,
         queue: &wgpu::Queue,
         percentile: f32,
@@ -45,7 +45,7 @@ impl TopologyPercentileRangeBuffer {
         }
     }
 
-    pub(crate) fn update_data(&mut self, queue: &wgpu::Queue, data: &[f32]) {
+    pub fn update_data(&mut self, queue: &wgpu::Queue, data: &[f32]) {
         let mut vec = data.to_vec();
         let total_pixels = vec.len();
         let (_, lower, _) = vec.select_nth_unstable_by(

@@ -1,7 +1,6 @@
 use std::{num::NonZeroU32, sync::Arc};
 
-use wgpu::{BindGroupLayout, Surface, TextureFormat};
-use winit::{dpi::PhysicalSize, window::Window};
+use wgpu::{BindGroupLayout, TextureFormat};
 
 use crate::{
     gpu_data::{
@@ -13,14 +12,15 @@ use crate::{
     scene::Scene,
 };
 
-pub(crate) mod axes;
+pub mod axes;
 mod depth_buffer;
-pub(crate) mod font_atlas;
-pub(crate) mod pipeline;
+pub mod font_atlas;
+pub mod pipeline;
 
-pub(crate) struct Renderer {
-    surface: wgpu::Surface<'static>,
-    surface_format: wgpu::TextureFormat,
+/// Renders the 3D scene into a caller-provided offscreen color target (plus an
+/// internal picking texture + depth buffer). No swapchain/surface is owned here —
+/// eframe owns the WebGPU surface; the produced color texture is sampled by egui.
+pub struct Renderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     pipeline: Pipeline,
@@ -28,19 +28,19 @@ pub(crate) struct Renderer {
     axes_visible: bool,
     depth_buffer: DepthBuffer,
     image_info_bind_group: wgpu::BindGroup,
+    size: (u32, u32),
 }
 
 impl Renderer {
-    pub(crate) fn new(
-        window: &Window,
+    pub fn new(
         device: Arc<wgpu::Device>,
         queue: Arc<wgpu::Queue>,
         texture_bind_group_layout: &BindGroupLayout,
-        surface: Surface<'static>,
-        surface_format: TextureFormat,
+        target_format: TextureFormat,
         interaction: &Interaction,
         percentile_range_buffer: &TopologyPercentileRangeBuffer,
         texture_range_buffer: &TextureImageRangeBuffer,
+        size: (u32, u32),
     ) -> Self {
         let image_info_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -65,17 +65,15 @@ impl Renderer {
 
         let pipeline = Pipeline::new(
             &device,
-            surface_format,
+            target_format,
             texture_bind_group_layout,
             &image_info_bind_group_layout,
             interaction,
         );
-        let axes = Axes::new(&device, &queue, surface_format, interaction);
-        let depth_buffer = DepthBuffer::new(&device, window.inner_size());
+        let axes = Axes::new(&device, &queue, target_format, interaction);
+        let depth_buffer = DepthBuffer::new(&device, size);
 
         let mut this = Self {
-            surface,
-            surface_format,
             device,
             queue,
             pipeline,
@@ -83,36 +81,25 @@ impl Renderer {
             axes_visible: true,
             image_info_bind_group,
             depth_buffer,
+            size,
         };
-
-        // Configure surface for the first time
-        this.configure_surface(window.inner_size());
+        this.axes.update_screen_size(&this.queue, size.0, size.1);
         this
     }
 
-    pub(crate) fn configure_surface(&mut self, window_size: PhysicalSize<u32>) {
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            format: self.surface_format,
-            // Request compatibility with the sRGB-format texture view we‘re going to create later.
-            view_formats: vec![self.surface_format.add_srgb_suffix()],
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: window_size.width,
-            height: window_size.height,
-            desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::AutoVsync,
-        };
-        self.surface.configure(&self.device, &surface_config);
-        self.depth_buffer = DepthBuffer::new(&self.device, window_size);
-        self.axes
-            .update_screen_size(&self.queue, window_size.width, window_size.height);
+    pub fn resize(&mut self, size: (u32, u32)) {
+        if self.size != size && size.0 > 0 && size.1 > 0 {
+            self.size = size;
+            self.depth_buffer = DepthBuffer::new(&self.device, size);
+            self.axes.update_screen_size(&self.queue, size.0, size.1);
+        }
     }
 
-    pub(crate) fn display_grid(&mut self, visible: bool) {
+    pub fn display_grid(&mut self, visible: bool) {
         self.axes_visible = visible;
     }
 
-    pub(crate) fn update_axes_origin(
+    pub fn update_axes_origin(
         &mut self,
         image_size: (NonZeroU32, NonZeroU32),
         z_range: (f32, f32),
@@ -125,13 +112,14 @@ impl Renderer {
         );
     }
 
-    pub(crate) fn update_z_range(&mut self, z_range: (f32, f32)) {
+    pub fn update_z_range(&mut self, z_range: (f32, f32)) {
         self.axes.update_z_range(&self.device, z_range);
     }
 
-    pub(crate) fn render(
+    pub fn render(
         &mut self,
-        window: Arc<Window>,
+        color_view: &wgpu::TextureView,
+        color_texture: &wgpu::Texture,
         interaction: &Interaction,
         pixel_picker: &PixelPicker,
         image_capture: &Capture,
@@ -144,64 +132,33 @@ impl Renderer {
             self.axes.update_labels(&self.device, &self.queue, mvp);
         }
 
-        let surface_texture = self
-            .surface
-            .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
-        let surface_view = self.create_surface_view_phase(&surface_texture);
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
-        self.encode_scene_phase(
-            &mut encoder,
-            &surface_view,
-            interaction,
-            pixel_picker,
-            scene,
-        );
+        self.encode_scene_phase(&mut encoder, color_view, interaction, pixel_picker, scene);
         self.encode_post_process_phase(
             &mut encoder,
-            &surface_texture,
+            color_texture,
             interaction,
             pixel_picker,
             image_capture,
         );
 
         self.queue.submit([encoder.finish()]);
-        window.pre_present_notify();
-        surface_texture.present();
-
-        #[cfg(not(target_arch = "wasm32"))]
-        self.log_hover_pixel_phase(pixel_picker, scene);
-    }
-
-    fn create_surface_view_phase(
-        &self,
-        surface_texture: &wgpu::SurfaceTexture,
-    ) -> wgpu::TextureView {
-        surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor {
-                // Without add_srgb_suffix() the image we will be working with
-                // might not be "gamma correct".
-                format: Some(self.surface_format.add_srgb_suffix()),
-                ..Default::default()
-            })
     }
 
     fn encode_scene_phase(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        surface_view: &wgpu::TextureView,
+        color_view: &wgpu::TextureView,
         interaction: &Interaction,
         pixel_picker: &PixelPicker,
         scene: &Scene,
     ) {
-        // Two color attachments: main color + picking texture
         let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[
                 Some(wgpu::RenderPassColorAttachment {
-                    view: surface_view,
+                    view: color_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -224,6 +181,7 @@ impl Renderer {
             ),
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         let pipeline = self.pipeline.get(interaction.get_fragment_shader_variant());
@@ -236,7 +194,6 @@ impl Renderer {
 
         interaction.mip.update_gpu(&mut renderpass, &self.queue);
 
-        // Draw coordinate grid on top of the scene
         if self.axes_visible {
             self.axes.draw(&mut renderpass, interaction);
         }
@@ -245,44 +202,18 @@ impl Renderer {
     fn encode_post_process_phase(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        surface_texture: &wgpu::SurfaceTexture,
+        color_texture: &wgpu::Texture,
         interaction: &Interaction,
         pixel_picker: &PixelPicker,
         image_capture: &Capture,
     ) {
         pixel_picker.copy_pixel_at_mouse(encoder);
-        image_capture.copy_texture(encoder, surface_texture);
+        image_capture.copy_texture(encoder, color_texture);
         interaction.update_gpu(&self.queue);
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn log_hover_pixel_phase(&self, pixel_picker: &PixelPicker, scene: &Scene) {
-        if let Some(texture_image) = scene.get_texture_image() {
-            match pollster::block_on(pixel_picker.get(
-                self.device.clone(),
-                scene.get_topology_image(),
-                texture_image,
-            )) {
-                Ok(pixel_value) => {
-                    log::info!(
-                        "Pixel at [{}/{}]={:.3}, texture={}",
-                        pixel_value.x,
-                        pixel_value.y,
-                        pixel_value.z,
-                        pixel_value.texture
-                    );
-                }
-                Err(e) => {
-                    log::error!("Pixel read failed: {}", e);
-                }
-            }
-        } else {
-            log::error!("Texture image not initialized");
-        }
     }
 }
 
-pub(crate) fn uniform_buffer_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+pub fn uniform_buffer_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
     wgpu::BindGroupLayoutEntry {
         binding,
         visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,

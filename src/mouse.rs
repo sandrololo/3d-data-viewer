@@ -1,50 +1,26 @@
 use glam::Vec2;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, MouseButton, MouseScrollDelta},
+    event::MouseScrollDelta,
 };
 
-/// How much each scroll unit affects the zoom multiplier.
-const SCROLL_ZOOM_SENSITIVITY: f32 = 0.1;
 /// Divisor to convert pixel-based scroll deltas to the same scale as line deltas.
 const PIXEL_SCROLL_DIVISOR: f32 = 100.0;
 
+#[derive(Default)]
 pub(crate) struct Mouse {
     pub current_position: PhysicalPosition<f64>,
-    left_button: ElementState,
-    current_zoom: f32,
-}
-
-impl Default for Mouse {
-    fn default() -> Self {
-        Self {
-            current_position: PhysicalPosition::new(0.0, 0.0),
-            left_button: ElementState::Released,
-            current_zoom: 1.0,
-        }
-    }
 }
 
 impl Mouse {
-    pub(crate) fn register_button_event(&mut self, button: &MouseButton, state: &ElementState) {
-        if let MouseButton::Left = button {
-            self.left_button = *state;
-        }
-    }
-
     pub(crate) fn register_move_event(&mut self, new_position: PhysicalPosition<f64>) {
         self.current_position = new_position;
     }
 
-    pub(crate) fn register_scroll_event(&mut self, delta: &MouseScrollDelta) {
+    pub(crate) fn scroll_delta(delta: &MouseScrollDelta) -> f32 {
         match delta {
-            MouseScrollDelta::LineDelta(_delta_x, delta_y) => {
-                self.current_zoom *= -SCROLL_ZOOM_SENSITIVITY * delta_y + 1.0;
-            }
-            MouseScrollDelta::PixelDelta(pos) => {
-                let delta_y = pos.y as f32 / PIXEL_SCROLL_DIVISOR;
-                self.current_zoom *= -SCROLL_ZOOM_SENSITIVITY * delta_y + 1.0;
-            }
+            MouseScrollDelta::LineDelta(_delta_x, delta_y) => *delta_y,
+            MouseScrollDelta::PixelDelta(pos) => pos.y as f32 / PIXEL_SCROLL_DIVISOR,
         }
     }
 
@@ -57,30 +33,6 @@ impl Mouse {
         let x = (2.0 * self.current_position.x / w - 1.0) as f32;
         let y = (1.0 - 2.0 * self.current_position.y / h) as f32;
         Ok(Vec2::new(x, y))
-    }
-
-    pub(crate) fn is_left_button_pressed(&self) -> bool {
-        self.left_button == ElementState::Pressed
-    }
-
-    pub(crate) fn set_zoom(&mut self, zoom: f32) {
-        self.current_zoom = zoom;
-    }
-
-    pub(crate) fn get_zoom(&self) -> f32 {
-        self.current_zoom
-    }
-
-    pub(crate) fn reset_zoom(&mut self) {
-        self.current_zoom = 1.0;
-    }
-
-    pub(crate) fn zoom_in(&mut self) {
-        self.current_zoom *= 1.1;
-    }
-
-    pub(crate) fn zoom_out(&mut self) {
-        self.current_zoom *= 0.9;
     }
 
     pub(crate) fn is_pointer_inside(&self, pos: Vec2) -> bool {

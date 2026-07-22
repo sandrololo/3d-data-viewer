@@ -1,27 +1,23 @@
 use glam::{Mat4, Vec3};
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::wasm_bindgen;
 use wgpu::{BindGroupLayout, util::DeviceExt};
 
 /// Multiplier to amplify mouse-movement distance into a visible rotation angle.
 const ROTATION_SENSITIVITY: f32 = 100.0;
 
 #[derive(Clone, Copy)]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct EulerRotationDeg {
     pub pitch: f32,
     pub yaw: f32,
     pub roll: f32,
 }
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[allow(dead_code)]
 impl EulerRotationDeg {
     pub fn new(pitch: f32, yaw: f32, roll: f32) -> Self {
         Self { pitch, yaw, roll }
     }
 }
-pub(crate) struct Transformation {
+pub struct Transformation {
     current: Mat4,
     initial: Mat4,
     initial_position: Vec3,
@@ -31,7 +27,7 @@ pub(crate) struct Transformation {
 }
 
 impl Transformation {
-    pub(crate) fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device) -> Self {
         let default = Mat4::IDENTITY;
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("transformation_buffer"),
@@ -57,18 +53,18 @@ impl Transformation {
         }
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         let default = Mat4::IDENTITY;
         self.initial = default;
         self.current = default;
         self.initial_position = Vec3::new(0.0, 0.0, 1.0);
     }
 
-    pub(crate) fn get_current(&self) -> Mat4 {
+    pub fn get_current(&self) -> Mat4 {
         self.current
     }
 
-    pub(crate) fn update_gpu(&self, queue: &wgpu::Queue) {
+    pub fn update_gpu(&self, queue: &wgpu::Queue) {
         queue.write_buffer(
             &self.buffer,
             0,
@@ -76,12 +72,12 @@ impl Transformation {
         );
     }
 
-    pub(crate) fn start_move(&mut self, position: Vec3) {
+    pub fn start_move(&mut self, position: Vec3) {
         self.initial_position = position;
         self.initial = self.current;
     }
 
-    pub(crate) fn rotate(&mut self, new_position: Vec3) {
+    pub fn rotate(&mut self, new_position: Vec3) {
         if self.initial_position != new_position {
             let rot_axis = self.initial_position.cross(new_position);
             // Axis length represents the mouse distance moved, which we amplify into a visible rotation angle.
@@ -93,7 +89,7 @@ impl Transformation {
         }
     }
 
-    pub(crate) fn rotate_euler(&mut self, r: EulerRotationDeg) {
+    pub fn rotate_euler(&mut self, r: EulerRotationDeg) {
         let pitch = r.pitch * std::f32::consts::PI / 180.0;
         let yaw = r.yaw * std::f32::consts::PI / 180.0;
         let roll = r.roll * std::f32::consts::PI / 180.0;

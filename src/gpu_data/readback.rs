@@ -1,35 +1,36 @@
-use crate::events::SharedFuture;
+use crate::SharedFuture;
 use anyhow::anyhow;
 use futures::FutureExt;
+use std::future::Future;
 use std::sync::{Arc, Mutex};
 
-pub(crate) struct GPUDataReadback<T> {
+pub struct GPUDataReadback<T> {
     buffer: wgpu::Buffer,
     /// Cached shared future - if a read is in progress, subsequent calls get the same future
     pending_read: Arc<Mutex<Option<SharedFuture<Result<T, Arc<anyhow::Error>>>>>>,
 }
 
 impl<T: Clone + Send + 'static> GPUDataReadback<T> {
-    pub(crate) fn new(buffer: wgpu::Buffer) -> Self {
+    pub fn new(buffer: wgpu::Buffer) -> Self {
         Self {
             buffer,
             pending_read: Arc::new(Mutex::new(None)),
         }
     }
 
-    pub(crate) fn set_buffer(&mut self, buffer: wgpu::Buffer) {
+    pub fn set_buffer(&mut self, buffer: wgpu::Buffer) {
         self.buffer = buffer;
     }
 
-    pub(crate) fn get_buffer(&self) -> &wgpu::Buffer {
+    pub fn get_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
 
-    pub(crate) fn has_pending_read(&self) -> bool {
+    pub fn has_pending_read(&self) -> bool {
         self.pending_read.lock().unwrap().is_some()
     }
 
-    pub(crate) fn get(
+    pub fn get(
         &self,
         device: Arc<wgpu::Device>,
         extract_result: impl Fn(&[u8]) -> Result<T, Arc<anyhow::Error>> + Send + 'static,
@@ -44,18 +45,17 @@ impl<T: Clone + Send + 'static> GPUDataReadback<T> {
         // Create new read future
         let buffer = self.buffer.clone();
         let pending_read = self.pending_read.clone();
-        let (tx, rx) = async_channel::bounded::<Result<(), wgpu::BufferAsyncError>>(1);
+        let (tx, rx) = futures::channel::oneshot::channel::<Result<(), wgpu::BufferAsyncError>>();
 
         buffer.map_async(wgpu::MapMode::Read, .., move |result| {
-            let _ = tx.try_send(result);
+            let _ = tx.send(result);
         });
 
         let future: std::pin::Pin<Box<dyn Future<Output = Result<T, Arc<anyhow::Error>>>>> =
             Box::pin(async move {
                 let _ = device.poll(wgpu::PollType::Poll);
 
-                rx.recv()
-                    .await
+                rx.await
                     .map_err(|e| anyhow!("Channel error: {:?}", e))?
                     .map_err(|e| anyhow!("Buffer map error: {:?}", e))?;
 
