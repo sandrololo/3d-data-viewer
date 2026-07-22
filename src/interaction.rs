@@ -1,4 +1,4 @@
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 use wgpu::{Device, Queue};
 
 use crate::{
@@ -68,7 +68,7 @@ impl Interaction {
             self.projection.start_move(ndc);
             DragMode::Pan
         } else {
-            self.transformation.start_move(Vec3::from((ndc, 1.0)));
+            self.transformation.start_move(ndc);
             DragMode::Rotate
         };
     }
@@ -77,7 +77,7 @@ impl Interaction {
     pub fn drag(&mut self, ndc: Vec2, size: (u32, u32)) {
         match self.drag_mode {
             DragMode::Pan => self.projection.change_position(ndc, size.0, size.1),
-            DragMode::Rotate => self.transformation.rotate(Vec3::from((ndc, 1.0))),
+            DragMode::Rotate => self.transformation.rotate(ndc),
             DragMode::None => {}
         }
     }
@@ -88,8 +88,15 @@ impl Interaction {
 
     /// `delta_y` is positive when scrolling up (zoom in).
     pub fn scroll(&mut self, delta_y: f32) {
-        self.zoom_level *= -SCROLL_ZOOM_SENSITIVITY * delta_y + 1.0;
-        self.apply_zoom();
+        self.scroll_at(delta_y, Vec2::ZERO);
+    }
+
+    /// Zoom towards the given NDC position, keeping the point under it fixed.
+    pub fn scroll_at(&mut self, delta_y: f32, ndc: Vec2) {
+        self.zoom_level =
+            (self.zoom_level * (-SCROLL_ZOOM_SENSITIVITY * delta_y).exp()).clamp(0.05, 20.0);
+        self.projection.zoom_about(self.zoom_level, ndc);
+        self.mip.set_zoom(self.zoom_level);
     }
 
     pub fn zoom_in(&mut self) {

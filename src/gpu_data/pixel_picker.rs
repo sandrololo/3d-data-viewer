@@ -98,7 +98,11 @@ impl PixelPicker {
                 bytemuck::cast_slice::<u8, u32>(&buffer)[0],
                 bytemuck::cast_slice::<u8, u32>(&buffer)[1],
             );
-            let buffer_index = (pixel.0 + topology.width().get() * pixel.1) as usize;
+            let (w, h) = (topology.width().get(), topology.height().get());
+            if pixel.0 >= w || pixel.1 >= h {
+                return Err(Arc::new(anyhow!("Pixel out of bounds: {:?}", pixel)));
+            }
+            let buffer_index = pixel.1 as usize * w as usize + pixel.0 as usize;
             if buffer_index >= topology.buffer().len() || buffer_index >= texture.buffer().len() {
                 return Err(Arc::new(anyhow!("Pixel out of bounds: {:?}", pixel)));
             }
