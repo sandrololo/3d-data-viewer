@@ -171,7 +171,14 @@ impl Renderer {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        // Out-of-bounds sentinel (same as the axes shaders), so
+                        // background picks don't read as pixel (0, 0).
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: u32::MAX as f64,
+                            g: u32::MAX as f64,
+                            b: 0.0,
+                            a: 0.0,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                 }),

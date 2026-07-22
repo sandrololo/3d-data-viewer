@@ -116,6 +116,15 @@ impl Projection {
         self.zoom = zoom_factor;
     }
 
+    /// Zoom while keeping the world point at the given NDC position fixed
+    /// (world = -delta + ndc * span/2, so delta shifts by ndc * Δspan/2).
+    pub fn zoom_about(&mut self, zoom_factor: f32, ndc: Vec2) {
+        let old_span = self.visible_span();
+        self.zoom = zoom_factor;
+        let new_span = self.visible_span();
+        self.current_delta += ndc * (new_span - old_span) / 2.0;
+    }
+
     pub fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.aspect_ratio = aspect_ratio;
     }

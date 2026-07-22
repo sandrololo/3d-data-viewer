@@ -1,8 +1,9 @@
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec2};
 use wgpu::{BindGroupLayout, util::DeviceExt};
 
-/// Multiplier to amplify mouse-movement distance into a visible rotation angle.
-const ROTATION_SENSITIVITY: f32 = 100.0;
+/// Degrees of rotation per NDC unit of drag (the viewport spans 2 NDC units).
+const DEG_PER_NDC: f32 = 90.0;
+const TILT_RANGE_DEG: std::ops::RangeInclusive<f32> = 0.0..=180.0;
 
 #[derive(Clone, Copy)]
 pub struct EulerRotationDeg {
@@ -17,10 +18,16 @@ impl EulerRotationDeg {
         Self { pitch, yaw, roll }
     }
 }
+
+/// Turntable rotation: tilt about X composed with an azimuth spin about the
+/// height axis Z. Roll is structurally impossible.
 pub struct Transformation {
+    tilt_deg: f32,
+    azimuth_deg: f32,
+    drag_start_ndc: Vec2,
+    drag_start_tilt_deg: f32,
+    drag_start_azimuth_deg: f32,
     current: Mat4,
-    initial: Mat4,
-    initial_position: Vec3,
     pub bind_group: wgpu::BindGroup,
     pub bind_group_layout: BindGroupLayout,
     buffer: wgpu::Buffer,
@@ -44,9 +51,12 @@ impl Transformation {
             }],
         });
         Self {
-            initial: default,
+            tilt_deg: 0.0,
+            azimuth_deg: 0.0,
+            drag_start_ndc: Vec2::ZERO,
+            drag_start_tilt_deg: 0.0,
+            drag_start_azimuth_deg: 0.0,
             current: default,
-            initial_position: Vec3::new(0.0, 0.0, 1.0),
             bind_group,
             bind_group_layout: layout,
             buffer,
@@ -54,10 +64,9 @@ impl Transformation {
     }
 
     pub fn reset(&mut self) {
-        let default = Mat4::IDENTITY;
-        self.initial = default;
-        self.current = default;
-        self.initial_position = Vec3::new(0.0, 0.0, 1.0);
+        self.tilt_deg = 0.0;
+        self.azimuth_deg = 0.0;
+        self.current = Mat4::IDENTITY;
     }
 
     pub fn get_current(&self) -> Mat4 {
@@ -72,30 +81,33 @@ impl Transformation {
         );
     }
 
-    pub fn start_move(&mut self, position: Vec3) {
-        self.initial_position = position;
-        self.initial = self.current;
+    pub fn start_move(&mut self, ndc: Vec2) {
+        self.drag_start_ndc = ndc;
+        self.drag_start_tilt_deg = self.tilt_deg;
+        self.drag_start_azimuth_deg = self.azimuth_deg;
     }
 
-    pub fn rotate(&mut self, new_position: Vec3) {
-        if self.initial_position != new_position {
-            let rot_axis = self.initial_position.cross(new_position);
-            // Axis length represents the mouse distance moved, which we amplify into a visible rotation angle.
-            let rot = Mat4::from_axis_angle(
-                -Vec3::normalize(rot_axis),
-                rot_axis.length() * ROTATION_SENSITIVITY * std::f32::consts::PI / 180.0,
-            );
-            self.current = rot * self.initial;
-        }
+    pub fn rotate(&mut self, ndc: Vec2) {
+        let delta = ndc - self.drag_start_ndc;
+        self.azimuth_deg = self.drag_start_azimuth_deg + delta.x * DEG_PER_NDC;
+        self.tilt_deg = (self.drag_start_tilt_deg + delta.y * DEG_PER_NDC)
+            .clamp(*TILT_RANGE_DEG.start(), *TILT_RANGE_DEG.end());
+        self.rebuild();
     }
 
+    /// `pitch` maps to tilt, `roll` to azimuth; `yaw` is ignored (no roll in the
+    /// turntable model).
     pub fn rotate_euler(&mut self, r: EulerRotationDeg) {
-        let pitch = r.pitch * std::f32::consts::PI / 180.0;
-        let yaw = r.yaw * std::f32::consts::PI / 180.0;
-        let roll = r.roll * std::f32::consts::PI / 180.0;
-        let rotation = Mat4::from_euler(glam::EulerRot::XYZ, pitch, yaw, roll);
-        self.current = rotation;
-        self.initial = rotation;
+        self.tilt_deg = r
+            .pitch
+            .clamp(*TILT_RANGE_DEG.start(), *TILT_RANGE_DEG.end());
+        self.azimuth_deg = r.roll;
+        self.rebuild();
+    }
+
+    fn rebuild(&mut self) {
+        self.current = Mat4::from_rotation_x(self.tilt_deg.to_radians())
+            * Mat4::from_rotation_z(self.azimuth_deg.to_radians());
     }
 
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
