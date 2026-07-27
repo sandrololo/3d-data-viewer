@@ -65,7 +65,7 @@ impl Scene {
         self.texture.image.clone()
     }
 
-    pub fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>, queue: &Queue) {
+    pub fn set_overlays(&mut self, overlays: Arc<Vec<Region>>, queue: &Queue) {
         self.overlay.set_overlays(overlays);
         self.overlay.write_to_queue(queue);
     }

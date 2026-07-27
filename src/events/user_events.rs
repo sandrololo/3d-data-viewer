@@ -6,7 +6,7 @@ use data_viewer_3d::{
     gpu_data::{CaptureResult, pixel_picker::PixelResult},
     interaction::Orientation,
     render::pipeline::FragmentShaderVariant,
-    scene::Overlay,
+    scene::Region,
 };
 
 #[non_exhaustive]
@@ -19,7 +19,7 @@ pub(crate) enum UserEvent {
     SetOrientation(Orientation),
     ResetOrientation,
     SetFragmentShader(FragmentShaderVariant),
-    SetOverlays(Arc<Vec<Overlay>>),
+    SetOverlays(Arc<Vec<Region>>),
     ClearOverlays,
     GetPixel(futures::channel::oneshot::Sender<SharedFuture<PixelResult>>),
     ZoomIn,

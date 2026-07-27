@@ -1,25 +1,32 @@
-use crate::gpu_data::DataSize;
-use std::{ops::Range, sync::Arc};
+use futures::io;
+use imask::{CreateRange, ImageDimension, ImaskSet, NonZeroRange, SortedRanges};
 
-/// A coloured overlay region, expressed as flat pixel-index ranges (`y*width + x`).
-/// This is the same range model imanot/imask uses for 2D layers, so a single layer
-/// definition can drive both the 2D mask stack and this 3D overlay texture.
+use crate::gpu_data::DataSize;
+use std::sync::Arc;
+
 #[derive(Clone, Debug)]
-pub struct Overlay {
-    pub pixelrange: Vec<Range<u32>>,
+pub struct Region {
+    pub pixels: SortedRanges<u32, u32>,
     pub color: [u8; 4],
 }
 
-impl Overlay {
-    pub fn new(pixelrange: Vec<Range<u32>>, color: [u8; 4]) -> Self {
-        Self { pixelrange, color }
+impl Region {
+    pub fn new(
+        pixels: impl IntoIterator<Item = NonZeroRange<u64>, IntoIter: ImageDimension>,
+        color: [u8; 4],
+    ) -> Result<Self, io::Error> {
+        let iter = pixels.into_iter();
+        let roi = iter.bounds();
+        let pixels =
+            SortedRanges::try_from_ordered_iter(iter.map(|r| r.start..r.end).with_roi(roi))?;
+        Ok(Self { pixels, color })
     }
 }
 
 pub struct OverlayTexture {
     texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub overlays: Arc<Vec<Overlay>>,
+    pub overlays: Arc<Vec<Region>>,
     size: wgpu::Extent3d,
 }
 
@@ -40,7 +47,7 @@ impl OverlayTexture {
         }
     }
 
-    pub fn set_overlays(&mut self, overlays: Arc<Vec<Overlay>>) {
+    pub fn set_overlays(&mut self, overlays: Arc<Vec<Region>>) {
         self.overlays = overlays;
     }
 
@@ -68,9 +75,9 @@ impl OverlayTexture {
         let mut data = vec![0u8; total_pixels * 4];
 
         for overlay in self.overlays.iter() {
-            for range in &overlay.pixelrange {
-                for pixel_idx in range.clone() {
-                    let idx = (pixel_idx as usize) * 4;
+            for span in overlay.pixels.spans::<u32>() {
+                for x in span.x.start()..span.x.end() {
+                    let idx = (x + span.y * self.size.width) as usize * 4;
                     if idx + 3 < data.len() {
                         data[idx] = overlay.color[0];
                         data[idx + 1] = overlay.color[1];

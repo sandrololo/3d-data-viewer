@@ -1,14 +1,15 @@
-use std::sync::Arc;
-use wasm_bindgen::{JsValue, prelude::*};
-use winit::event_loop::EventLoop;
+use std::{num::NonZeroU32, ops::Deref, sync::Arc};
 
 use data_viewer_3d::{
     interaction::Orientation,
     render::pipeline::FragmentShaderVariant,
-    scene::Overlay,
+    scene::Region,
     tiff_decode::decode_tiff,
     view::{projection::Translation, transformation::EulerRotationDeg},
 };
+use imask::{NonZeroRange, RangeUnchecked, WithBounds};
+use wasm_bindgen::{JsValue, prelude::*};
+use winit::event_loop::EventLoop;
 
 use crate::{
     ImageViewer3D,
@@ -16,49 +17,76 @@ use crate::{
 };
 
 #[wasm_bindgen]
-#[derive(Copy, Clone, Debug)]
-pub struct WasmBindgenPixelRange {
-    start: u32,
-    end: u32,
-}
+pub struct WasmBindgenPixelRange(NonZeroRange<u64>);
 
 #[wasm_bindgen]
 impl WasmBindgenPixelRange {
-    pub fn new(start: u32, end: u32) -> Self {
-        Self { start, end }
+    pub fn new(start: u64, end: u64) -> Result<Self, JsValue> {
+        let range = NonZeroRange::try_from(RangeUnchecked { start, end }).map_err(|e| {
+            JsValue::from_str(&format!("Error initializing WasmBindgenPixelRange: {}", e))
+        })?;
+        Ok(Self(range))
+    }
+}
+
+impl Deref for WasmBindgenPixelRange {
+    type Target = NonZeroRange<u64>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 #[wasm_bindgen]
 #[derive(Copy, Clone, Debug)]
-pub struct OverlayColor([u8; 4]);
+pub struct RegionColor([u8; 4]);
 
 #[wasm_bindgen]
-impl OverlayColor {
+impl RegionColor {
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self([r, g, b, a])
     }
 }
 
-#[wasm_bindgen(js_name = Overlay)]
-pub struct WasmOverlay {
+#[wasm_bindgen(js_name = Region)]
+pub struct WasmRegion {
     pixelrange: Vec<WasmBindgenPixelRange>,
-    color: OverlayColor,
+    color: RegionColor,
+    image_width: u32,
+    image_height: u32,
 }
 
-#[wasm_bindgen(js_class = Overlay)]
-impl WasmOverlay {
-    pub fn new(pixelrange: Vec<WasmBindgenPixelRange>, color: OverlayColor) -> Self {
-        Self { pixelrange, color }
+#[wasm_bindgen(js_class = Region)]
+impl WasmRegion {
+    pub fn new(
+        pixelrange: Vec<WasmBindgenPixelRange>,
+        color: RegionColor,
+        image_width: u32,
+        image_height: u32,
+    ) -> Self {
+        Self {
+            pixelrange,
+            color,
+            image_width,
+            image_height,
+        }
     }
 }
 
-impl From<&WasmOverlay> for Overlay {
-    fn from(overlay: &WasmOverlay) -> Self {
-        Overlay::new(
-            overlay.pixelrange.iter().map(|r| r.start..r.end).collect(),
-            overlay.color.0,
+impl TryFrom<WasmRegion> for Region {
+    type Error = JsValue;
+
+    fn try_from(region: WasmRegion) -> Result<Self, JsValue> {
+        let width = NonZeroU32::new(region.image_width)
+            .ok_or_else(|| JsValue::from_str("image_width must be non-zero"))?;
+        let height = NonZeroU32::new(region.image_height)
+            .ok_or_else(|| JsValue::from_str("image_height must be non-zero"))?;
+
+        Region::new(
+            WithBounds::new(region.pixelrange.into_iter().map(|r| *r), width, height),
+            region.color.0,
         )
+        .map_err(|e| JsValue::from_str(&format!("Error converting WasmRegion to Region: {}", e)))
     }
 }
 
@@ -217,8 +245,11 @@ impl WasmViewer {
         ))
     }
 
-    pub fn set_overlays(&self, overlays: Vec<WasmOverlay>) -> Result<(), JsValue> {
-        let overlays = overlays.iter().map(Overlay::from).collect::<Vec<_>>();
+    pub fn set_overlays(&self, overlays: Vec<WasmRegion>) -> Result<(), JsValue> {
+        let overlays = overlays
+            .into_iter()
+            .map(|r| Region::try_from(r))
+            .collect::<Result<Vec<_>, _>>()?;
         self.send_event(UserEvent::SetOverlays(Arc::new(overlays)))
     }
 

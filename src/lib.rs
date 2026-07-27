@@ -18,7 +18,7 @@ pub mod view;
 
 pub use interaction::{Interaction, Orientation};
 pub use render::Renderer;
-pub use scene::{Overlay, Scene};
+pub use scene::{Region, Scene};
 
 /// A `Shared` boxed future used to hand GPU readbacks (pixel pick / capture) to callers.
 pub type SharedFuture<T> =
