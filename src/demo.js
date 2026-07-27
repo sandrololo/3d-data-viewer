@@ -6,11 +6,9 @@
  */
 
 import init, {
-    EulerRotationDeg,
     Orientation,
-    Overlay,
-    OverlayColor,
-    Translation,
+    Region,
+    RegionColor,
     WasmBindgenPixelRange,
     WasmViewer
 } from './assets/wasm/data-viewer-3d.js';
@@ -35,7 +33,7 @@ const btnDownloadImage = document.getElementById('btn-download-image');
 const btnToggleGrid = document.getElementById('btn-toggle-grid');
 
 const DEFAULT_ORIENTATION = () =>
-    Orientation.new(0.8, Translation.new(0.0, 0.0), EulerRotationDeg.new(70, 0, -45));
+    Orientation.new(0.8, 0.0, 0.0, 70, 0, -45);
 
 // State
 let wasmModule = null;
@@ -46,6 +44,8 @@ let isGridVisible = true;
 let isPollingEnabled = false;
 let isPolling = false;
 let overlayDefinitions = null;
+let imageWidth = 0;
+let imageHeight = 0;
 
 const OVERLAY_DATA_PATH = './src/assets/data/overlay.json';
 
@@ -161,6 +161,24 @@ async function downloadCurrentImage() {
         link.remove();
         URL.revokeObjectURL(url);
     }, 'image/png');
+}
+
+/**
+ * Parse image dimensions from a TIFF ArrayBuffer
+ */
+function parseTiffDimensions(buffer) {
+    const view = new DataView(buffer);
+    const littleEndian = view.getUint16(0) === 0x4949; // 'II' = little-endian
+    const ifdOffset = view.getUint32(4, littleEndian);
+    const numEntries = view.getUint16(ifdOffset, littleEndian);
+    let w = 0, h = 0;
+    for (let i = 0; i < numEntries; i++) {
+        const entryOffset = ifdOffset + 2 + i * 12;
+        const tag = view.getUint16(entryOffset, littleEndian);
+        if (tag === 256) w = view.getUint32(entryOffset + 8, littleEndian);
+        else if (tag === 257) h = view.getUint32(entryOffset + 8, littleEndian);
+    }
+    return { width: w, height: h };
 }
 
 /**
@@ -418,6 +436,12 @@ function setupControls() {
         } else if (key === 'g') {
             event.preventDefault();
             toggleGrid();
+        } else if (event.key === '+' || event.key === '=') {
+            event.preventDefault();
+            wasmViewer.zoom_in();
+        } else if (event.key === '-') {
+            event.preventDefault();
+            wasmViewer.zoom_out();
         }
     });
 
@@ -542,7 +566,11 @@ function startPixelPolling() {
                 console.log('Invalid result format:', result);
             }
         } catch (err) {
-            console.error('Failed to fetch pixel (WASM error):', err);
+            // Silence "Pixel out of bounds" — this is the sentinel returned when the
+            // cursor is not over valid geometry (x/y == u32::MAX).
+            if (!String(err).includes('out of bounds')) {
+                console.error('Failed to fetch pixel (WASM error):', err);
+            }
         }
 
         // Continue polling
@@ -590,6 +618,9 @@ async function main() {
         try {
             const surfaceData = await loadSurfaceData();
             const amplitudeData = await loadAmplitudeData();
+            const dims = parseTiffDimensions(surfaceData.buffer);
+            imageWidth = dims.width;
+            imageHeight = dims.height;
             if (wasmViewer && typeof wasmViewer.set_topology === 'function') {
                 await wasmViewer.set_topology(surfaceData);
                 await wasmViewer.set_texture(amplitudeData);
@@ -671,28 +702,39 @@ function buildOverlay(ranges, colorRgba) {
         return null;
     }
 
-    const pixelRanges = [];
+    // Parse, validate and sort raw ranges
+    const valid = [];
     for (const range of ranges) {
-        if (!Array.isArray(range) || range.length < 2) {
-            continue;
-        }
-
+        if (!Array.isArray(range) || range.length < 2) continue;
         const start = Number(range[0]);
         const end = Number(range[1]);
-        if (!Number.isFinite(start) || !Number.isFinite(end)) {
-            continue;
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) continue;
+        valid.push([Math.trunc(start), Math.trunc(end)]);
+    }
+    if (valid.length === 0) return null;
+
+    // Merge adjacent and overlapping ranges.
+    // SortedRanges requires non-zero gaps between consecutive ranges, so
+    // touching ranges (end of one == start of next) must be merged first.
+    valid.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const merged = [valid[0].slice()];
+    for (let i = 1; i < valid.length; i++) {
+        const last = merged[merged.length - 1];
+        const [s, e] = valid[i];
+        if (s <= last[1]) {
+            last[1] = Math.max(last[1], e); // merge
+        } else {
+            merged.push([s, e]);
         }
-
-        pixelRanges.push(WasmBindgenPixelRange.new(Math.trunc(start), Math.trunc(end)));
     }
 
-    if (pixelRanges.length === 0) {
-        return null;
-    }
+    const pixelRanges = merged.map(([s, e]) =>
+        WasmBindgenPixelRange.new(BigInt(s), BigInt(e))
+    );
 
     const [r, g, b, a] = colorRgba;
-    const color = OverlayColor.new(r, g, b, a);
-    return Overlay.new(pixelRanges, color);
+    const color = RegionColor.new(r, g, b, a);
+    return Region.new(pixelRanges, color, imageWidth, imageHeight);
 }
 
 async function example_overlays() {
