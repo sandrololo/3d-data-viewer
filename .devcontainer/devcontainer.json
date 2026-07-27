@@ -3,7 +3,7 @@
 {
 	"name": "Rust & Node",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bookworm",
+	"image": "mcr.microsoft.com/devcontainers/rust:2.0.9-bookworm",
 	"features": {
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "lts"
