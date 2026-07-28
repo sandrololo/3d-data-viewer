@@ -600,6 +600,71 @@
             line-height: 1.5;
         }
 
+        /* Slider controls */
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .slider-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            min-width: 2.5ch;
+            text-align: right;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--bg-primary);
+            outline: none;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            box-shadow: 0 0 6px rgba(0, 217, 255, 0.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 6px rgba(0, 217, 255, 0.5);
+        }
+
         /* Footer */
         footer {
             margin-top: 3rem;
@@ -671,6 +736,26 @@
                         <button class="btn" id="btn-set-overlay">Set Overlay</button>
                         <button class="btn" id="btn-clear-overlay">Clear Overlay</button>
                         <button class="btn" id="btn-download-image">Download Image</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <div class="section-label">Overlay Opacity</div>
+                    <div class="slider-group">
+                        <div class="slider-row">
+                            <div class="slider-header">
+                                <span class="slider-label">Default</span>
+                                <span class="slider-value" id="default-opacity-value">128</span>
+                            </div>
+                            <input type="range" id="default-opacity" min="0" max="255" value="128">
+                        </div>
+                        <div class="slider-row">
+                            <div class="slider-header">
+                                <span class="slider-label">Active</span>
+                                <span class="slider-value" id="active-opacity-value">200</span>
+                            </div>
+                            <input type="range" id="active-opacity" min="0" max="255" value="200">
+                        </div>
                     </div>
                 </div>
 

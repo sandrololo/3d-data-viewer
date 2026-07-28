@@ -20,6 +20,9 @@ pub struct OverlayTexture {
     pub view: wgpu::TextureView,
     pub overlays: Arc<Vec<Region>>,
     size: wgpu::Extent3d,
+    active_region: Option<usize>,
+    default_opacity: u8,
+    active_opacity: u8,
 }
 
 impl OverlayTexture {
@@ -36,11 +39,22 @@ impl OverlayTexture {
             view,
             overlays: Arc::new(Vec::new()),
             size,
+            active_region: None,
+            default_opacity: 128,
+            active_opacity: 200,
         }
     }
 
     pub fn set_overlays(&mut self, overlays: Arc<Vec<Region>>) {
         self.overlays = overlays;
+    }
+
+    pub fn set_default_opacity(&mut self, opacity: u8) {
+        self.default_opacity = opacity;
+    }
+
+    pub fn set_active_opacity(&mut self, opacity: u8) {
+        self.active_opacity = opacity;
     }
 
     pub fn write_to_queue(&self, queue: &wgpu::Queue) {
@@ -66,15 +80,19 @@ impl OverlayTexture {
         let total_pixels = (self.size.width * self.size.height) as usize;
         let mut data = vec![0u8; total_pixels * 4];
 
-        for overlay in self.overlays.iter() {
+        for (i, overlay) in self.overlays.iter().enumerate() {
             for span in overlay.pixels.spans::<u32>() {
                 for x in span.x.start()..span.x.end() {
+                    let is_active = self.active_region == Some(i);
+                    let opacity = self.opacity(is_active);
+                    let [r, g, b, a] = overlay.color;
                     let idx = (x + span.y * self.size.width) as usize * 4;
+                    let a = (a as u16 * opacity as u16 / 255) as u8;
                     if idx + 3 < data.len() {
-                        data[idx] = overlay.color[0];
-                        data[idx + 1] = overlay.color[1];
-                        data[idx + 2] = overlay.color[2];
-                        data[idx + 3] = overlay.color[3];
+                        data[idx] = r;
+                        data[idx + 1] = g;
+                        data[idx + 2] = b;
+                        data[idx + 3] = a;
                     }
                 }
             }
@@ -92,6 +110,14 @@ impl OverlayTexture {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+        }
+    }
+
+    fn opacity(&self, is_active: bool) -> u8 {
+        if is_active {
+            self.active_opacity
+        } else {
+            self.default_opacity
         }
     }
 }

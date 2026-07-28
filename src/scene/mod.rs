@@ -75,6 +75,17 @@ impl Scene {
         self.overlay.write_to_queue(queue);
     }
 
+    pub fn set_overlay_opacity(
+        &mut self,
+        default_opacity: u8,
+        active_opacity: u8,
+        queue: &Queue,
+    ) {
+        self.overlay.set_default_opacity(default_opacity);
+        self.overlay.set_active_opacity(active_opacity);
+        self.overlay.write_to_queue(queue);
+    }
+
     pub fn get_bind_group(&self) -> &BindGroup {
         &self.bind_group
     }

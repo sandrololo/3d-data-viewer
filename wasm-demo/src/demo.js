@@ -32,6 +32,12 @@ const btnClearOverlay = document.getElementById('btn-clear-overlay');
 const btnDownloadImage = document.getElementById('btn-download-image');
 const btnToggleGrid = document.getElementById('btn-toggle-grid');
 
+// Opacity sliders
+const defaultOpacitySlider = document.getElementById('default-opacity');
+const activeOpacitySlider = document.getElementById('active-opacity');
+const defaultOpacityValue = document.getElementById('default-opacity-value');
+const activeOpacityValue = document.getElementById('active-opacity-value');
+
 const DEFAULT_ORIENTATION = () =>
     Orientation.new(0.8, 0.0, 0.0, 70, 0, -45);
 
@@ -409,6 +415,24 @@ function setupControls() {
     // Download current canvas image
     btnDownloadImage.addEventListener('click', () => {
         downloadCurrentImage();
+    });
+
+    // Opacity sliders
+    const sendOpacity = () => {
+        if (!wasmViewer) return;
+        const def = parseInt(defaultOpacitySlider.value, 10);
+        const active = parseInt(activeOpacitySlider.value, 10);
+        wasmViewer.set_overlay_opacity(def, active);
+    };
+
+    defaultOpacitySlider.addEventListener('input', () => {
+        defaultOpacityValue.textContent = defaultOpacitySlider.value;
+        sendOpacity();
+    });
+
+    activeOpacitySlider.addEventListener('input', () => {
+        activeOpacityValue.textContent = activeOpacitySlider.value;
+        sendOpacity();
     });
 
     // Keyboard shortcuts
