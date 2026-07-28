@@ -44,7 +44,7 @@ impl TopologyTexture {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            bytemuck::cast_slice(&self.image.buffer()),
+            bytemuck::cast_slice(self.image.buffer()),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * self.image.width().get()),

@@ -55,13 +55,13 @@ use crate::{
 #[derive(thiserror::Error, Debug)]
 enum InitializationError {
     #[error("Failed to get GPU adapter ({0})")]
-    AdapterError(#[from] wgpu::RequestAdapterError),
+    Adapter(#[from] wgpu::RequestAdapterError),
     #[error("Failed to create GPU device ({0})")]
-    DeviceError(#[from] wgpu::RequestDeviceError),
+    Device(#[from] wgpu::RequestDeviceError),
     #[error("Failed to create surface ({0})")]
-    SurfaceError(#[from] wgpu::CreateSurfaceError),
+    Surface(#[from] wgpu::CreateSurfaceError),
     #[error("Failed to create window ({0})")]
-    CreateWindowError(#[from] winit::error::OsError),
+    CreateWindow(#[from] winit::error::OsError),
 }
 
 struct State {
@@ -387,7 +387,7 @@ impl ApplicationHandler<Event> for ImageViewer3D {
             Ok(window) => window,
             Err(e) => {
                 let _ = self.proxy.send_event(
-                    ErrorEvent::Initialization(InitializationError::CreateWindowError(e)).into(),
+                    ErrorEvent::Initialization(InitializationError::CreateWindow(e)).into(),
                 );
                 return;
             }

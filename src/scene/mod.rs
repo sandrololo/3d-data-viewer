@@ -22,12 +22,12 @@ impl Scene {
         queue: &Queue,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let overlay_texture = OverlayTexture::new(&topology.dimensions().into(), &device);
-        let texture = TextureImage::new(&topology.dimensions().into(), &device);
-        let topology_data = TopologyTexture::new(Arc::new(topology), &device);
+        let overlay_texture = OverlayTexture::new(&topology.dimensions().into(), device);
+        let texture = TextureImage::new(&topology.dimensions().into(), device);
+        let topology_data = TopologyTexture::new(Arc::new(topology), device);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture_bind_group"),
-            layout: layout,
+            layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,

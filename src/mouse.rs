@@ -28,8 +28,8 @@ impl Mouse {
         &self,
         window_size: PhysicalSize<u32>,
     ) -> anyhow::Result<Vec2> {
-        let w = f64::try_from(window_size.width - 1)?;
-        let h = f64::try_from(window_size.height - 1)?;
+        let w = f64::from(window_size.width - 1);
+        let h = f64::from(window_size.height - 1);
         let x = (2.0 * self.current_position.x / w - 1.0) as f32;
         let y = (1.0 - 2.0 * self.current_position.y / h) as f32;
         Ok(Vec2::new(x, y))

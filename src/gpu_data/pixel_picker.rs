@@ -95,8 +95,8 @@ impl PixelPicker {
     ) -> SharedFuture<PixelResult> {
         self.gpu_readback.get(device, move |buffer| {
             let pixel = (
-                bytemuck::cast_slice::<u8, u32>(&buffer)[0],
-                bytemuck::cast_slice::<u8, u32>(&buffer)[1],
+                bytemuck::cast_slice::<u8, u32>(buffer)[0],
+                bytemuck::cast_slice::<u8, u32>(buffer)[1],
             );
             let (w, h) = (topology.width().get(), topology.height().get());
             if pixel.0 >= w || pixel.1 >= h {

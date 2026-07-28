@@ -33,7 +33,7 @@ impl Mip {
             contents: bytemuck::cast_slice(&[2u32]),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         });
-        let image_dims_buffer = DataSize::create_buffer(&device);
+        let image_dims_buffer = DataSize::create_buffer(device);
         Self {
             mip_buffer,
             image_dims_buffer,
@@ -57,8 +57,8 @@ impl Mip {
             })
             .collect();
         let index_buffer =
-            IndexBufferBuilder::new_triangle_list(image_size, &mip_levels).create_buffer(&device);
-        let vertex_buffer = VertexBuffer::new(image_size, &device);
+            IndexBufferBuilder::new_triangle_list(image_size, &mip_levels).create_buffer(device);
+        let vertex_buffer = VertexBuffer::new(image_size, device);
         let mip_data = MipData {
             mip_levels,
             index_buffer,
@@ -72,8 +72,8 @@ impl Mip {
     /// The mask must have the same dimensions as the image (width * height bytes, 0=invalid, 1=valid).
     pub fn set_image_masked(&mut self, image_size: DataSize, mask: &[u8], device: &wgpu::Device) {
         let index_buffer =
-            IndexBufferBuilder::new_triangle_list_masked(image_size, mask).create_buffer(&device);
-        let vertex_buffer = VertexBuffer::new(image_size, &device);
+            IndexBufferBuilder::new_triangle_list_masked(image_size, mask).create_buffer(device);
+        let vertex_buffer = VertexBuffer::new(image_size, device);
         let mip_data = MipData {
             mip_levels: vec![0],
             index_buffer,

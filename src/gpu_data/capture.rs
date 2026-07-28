@@ -37,8 +37,8 @@ impl Capture {
 
     fn create_readback_buffer(device: &wgpu::Device, window_size: &DataSize) -> wgpu::Buffer {
         let unpadded_bytes_per_row = window_size.width.get() * 4;
-        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u32;
-        let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
         let size = padded_bytes_per_row as u64 * window_size.height.get() as u64;
 
         device.create_buffer(&wgpu::BufferDescriptor {
@@ -64,8 +64,8 @@ impl Capture {
         }
 
         let unpadded_bytes_per_row = self.window_size.width.get() * 4;
-        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u32;
-        let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
 
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -92,14 +92,14 @@ impl Capture {
 
     pub fn get(&self, device: Arc<wgpu::Device>) -> SharedFuture<CaptureResult> {
         let surface_format = self.surface_format;
-        let window_size = self.window_size.clone();
+        let window_size = self.window_size;
         self.gpu_readback.get(device, move |buffer| {
             // Rows are padded to COPY_BYTES_PER_ROW_ALIGNMENT; copy only the
             // unpadded bytes_per_row for each row into `rgba`.
             let bytes_per_pixel = 4usize;
             let unpadded_bytes_per_row = (window_size.width.get() as usize) * bytes_per_pixel;
             let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
-            let padded_bytes_per_row = ((unpadded_bytes_per_row + align - 1) / align) * align;
+            let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
 
             let mut rgba =
                 Vec::with_capacity(unpadded_bytes_per_row * window_size.height.get() as usize);
