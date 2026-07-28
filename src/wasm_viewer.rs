@@ -7,7 +7,7 @@ use data_viewer_3d::{
     tiff_decode::decode_tiff,
     view::{projection::Translation, transformation::EulerRotationDeg},
 };
-use imask::{NonZeroRange, RangeUnchecked, WithBounds};
+use imask::{ImageDimension, ImaskSet, NonZeroRange, RangeUnchecked, SortedRanges, WithBounds};
 use wasm_bindgen::{JsValue, prelude::*};
 use winit::event_loop::EventLoop;
 
@@ -81,12 +81,14 @@ impl TryFrom<WasmRegion> for Region {
             .ok_or_else(|| JsValue::from_str("image_width must be non-zero"))?;
         let height = NonZeroU32::new(region.image_height)
             .ok_or_else(|| JsValue::from_str("image_height must be non-zero"))?;
-
-        Region::new(
-            WithBounds::new(region.pixelrange.into_iter().map(|r| *r), width, height),
-            region.color.0,
-        )
-        .map_err(|e| JsValue::from_str(&format!("Error converting WasmRegion to Region: {}", e)))
+        let iter = WithBounds::new(region.pixelrange.into_iter().map(|r| *r), width, height);
+        let roi = iter.bounds();
+        let pixels =
+            SortedRanges::try_from_ordered_iter(iter.map(|r| r.start..r.end).with_roi(roi))
+                .map_err(|e| {
+                    JsValue::from_str(&format!("Error converting to SortedRanges: {}", e))
+                })?;
+        Ok(Region::new(pixels, region.color.0))
     }
 }
 

@@ -1,5 +1,4 @@
-use futures::io;
-use imask::{CreateRange, ImageDimension, ImaskSet, NonZeroRange, SortedRanges};
+use imask::{CreateRange, SortedRanges};
 
 use crate::gpu_data::DataSize;
 use std::sync::Arc;
@@ -11,15 +10,8 @@ pub struct Region {
 }
 
 impl Region {
-    pub fn new(
-        pixels: impl IntoIterator<Item = NonZeroRange<u64>, IntoIter: ImageDimension>,
-        color: [u8; 4],
-    ) -> Result<Self, io::Error> {
-        let iter = pixels.into_iter();
-        let roi = iter.bounds();
-        let pixels =
-            SortedRanges::try_from_ordered_iter(iter.map(|r| r.start..r.end).with_roi(roi))?;
-        Ok(Self { pixels, color })
+    pub fn new(pixels: SortedRanges<u32, u32>, color: [u8; 4]) -> Self {
+        Self { pixels, color }
     }
 }
 
