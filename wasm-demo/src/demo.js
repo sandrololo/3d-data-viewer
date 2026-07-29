@@ -621,7 +621,7 @@ function startPixelPolling() {
         }
 
         // Continue polling
-        setTimeout(pollOnce, 100);
+        setTimeout(pollOnce, 20);
     }
 
     pollOnce();
