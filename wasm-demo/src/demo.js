@@ -489,8 +489,11 @@ function setupControls() {
         });
 
         canvas.addEventListener('mouseleave', () => {
-            console.log('Canvas mouseleave');
             isPollingEnabled = false;
+            if (activeRegionIndex !== null) {
+                activeRegionIndex = null;
+                applyOverlays(null);
+            }
         });
     } else {
         console.warn('Canvas element not found');
@@ -594,7 +597,7 @@ function startPixelPolling() {
             const parsed = parsePixelResult(result);
             if (parsed) {
                 renderPixelReadout(parsed.x, parsed.y, parsed.z, parsed.amplitude);
-                if (isOverlayVisible && overlayRawData) {
+                if (isPollingEnabled && isOverlayVisible && overlayRawData) {
                     const newActive = findRegionAtPixel(parsed.x, parsed.y, overlayRawData, imageWidth);
                     if (newActive !== activeRegionIndex) {
                         activeRegionIndex = newActive;
@@ -603,7 +606,7 @@ function startPixelPolling() {
                 }
             } else {
                 console.log('Invalid result format:', result);
-                if (activeRegionIndex !== null) {
+                if (isPollingEnabled && activeRegionIndex !== null) {
                     activeRegionIndex = null;
                     applyOverlays(null);
                 }
@@ -614,7 +617,7 @@ function startPixelPolling() {
             if (!String(err).includes('out of bounds')) {
                 console.error('Failed to fetch pixel (WASM error):', err);
             }
-            if (activeRegionIndex !== null) {
+            if (isPollingEnabled && activeRegionIndex !== null) {
                 activeRegionIndex = null;
                 applyOverlays(null);
             }
