@@ -7,7 +7,7 @@ use crate::index_buffer::{IndexBuffer, IndexBufferBuilder};
 use crate::vertex_buffer::VertexBuffer;
 
 /// Maximum index count for a mip level to be considered renderable.
-const MAX_MIP_INDEX_COUNT: u64 = 2u64.pow(28);
+const MAX_MIP_INDEX_COUNT: u64 = 2u64.pow(24);
 /// Minimum index count below which a mip level is too coarse to be useful.
 const MIN_MIP_INDEX_COUNT: u64 = 2u64.pow(17);
 
