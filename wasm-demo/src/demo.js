@@ -52,6 +52,8 @@ let isPolling = false;
 let overlayDefinitions = null;
 let imageWidth = 0;
 let imageHeight = 0;
+let overlayRawData = null;  // [{ mergedRanges: [[s,e],...], baseColor: [r,g,b] }]
+let activeRegionIndex = null;
 
 const OVERLAY_DATA_PATH = './src/assets/data/overlay.json';
 
@@ -339,13 +341,24 @@ function setupControls() {
 
     const setOverlay = async () => {
         if (wasmViewer) {
-            const overlays = await example_overlays();
-            if (overlays.length === 0) {
+            const definitions = await loadOverlayDefinitions();
+            if (!definitions || typeof definitions !== 'object') {
                 console.warn('No overlays loaded from overlay.json');
                 return;
             }
 
-            wasmViewer.set_overlays(overlays);
+            overlayRawData = [
+                { mergedRanges: parseMergeRanges(definitions.overlay1), baseColor: [255, 64, 64] },
+                { mergedRanges: parseMergeRanges(definitions.overlay2), baseColor: [64, 196, 64] },
+            ].filter(d => d.mergedRanges.length > 0);
+
+            if (overlayRawData.length === 0) {
+                console.warn('No valid overlay ranges found');
+                return;
+            }
+
+            activeRegionIndex = null;
+            applyOverlays(null);
             isOverlayVisible = true;
         }
     };
@@ -353,6 +366,8 @@ function setupControls() {
     const clearOverlay = () => {
         if (wasmViewer) {
             wasmViewer.clear_overlays();
+            overlayRawData = null;
+            activeRegionIndex = null;
             isOverlayVisible = false;
         }
     };
@@ -418,21 +433,14 @@ function setupControls() {
     });
 
     // Opacity sliders
-    const sendOpacity = () => {
-        if (!wasmViewer) return;
-        const def = parseInt(defaultOpacitySlider.value, 10);
-        const active = parseInt(activeOpacitySlider.value, 10);
-        wasmViewer.set_overlay_opacity(def, active);
-    };
-
     defaultOpacitySlider.addEventListener('input', () => {
         defaultOpacityValue.textContent = defaultOpacitySlider.value;
-        sendOpacity();
+        applyOverlays(activeRegionIndex);
     });
 
     activeOpacitySlider.addEventListener('input', () => {
         activeOpacityValue.textContent = activeOpacitySlider.value;
-        sendOpacity();
+        applyOverlays(activeRegionIndex);
     });
 
     // Keyboard shortcuts
@@ -586,14 +594,29 @@ function startPixelPolling() {
             const parsed = parsePixelResult(result);
             if (parsed) {
                 renderPixelReadout(parsed.x, parsed.y, parsed.z, parsed.amplitude);
+                if (isOverlayVisible && overlayRawData) {
+                    const newActive = findRegionAtPixel(parsed.x, parsed.y, overlayRawData, imageWidth);
+                    if (newActive !== activeRegionIndex) {
+                        activeRegionIndex = newActive;
+                        applyOverlays(activeRegionIndex);
+                    }
+                }
             } else {
                 console.log('Invalid result format:', result);
+                if (activeRegionIndex !== null) {
+                    activeRegionIndex = null;
+                    applyOverlays(null);
+                }
             }
         } catch (err) {
             // Silence "Pixel out of bounds" — this is the sentinel returned when the
             // cursor is not over valid geometry (x/y == u32::MAX).
             if (!String(err).includes('out of bounds')) {
                 console.error('Failed to fetch pixel (WASM error):', err);
+            }
+            if (activeRegionIndex !== null) {
+                activeRegionIndex = null;
+                applyOverlays(null);
             }
         }
 
@@ -719,6 +742,79 @@ async function loadOverlayDefinitions() {
         console.error('Failed to load overlay definitions:', error);
         return null;
     }
+}
+
+/**
+ * Validate, sort, and merge a raw array of [start, end] pixel-index ranges.
+ * Returns an array of merged [start, end] pairs, or [] if none are valid.
+ */
+function parseMergeRanges(rawRanges) {
+    if (!Array.isArray(rawRanges) || rawRanges.length === 0) return [];
+    const valid = [];
+    for (const range of rawRanges) {
+        if (!Array.isArray(range) || range.length < 2) continue;
+        const start = Math.trunc(Number(range[0]));
+        const end = Math.trunc(Number(range[1]));
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) continue;
+        valid.push([start, end]);
+    }
+    if (valid.length === 0) return [];
+    valid.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const merged = [valid[0].slice()];
+    for (let i = 1; i < valid.length; i++) {
+        const last = merged[merged.length - 1];
+        const [s, e] = valid[i];
+        if (s <= last[1]) {
+            last[1] = Math.max(last[1], e);
+        } else {
+            merged.push([s, e]);
+        }
+    }
+    return merged;
+}
+
+/**
+ * Return the index (0-based) of the first overlay region that contains the
+ * pixel at image coordinates (x, y), or null if none does.
+ */
+function findRegionAtPixel(x, y, rawData, width) {
+    if (!rawData || rawData.length === 0 || width <= 0) return null;
+    const pixelIdx = y * width + x;
+    for (let i = 0; i < rawData.length; i++) {
+        for (const [s, e] of rawData[i].mergedRanges) {
+            if (pixelIdx >= s && pixelIdx < e) return i;
+        }
+    }
+    return null;
+}
+
+/**
+ * Re-send all overlay regions to the WASM viewer, applying the current
+ * default / active opacity values from the sliders.
+ */
+function applyOverlays(activeIdx) {
+    if (!wasmViewer || !overlayRawData || overlayRawData.length === 0) return;
+    const defaultOp = parseInt(defaultOpacitySlider.value, 10);
+    const activeOp = parseInt(activeOpacitySlider.value, 10);
+    const regions = overlayRawData.map((data, i) => {
+        const opacity = i === activeIdx ? activeOp : defaultOp;
+        const [r, g, b] = data.baseColor;
+        return buildRegionFromMerged(data.mergedRanges, [r, g, b, opacity]);
+    }).filter(Boolean);
+    wasmViewer.set_overlays(regions);
+}
+
+/**
+ * Build a WasmRegion from already-merged ranges (no re-merging needed).
+ */
+function buildRegionFromMerged(mergedRanges, colorRgba) {
+    if (!mergedRanges || mergedRanges.length === 0) return null;
+    const pixelRanges = mergedRanges.map(([s, e]) =>
+        WasmBindgenPixelRange.new(BigInt(s), BigInt(e))
+    );
+    const [r, g, b, a] = colorRgba;
+    const color = RegionColor.new(r, g, b, a);
+    return Region.new(pixelRanges, color, imageWidth, imageHeight);
 }
 
 function buildOverlay(ranges, colorRgba) {

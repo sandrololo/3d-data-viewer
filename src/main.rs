@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use futures::FutureExt;
-use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use winit::{
@@ -325,14 +326,6 @@ impl State {
             }
             UserEvent::DisplayGrid(visible) => {
                 self.renderer.display_grid(visible);
-            }
-            UserEvent::SetOverlayOpacity {
-                default_opacity,
-                active_opacity,
-            } => {
-                if let Some(scene) = &mut self.scene {
-                    scene.set_overlay_opacity(default_opacity, active_opacity, &self.queue);
-                }
             }
         }
     }

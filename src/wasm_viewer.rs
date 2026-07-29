@@ -291,17 +291,6 @@ impl WasmViewer {
         self.send_event(UserEvent::DisplayGrid(visible))
     }
 
-    pub fn set_overlay_opacity(
-        &self,
-        default_opacity: u8,
-        active_opacity: u8,
-    ) -> Result<(), JsValue> {
-        self.send_event(UserEvent::SetOverlayOpacity {
-            default_opacity,
-            active_opacity,
-        })
-    }
-
     fn send_event(&self, event: UserEvent) -> Result<(), JsValue> {
         if let Some(proxy) = &self.proxy {
             proxy.send_event(event.into()).map_err(|e| e.to_string())?;

@@ -29,5 +29,4 @@ pub(crate) enum UserEvent {
     SetMipOverride(Option<u32>),
     DisplayGrid(bool),
     CaptureImage(futures::channel::oneshot::Sender<SharedFuture<CaptureResult>>),
-    SetOverlayOpacity { default_opacity: u8, active_opacity: u8 },
 }
