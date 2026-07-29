@@ -9,7 +9,7 @@ use crate::vertex_buffer::VertexBuffer;
 /// Maximum index count for a mip level to be considered renderable.
 const MAX_MIP_INDEX_COUNT: u64 = 2u64.pow(28);
 /// Minimum index count below which a mip level is too coarse to be useful.
-const MIN_MIP_INDEX_COUNT: u64 = 2u64.pow(15);
+const MIN_MIP_INDEX_COUNT: u64 = 2u64.pow(17);
 
 struct MipData {
     mip_levels: Vec<u32>,
