@@ -27,7 +27,7 @@ num-traits = "0.2.19"
 pollster = { version = "0.4.0", optional = true }
 thiserror = "2.0.18"
 tiff = "0.10.3"
-wgpu = "29"
+wgpu = "30"
 winit = { version = "0.30.12", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -40,4 +40,4 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Element",
 ]}
-wgpu = { version = "29" }
+wgpu = { version = "30" }
