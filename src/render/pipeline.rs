@@ -56,7 +56,7 @@ impl Pipeline {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[VertexBuffer::desc()],
+                buffers: &[Some(VertexBuffer::desc())],
                 compilation_options: Default::default(),
             },
             fragment: None,

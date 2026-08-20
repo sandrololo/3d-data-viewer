@@ -687,7 +687,7 @@ impl Axes {
             vertex: wgpu::VertexState {
                 module: &grid_shader,
                 entry_point: Some("vs_axes"),
-                buffers: &[GridVertex::desc()],
+                buffers: &[Some(GridVertex::desc())],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -793,7 +793,7 @@ impl Axes {
             vertex: wgpu::VertexState {
                 module: &label_shader,
                 entry_point: Some("vs_label"),
-                buffers: &[LabelVertex::desc()],
+                buffers: &[Some(LabelVertex::desc())],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {

@@ -163,6 +163,7 @@ impl State {
             height: window_size.height,
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::AutoVsync,
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
         self.surface.configure(&self.device, &surface_config);
     }
@@ -196,7 +197,7 @@ impl State {
             scene,
         );
         self.window.pre_present_notify();
-        surface_texture.present();
+        self.queue.present(surface_texture);
     }
 
     fn apply_user_event(&mut self, event: UserEvent) {

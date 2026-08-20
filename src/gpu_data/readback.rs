@@ -59,7 +59,9 @@ impl<T: Clone + Send + 'static> GPUDataReadback<T> {
                     .map_err(|e| anyhow!("Channel error: {:?}", e))?
                     .map_err(|e| anyhow!("Buffer map error: {:?}", e))?;
 
-                let output_data = buffer.get_mapped_range(..);
+                let output_data = buffer
+                    .get_mapped_range(..)
+                    .map_err(|e| anyhow!("Buffer range error: {:?}", e))?;
                 let result = extract_result(&output_data);
                 drop(output_data);
                 // Must also run when extraction fails, or the readback wedges forever.
