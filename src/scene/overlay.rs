@@ -6,12 +6,12 @@ use crate::gpu_data::DataSize;
 
 #[derive(Clone, Debug)]
 pub struct Region {
-    pub pixels: SortedRanges<u32, u32>,
+    pub pixels: SortedRanges<u32>,
     pub color: [u8; 4],
 }
 
 impl Region {
-    pub fn new(pixels: SortedRanges<u32, u32>, color: [u8; 4]) -> Self {
+    pub fn new(pixels: SortedRanges<u32>, color: [u8; 4]) -> Self {
         Self { pixels, color }
     }
 }
