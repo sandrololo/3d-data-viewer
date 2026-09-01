@@ -124,10 +124,10 @@ fn vs_main(data: VertexInput) -> VertexOutput {
 fn fs_texture(in: VertexOutput) -> FragmentOutput {
     let sampled = textureLoad(texture_image, in.pixel * in.resize, 0);
     let range = f32(texture_image_range.end - texture_image_range.start);
-    let red = 1.0 - f32(sampled.r - texture_image_range.start) / range;
-    let green = f32(sampled.r - texture_image_range.start) / range;
+    // Both operands are u32: below `start` an integer subtraction would wrap.
+    let t = clamp((f32(sampled.r) - f32(texture_image_range.start)) / range, 0.0, 1.0);
     var out: FragmentOutput;
-    out.color = vec4<f32>(red, green, 0.0, 1.0) * in.light_intensity;
+    out.color = vec4<f32>(1.0 - t, t, 0.0, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
@@ -176,7 +176,7 @@ fn turbo_colormap(x: f32) -> vec3<f32> {
     let kGreenVec2 = vec2(4.27729857, 2.82956604);
     let kBlueVec2 = vec2(-89.90310912, 27.34824973);
   
-    let v4 = vec4(1.0, x, x * x, x * x * x);
+    let v4 = vec4(1.0, t, t * t, t * t * t);
     let v2 = v4.zw * v4.z;
     return vec3(
         dot(v4, kRedVec4) + dot(v2, kRedVec2),
