@@ -241,6 +241,12 @@ impl WasmViewer {
         self.send_event(UserEvent::SetFragmentShader(FragmentShaderVariant::Texture))
     }
 
+    pub fn set_texture_turbo_shader(&self) -> Result<(), JsValue> {
+        self.send_event(UserEvent::SetFragmentShader(
+            FragmentShaderVariant::TextureTurbo,
+        ))
+    }
+
     pub fn set_turbo_colormap_shader(&self) -> Result<(), JsValue> {
         self.send_event(UserEvent::SetFragmentShader(
             FragmentShaderVariant::TurboColormap,

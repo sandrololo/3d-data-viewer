@@ -120,38 +120,44 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     return out;
 }
 
-@fragment
-fn fs_texture(in: VertexOutput) -> FragmentOutput {
+fn texture_fraction(in: VertexOutput) -> f32 {
     let sampled = textureLoad(texture_image, in.pixel * in.resize, 0);
     let range = f32(texture_image_range.end - texture_image_range.start);
-    let red = 1.0 - f32(sampled.r - texture_image_range.start) / range;
-    let green = f32(sampled.r - texture_image_range.start) / range;
+    // Both operands are u32: below `start` an integer subtraction would wrap.
+    return clamp((f32(sampled.r) - f32(texture_image_range.start)) / range, 0.0, 1.0);
+}
+
+@fragment
+fn fs_texture(in: VertexOutput) -> FragmentOutput {
+    let t = texture_fraction(in);
+    let color = blend_overlay(vec3<f32>(t, t, t), in.pixel * in.resize);
     var out: FragmentOutput;
-    out.color = vec4<f32>(red, green, 0.0, 1.0) * in.light_intensity;
+    out.color = vec4<f32>(color, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
 
 @fragment
-fn fs_height(in: VertexOutput) -> FragmentOutput {    
-    let overlay_color = textureLoad(overlay_texture, in.pixel * in.resize, 0);
-    
-    // Calculate base height color
-    let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
-    var color = vec4<f32>(depth, depth, depth, 1.0);
-    
-    // Blend overlay if present (alpha > 0)
-    if (overlay_color.a > 0.0) {
-        // Alpha blend: result = overlay * alpha + base * (1 - alpha)
-        let alpha = overlay_color.a;
-        color = vec4<f32>(
-            overlay_color.rgb * alpha + color.rgb * (1.0 - alpha),
-            1.0
-        );
-    }
-    
+fn fs_texture_turbo(in: VertexOutput) -> FragmentOutput {
+    let color = blend_overlay(turbo_colormap(texture_fraction(in)), in.pixel * in.resize);
     var out: FragmentOutput;
-    out.color = color * in.light_intensity;
+    out.color = vec4<f32>(color, 1.0) * in.light_intensity;
+    out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
+    return out;
+}
+
+fn blend_overlay(base: vec3<f32>, pixel: vec2<u32>) -> vec3<f32> {
+    let overlay = textureLoad(overlay_texture, pixel, 0);
+    return mix(base, overlay.rgb, overlay.a);
+}
+
+@fragment
+fn fs_height(in: VertexOutput) -> FragmentOutput {
+    let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
+    let color = blend_overlay(vec3<f32>(depth, depth, depth), in.pixel * in.resize);
+
+    var out: FragmentOutput;
+    out.color = vec4<f32>(color, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
@@ -159,9 +165,10 @@ fn fs_height(in: VertexOutput) -> FragmentOutput {
 @fragment
 fn fs_turbo_colormap(in: VertexOutput) -> FragmentOutput {
     let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
+    let color = blend_overlay(turbo_colormap(depth), in.pixel * in.resize);
     var out: FragmentOutput;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
-    out.color = vec4<f32>(turbo_colormap(depth) * in.light_intensity, 1.0);
+    out.color = vec4<f32>(color * in.light_intensity, 1.0);
     return out;
 }
 
@@ -176,7 +183,7 @@ fn turbo_colormap(x: f32) -> vec3<f32> {
     let kGreenVec2 = vec2(4.27729857, 2.82956604);
     let kBlueVec2 = vec2(-89.90310912, 27.34824973);
   
-    let v4 = vec4(1.0, x, x * x, x * x * x);
+    let v4 = vec4(1.0, t, t * t, t * t * t);
     let v2 = v4.zw * v4.z;
     return vec3(
         dot(v4, kRedVec4) + dot(v2, kRedVec2),
