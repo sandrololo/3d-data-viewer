@@ -120,13 +120,26 @@ fn vs_main(data: VertexInput) -> VertexOutput {
     return out;
 }
 
-@fragment
-fn fs_texture(in: VertexOutput) -> FragmentOutput {
+fn texture_fraction(in: VertexOutput) -> f32 {
     let sampled = textureLoad(texture_image, in.pixel * in.resize, 0);
     let range = f32(texture_image_range.end - texture_image_range.start);
     // Both operands are u32: below `start` an integer subtraction would wrap.
-    let t = clamp((f32(sampled.r) - f32(texture_image_range.start)) / range, 0.0, 1.0);
-    let color = blend_overlay(vec3<f32>(1.0 - t, t, 0.0), in.pixel * in.resize);
+    return clamp((f32(sampled.r) - f32(texture_image_range.start)) / range, 0.0, 1.0);
+}
+
+@fragment
+fn fs_texture(in: VertexOutput) -> FragmentOutput {
+    let t = texture_fraction(in);
+    let color = blend_overlay(vec3<f32>(t, t, t), in.pixel * in.resize);
+    var out: FragmentOutput;
+    out.color = vec4<f32>(color, 1.0) * in.light_intensity;
+    out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
+    return out;
+}
+
+@fragment
+fn fs_texture_turbo(in: VertexOutput) -> FragmentOutput {
+    let color = blend_overlay(turbo_colormap(texture_fraction(in)), in.pixel * in.resize);
     var out: FragmentOutput;
     out.color = vec4<f32>(color, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
