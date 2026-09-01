@@ -126,32 +126,25 @@ fn fs_texture(in: VertexOutput) -> FragmentOutput {
     let range = f32(texture_image_range.end - texture_image_range.start);
     // Both operands are u32: below `start` an integer subtraction would wrap.
     let t = clamp((f32(sampled.r) - f32(texture_image_range.start)) / range, 0.0, 1.0);
+    let color = blend_overlay(vec3<f32>(1.0 - t, t, 0.0), in.pixel * in.resize);
     var out: FragmentOutput;
-    out.color = vec4<f32>(1.0 - t, t, 0.0, 1.0) * in.light_intensity;
+    out.color = vec4<f32>(color, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
 
+fn blend_overlay(base: vec3<f32>, pixel: vec2<u32>) -> vec3<f32> {
+    let overlay = textureLoad(overlay_texture, pixel, 0);
+    return mix(base, overlay.rgb, overlay.a);
+}
+
 @fragment
-fn fs_height(in: VertexOutput) -> FragmentOutput {    
-    let overlay_color = textureLoad(overlay_texture, in.pixel * in.resize, 0);
-    
-    // Calculate base height color
+fn fs_height(in: VertexOutput) -> FragmentOutput {
     let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
-    var color = vec4<f32>(depth, depth, depth, 1.0);
-    
-    // Blend overlay if present (alpha > 0)
-    if (overlay_color.a > 0.0) {
-        // Alpha blend: result = overlay * alpha + base * (1 - alpha)
-        let alpha = overlay_color.a;
-        color = vec4<f32>(
-            overlay_color.rgb * alpha + color.rgb * (1.0 - alpha),
-            1.0
-        );
-    }
-    
+    let color = blend_overlay(vec3<f32>(depth, depth, depth), in.pixel * in.resize);
+
     var out: FragmentOutput;
-    out.color = color * in.light_intensity;
+    out.color = vec4<f32>(color, 1.0) * in.light_intensity;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
     return out;
 }
@@ -159,9 +152,10 @@ fn fs_height(in: VertexOutput) -> FragmentOutput {
 @fragment
 fn fs_turbo_colormap(in: VertexOutput) -> FragmentOutput {
     let depth = (in.z_value - z_range.min) / (z_range.max - z_range.min);
+    let color = blend_overlay(turbo_colormap(depth), in.pixel * in.resize);
     var out: FragmentOutput;
     out.picking = vec2<u32>(in.pixel.x * in.resize, in.pixel.y * in.resize);
-    out.color = vec4<f32>(turbo_colormap(depth) * in.light_intensity, 1.0);
+    out.color = vec4<f32>(color * in.light_intensity, 1.0);
     return out;
 }
 
